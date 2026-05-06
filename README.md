@@ -117,6 +117,8 @@ Database config is currently provided by Compose:
 ## Current endpoints
 
 - `GET /healthz`
+- `GET /readyz` (DB readiness; returns 503 until DB is reachable)
+- `GET /metrics` (Prometheus metrics)
 - `POST /checkout` (creates a pending order + reserves inventory + creates Stripe Checkout Session when `STRIPE_SECRET_KEY` is set)
 - `GET /orders/{id}`
 - `POST /webhooks/stripe` (enabled when `STRIPE_WEBHOOK_SECRET` is set)
@@ -126,3 +128,9 @@ Database config is currently provided by Compose:
 - `POST /admin/prices` (requires `Authorization: Bearer $ADMIN_TOKEN`)
 - `POST /admin/inventory` (requires `Authorization: Bearer $ADMIN_TOKEN`)
 - `GET /admin/audit-events` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `aggregate_type`, `aggregate_id`)
+
+## Observability
+
+- **Request IDs**: `ssh-gateway` sends `X-Request-Id` to `core-api` and `core-api` echoes it back on responses.
+- **Metrics**: scrape `GET /metrics`
+- **Readiness**: `GET /readyz` checks DB connectivity

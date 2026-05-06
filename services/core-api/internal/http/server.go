@@ -14,6 +14,8 @@ import (
 	"sip-happens/pkg/ids"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Server struct {
@@ -29,8 +31,12 @@ type Server struct {
 }
 
 func (s *Server) Handler() http.Handler {
+	metrics := NewMetrics()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/readyz", s.handleReadyz)
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/catalog", s.handleCatalog)
 	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
@@ -45,7 +51,10 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/webhooks/stripe", s.StripeWebhook)
 	}
 
-	return mux
+	h := http.Handler(mux)
+	h = WithRequestID(h)
+	h = AccessLog(metrics)(h)
+	return h
 }
 
 func (s *Server) requireSigned(next http.Handler) http.Handler {
@@ -58,6 +67,25 @@ func (s *Server) requireSigned(next http.Handler) http.Handler {
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.DB == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := s.DB.PingContext(ctx); err != nil {
+		http.Error(w, "db not ready", http.StatusServiceUnavailable)
+		return
+	}
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }

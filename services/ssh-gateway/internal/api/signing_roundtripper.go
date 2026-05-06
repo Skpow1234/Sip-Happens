@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"sip-happens/pkg/auth"
@@ -44,6 +45,11 @@ func (rt SigningRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	ts := strconv.FormatInt(nowFn().Unix(), 10)
 	nonce := randomHex(16)
 	bodySHA := auth.BodySHA256Hex(bodyBytes)
+
+	// Correlation id.
+	if strings.TrimSpace(req.Header.Get("X-Request-Id")) == "" {
+		req.Header.Set("X-Request-Id", randomHex(16))
+	}
 
 	path := req.URL.RequestURI()
 	canonical := auth.Canonical(req.Method, path, ts, nonce, bodySHA)
