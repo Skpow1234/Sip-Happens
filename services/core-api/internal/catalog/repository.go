@@ -9,7 +9,14 @@ import (
 
 type Repository interface {
 	GetProduct(ctx context.Context, q Querier, id domain.ProductID) (*domain.Product, error)
+	GetProductBySKU(ctx context.Context, q Querier, sku string) (*domain.Product, error)
+	ListActiveProducts(ctx context.Context, q Querier, currency string, limit int) ([]ProductWithPrice, error)
 	GetCurrentPrice(ctx context.Context, q Querier, productID domain.ProductID, currency string) (*domain.Price, error)
+}
+
+type ProductWithPrice struct {
+	Product domain.Product
+	Price   domain.Price
 }
 
 type Querier interface {

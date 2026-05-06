@@ -119,6 +119,8 @@ func runServer() error {
 
 	srv := &httpserver.Server{
 		Orders:        ordersSvc,
+		Catalog:       catalogRepo,
+		DB:            sqlDB,
 		Stripe:        stripepayments.StripeGoClient{SecretKey: os.Getenv("STRIPE_SECRET_KEY")},
 		StripeWebhook: stripeWebhook,
 	}

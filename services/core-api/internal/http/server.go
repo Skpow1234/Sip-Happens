@@ -1,11 +1,13 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
+	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/domain"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
@@ -13,6 +15,8 @@ import (
 
 type Server struct {
 	Orders        orders.Service
+	Catalog       catalog.Repository
+	DB            *sql.DB
 	Stripe        stripepayments.Service
 	StripeWebhook *stripepayments.WebhookHandler
 }
@@ -20,6 +24,8 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/catalog", s.handleCatalog)
+	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	mux.HandleFunc("/orders/", s.handleGetOrder)
 	mux.HandleFunc("/checkout", s.handleCheckout)
 
@@ -33,6 +39,87 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Catalog == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	if s.DB == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	currency := r.URL.Query().Get("currency")
+	if currency == "" {
+		currency = "COP"
+	}
+
+	list, err := s.Catalog.ListActiveProducts(r.Context(), s.DB, currency, 100)
+	if err != nil {
+		http.Error(w, "error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"currency": currency,
+		"items":    list,
+	})
+}
+
+func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Catalog == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	if s.DB == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	sku := strings.TrimPrefix(r.URL.Path, "/catalog/")
+	if sku == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	currency := r.URL.Query().Get("currency")
+	if currency == "" {
+		currency = "COP"
+	}
+
+	p, err := s.Catalog.GetProductBySKU(r.Context(), s.DB, sku)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err == domain.ErrNotFound {
+			status = http.StatusNotFound
+		}
+		http.Error(w, "error", status)
+		return
+	}
+	price, err := s.Catalog.GetCurrentPrice(r.Context(), s.DB, p.ID, currency)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err == domain.ErrNotFound {
+			status = http.StatusNotFound
+		}
+		http.Error(w, "error", status)
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"product": p,
+		"price":   price,
+	})
 }
 
 func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
