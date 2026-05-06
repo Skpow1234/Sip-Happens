@@ -225,6 +225,44 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	switch r.Method {
+	case http.MethodPut:
+		var req admin.UpsertProductInput
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		err := s.Admin.PutProductByID(r.Context(), "admin", domain.ProductID(id), req)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if err == domain.ErrInvalidInput {
+				status = http.StatusBadRequest
+			}
+			if err == domain.ErrNotFound {
+				status = http.StatusNotFound
+			}
+			http.Error(w, "error", status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodPatch:
+		var req admin.PatchProductInput
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		err := s.Admin.PatchProductByID(r.Context(), "admin", domain.ProductID(id), req)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if err == domain.ErrInvalidInput {
+				status = http.StatusBadRequest
+			}
+			if err == domain.ErrNotFound {
+				status = http.StatusNotFound
+			}
+			http.Error(w, "error", status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case http.MethodDelete:
 		reason := r.URL.Query().Get("reason")
 		err := s.Admin.DeactivateProduct(r.Context(), "admin", domain.ProductID(id), reason)
@@ -253,27 +291,54 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server misconfigured", http.StatusInternalServerError)
 		return
 	}
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	var req admin.SetPriceInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	if req.Currency == "" {
-		req.Currency = "COP"
-	}
-	if err := s.Admin.SetPrice(r.Context(), "admin", req); err != nil {
-		status := http.StatusInternalServerError
-		if err == domain.ErrInvalidInput {
-			status = http.StatusBadRequest
+	switch r.Method {
+	case http.MethodPost, http.MethodPut:
+		var req admin.SetPriceInput
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
 		}
-		http.Error(w, "error", status)
-		return
+		if req.Currency == "" {
+			req.Currency = "COP"
+		}
+		if err := s.Admin.SetPrice(r.Context(), "admin", req); err != nil {
+			status := http.StatusInternalServerError
+			if err == domain.ErrInvalidInput {
+				status = http.StatusBadRequest
+			}
+			http.Error(w, "error", status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		// End current price: ?product_id=...&currency=...&reason=...
+		pid := strings.TrimSpace(r.URL.Query().Get("product_id"))
+		if pid == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		cur := strings.TrimSpace(r.URL.Query().Get("currency"))
+		if cur == "" {
+			cur = "COP"
+		}
+		reason := r.URL.Query().Get("reason")
+		if err := s.Admin.EndCurrentPrice(r.Context(), "admin", domain.ProductID(pid), cur, reason); err != nil {
+			status := http.StatusInternalServerError
+			if err == domain.ErrInvalidInput {
+				status = http.StatusBadRequest
+			}
+			if err == domain.ErrNotFound {
+				status = http.StatusNotFound
+			}
+			http.Error(w, "error", status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
@@ -284,7 +349,7 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server misconfigured", http.StatusInternalServerError)
 		return
 	}
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}

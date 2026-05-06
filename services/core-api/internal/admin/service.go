@@ -14,8 +14,11 @@ import (
 type Service interface {
 	ListProducts(ctx context.Context, in ListProductsInput) ([]ProductRow, error)
 	UpsertProduct(ctx context.Context, actor string, in UpsertProductInput) (domain.ProductID, error)
+	PutProductByID(ctx context.Context, actor string, productID domain.ProductID, in UpsertProductInput) error
+	PatchProductByID(ctx context.Context, actor string, productID domain.ProductID, in PatchProductInput) error
 	DeactivateProduct(ctx context.Context, actor string, productID domain.ProductID, reason string) error
 	SetPrice(ctx context.Context, actor string, in SetPriceInput) error
+	EndCurrentPrice(ctx context.Context, actor string, productID domain.ProductID, currency string, reason string) error
 	UpsertInventory(ctx context.Context, actor string, in UpsertInventoryInput) error
 
 	ListAuditEvents(ctx context.Context, in ListAuditEventsInput) ([]domain.AuditEvent, error)
@@ -47,6 +50,17 @@ type UpsertProductInput struct {
 	VolumeML  int
 	InvimaReg string
 	IsActive  bool
+}
+
+type PatchProductInput struct {
+	// Optional fields; when nil/zero-value + not present, no change.
+	Name      *string `json:"name"`
+	Brewery   *string `json:"brewery"`
+	Style     *string `json:"style"`
+	ABV       *float64 `json:"abv"`
+	VolumeML  *int    `json:"volume_ml"`
+	InvimaReg *string `json:"invima_reg"`
+	IsActive  *bool   `json:"is_active"`
 }
 
 type SetPriceInput struct {
@@ -203,6 +217,93 @@ where id=$9
 	return domain.ProductID(id), nil
 }
 
+func (s *SQLService) PutProductByID(ctx context.Context, actor string, productID domain.ProductID, in UpsertProductInput) error {
+	if s.DB == nil {
+		return fmt.Errorf("missing db")
+	}
+	if productID == "" {
+		return domain.ErrInvalidInput
+	}
+	if in.SKU == "" || in.Name == "" || in.Brewery == "" || in.Style == "" || in.VolumeML <= 0 || in.InvimaReg == "" {
+		return domain.ErrInvalidInput
+	}
+	now := time.Now()
+	res, err := s.DB.ExecContext(ctx, `
+update products
+set sku=$1, name=$2, brewery=$3, style=$4, abv=$5, volume_ml=$6, invima_reg=$7, is_active=$8, updated_at=$9
+where id=$10
+`, in.SKU, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, in.IsActive, now, string(productID))
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	_ = s.insertAudit(ctx, "product", string(productID), actor, "product.put", fmt.Sprintf(`{"sku":%q}`, in.SKU))
+	return nil
+}
+
+func (s *SQLService) PatchProductByID(ctx context.Context, actor string, productID domain.ProductID, in PatchProductInput) error {
+	if s.DB == nil {
+		return fmt.Errorf("missing db")
+	}
+	if productID == "" {
+		return domain.ErrInvalidInput
+	}
+	// Read existing.
+	row := s.DB.QueryRowContext(ctx, `
+select sku, name, brewery, style, abv, volume_ml, invima_reg, is_active
+from products where id=$1
+`, string(productID))
+	var cur UpsertProductInput
+	if err := row.Scan(&cur.SKU, &cur.Name, &cur.Brewery, &cur.Style, &cur.ABV, &cur.VolumeML, &cur.InvimaReg, &cur.IsActive); err != nil {
+		if err == sql.ErrNoRows {
+			return domain.ErrNotFound
+		}
+		return err
+	}
+
+	if in.Name != nil {
+		cur.Name = strings.TrimSpace(*in.Name)
+	}
+	if in.Brewery != nil {
+		cur.Brewery = strings.TrimSpace(*in.Brewery)
+	}
+	if in.Style != nil {
+		cur.Style = strings.TrimSpace(*in.Style)
+	}
+	if in.ABV != nil {
+		cur.ABV = *in.ABV
+	}
+	if in.VolumeML != nil {
+		cur.VolumeML = *in.VolumeML
+	}
+	if in.InvimaReg != nil {
+		cur.InvimaReg = strings.TrimSpace(*in.InvimaReg)
+	}
+	if in.IsActive != nil {
+		cur.IsActive = *in.IsActive
+	}
+
+	// Validate required invariants after patch.
+	if cur.SKU == "" || cur.Name == "" || cur.Brewery == "" || cur.Style == "" || cur.VolumeML <= 0 || cur.InvimaReg == "" {
+		return domain.ErrInvalidInput
+	}
+
+	now := time.Now()
+	_, err := s.DB.ExecContext(ctx, `
+update products
+set name=$1, brewery=$2, style=$3, abv=$4, volume_ml=$5, invima_reg=$6, is_active=$7, updated_at=$8
+where id=$9
+`, cur.Name, cur.Brewery, cur.Style, cur.ABV, cur.VolumeML, cur.InvimaReg, cur.IsActive, now, string(productID))
+	if err != nil {
+		return err
+	}
+	_ = s.insertAudit(ctx, "product", string(productID), actor, "product.patched", `{}`)
+	return nil
+}
+
 func (s *SQLService) DeactivateProduct(ctx context.Context, actor string, productID domain.ProductID, reason string) error {
 	if s.DB == nil {
 		return fmt.Errorf("missing db")
@@ -239,6 +340,35 @@ values ($1,$2,$3,$4)
 		return err
 	}
 	_ = s.insertAudit(ctx, "product", string(in.ProductID), actor, "price.set", fmt.Sprintf(`{"currency":%q,"amount_minor_units":%d}`, in.Currency, in.AmountMinorUnits))
+	return nil
+}
+
+func (s *SQLService) EndCurrentPrice(ctx context.Context, actor string, productID domain.ProductID, currency string, reason string) error {
+	if s.DB == nil {
+		return fmt.Errorf("missing db")
+	}
+	if productID == "" {
+		return domain.ErrInvalidInput
+	}
+	if currency == "" {
+		currency = "COP"
+	}
+	res, err := s.DB.ExecContext(ctx, `
+update prices
+set valid_through=now()
+where product_id=$1
+  and currency=$2
+  and valid_from <= now()
+  and (valid_through is null or valid_through > now())
+`, string(productID), currency)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	_ = s.insertAudit(ctx, "product", string(productID), actor, "price.ended", fmt.Sprintf(`{"currency":%q,"reason":%q}`, currency, reason))
 	return nil
 }
 

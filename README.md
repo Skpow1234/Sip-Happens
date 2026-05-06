@@ -126,9 +126,14 @@ Database config is currently provided by Compose:
 - `POST /webhooks/stripe` (enabled when `STRIPE_WEBHOOK_SECRET` is set)
 - `GET /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `q`, `active`, `currency`)
 - `POST /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`)
+- `PUT /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; full replace)
+- `PATCH /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; partial update)
 - `DELETE /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; deactivates product)
 - `POST /admin/prices` (requires `Authorization: Bearer $ADMIN_TOKEN`)
+- `PUT /admin/prices` (requires `Authorization: Bearer $ADMIN_TOKEN`; idempotent-ish alias of POST for tooling)
+- `DELETE /admin/prices?product_id=...&currency=COP` (requires `Authorization: Bearer $ADMIN_TOKEN`; ends current price)
 - `POST /admin/inventory` (requires `Authorization: Bearer $ADMIN_TOKEN`)
+- `PUT /admin/inventory` (requires `Authorization: Bearer $ADMIN_TOKEN`; idempotent upsert)
 - `GET /admin/audit-events` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `aggregate_type`, `aggregate_id`)
 
 ## Observability
