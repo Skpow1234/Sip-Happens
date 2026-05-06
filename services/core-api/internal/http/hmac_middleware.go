@@ -29,7 +29,7 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(m.Secret) == 0 {
-			http.Error(w, "server misconfigured", http.StatusInternalServerError)
+			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 			return
 		}
 
@@ -38,15 +38,15 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 		sig := r.Header.Get(auth.HeaderSignature)
 
 		if err := auth.ParseUnixSeconds(ts, time.Now(), m.Tolerance); err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}
 		if nonce == "" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}
 		if m.seen(nonce, ts) {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "replay detected")
 			return
 		}
 
@@ -54,7 +54,7 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 		if r.Body != nil {
 			b, err := io.ReadAll(r.Body)
 			if err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
+				writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid body")
 				return
 			}
 			_ = r.Body.Close()
@@ -66,7 +66,7 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 		path := r.URL.RequestURI()
 		canonical := auth.Canonical(r.Method, path, ts, nonce, bodySHA)
 		if err := auth.Verify(m.Secret, canonical, sig); err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}
 

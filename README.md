@@ -142,6 +142,20 @@ Database config is currently provided by Compose:
 - **Metrics**: scrape `GET /metrics`
 - **Readiness**: `GET /readyz` checks DB connectivity
 
+## Error responses
+
+All API errors return JSON in a stable envelope:
+
+```json
+{
+  "error": {
+    "code": "invalid_input",
+    "message": "request invalid",
+    "request_id": "..."
+  }
+}
+```
+
 ## Tests
 
 Unit tests run without any dependencies.

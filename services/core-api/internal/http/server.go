@@ -84,13 +84,13 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.DB == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	if err := s.DB.PingContext(ctx); err != nil {
-		http.Error(w, "db not ready", http.StatusServiceUnavailable)
+		writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "db not ready")
 		return
 	}
 	w.Header().Set("content-type", "application/json")
@@ -99,18 +99,18 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	if s.AdminToken == "" && len(s.AdminTokens) == 0 {
-		http.Error(w, "admin not configured", http.StatusNotFound)
+		writeAPIError(w, r, http.StatusNotFound, "not_found", "admin not configured")
 		return false
 	}
 	h := r.Header.Get("Authorization")
 	const prefix = "Bearer "
 	if !strings.HasPrefix(h, prefix) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return false
 	}
 	provided := strings.TrimSpace(strings.TrimPrefix(h, prefix))
 	if provided == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return false
 	}
 
@@ -127,14 +127,14 @@ func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 			}
 		}
 		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return false
 		}
 		return true
 	}
 
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(s.AdminToken)) != 1 {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return false
 	}
 	return true
@@ -157,7 +157,7 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Admin == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 
@@ -184,7 +184,7 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 			IsActive: isActivePtr,
 		})
 		if err != nil {
-			http.Error(w, "error", http.StatusInternalServerError)
+			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 			return
 		}
 		w.Header().Set("content-type", "application/json")
@@ -192,16 +192,20 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var req admin.UpsertProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
 		id, err := s.Admin.UpsertProduct(r.Context(), "admin", req)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
-				status = http.StatusBadRequest
+				status = http.StatusUnprocessableEntity
 			}
-			http.Error(w, "error", status)
+			code := "internal"
+			if status == http.StatusUnprocessableEntity {
+				code = "invalid_input"
+			}
+			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
 		w.Header().Set("content-type", "application/json")
@@ -216,50 +220,64 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if s.Admin == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/admin/products/")
 	if id == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
 		return
 	}
 	switch r.Method {
 	case http.MethodPut:
 		var req admin.UpsertProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
 		err := s.Admin.PutProductByID(r.Context(), "admin", domain.ProductID(id), req)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
-				status = http.StatusBadRequest
+				status = http.StatusUnprocessableEntity
 			}
 			if err == domain.ErrNotFound {
 				status = http.StatusNotFound
 			}
-			http.Error(w, "error", status)
+			code := "internal"
+			switch status {
+			case http.StatusNotFound:
+				code = "not_found"
+			case http.StatusUnprocessableEntity:
+				code = "invalid_input"
+			}
+			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPatch:
 		var req admin.PatchProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
 		err := s.Admin.PatchProductByID(r.Context(), "admin", domain.ProductID(id), req)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
-				status = http.StatusBadRequest
+				status = http.StatusUnprocessableEntity
 			}
 			if err == domain.ErrNotFound {
 				status = http.StatusNotFound
 			}
-			http.Error(w, "error", status)
+			code := "internal"
+			switch status {
+			case http.StatusNotFound:
+				code = "not_found"
+			case http.StatusUnprocessableEntity:
+				code = "invalid_input"
+			}
+			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -269,12 +287,19 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
-				status = http.StatusBadRequest
+				status = http.StatusUnprocessableEntity
 			}
 			if err == domain.ErrNotFound {
 				status = http.StatusNotFound
 			}
-			http.Error(w, "error", status)
+			code := "internal"
+			switch status {
+			case http.StatusNotFound:
+				code = "not_found"
+			case http.StatusUnprocessableEntity:
+				code = "invalid_input"
+			}
+			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -288,7 +313,7 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Admin == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
@@ -299,7 +324,7 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost, http.MethodPut:
 		var req admin.SetPriceInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
 		if req.Currency == "" {
@@ -308,9 +333,13 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 		if err := s.Admin.SetPrice(r.Context(), "admin", req); err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
-				status = http.StatusBadRequest
+				status = http.StatusUnprocessableEntity
 			}
-			http.Error(w, "error", status)
+			code := "internal"
+			if status == http.StatusUnprocessableEntity {
+				code = "invalid_input"
+			}
+			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -318,7 +347,7 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 		// End current price: ?product_id=...&currency=...&reason=...
 		pid := strings.TrimSpace(r.URL.Query().Get("product_id"))
 		if pid == "" {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing product_id")
 			return
 		}
 		cur := strings.TrimSpace(r.URL.Query().Get("currency"))
@@ -329,12 +358,19 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 		if err := s.Admin.EndCurrentPrice(r.Context(), "admin", domain.ProductID(pid), cur, reason); err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
-				status = http.StatusBadRequest
+				status = http.StatusUnprocessableEntity
 			}
 			if err == domain.ErrNotFound {
 				status = http.StatusNotFound
 			}
-			http.Error(w, "error", status)
+			code := "internal"
+			switch status {
+			case http.StatusNotFound:
+				code = "not_found"
+			case http.StatusUnprocessableEntity:
+				code = "invalid_input"
+			}
+			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -346,7 +382,7 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Admin == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
@@ -355,15 +391,19 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 	}
 	var req admin.UpsertInventoryInput
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 		return
 	}
 	if err := s.Admin.UpsertInventory(r.Context(), "admin", req); err != nil {
 		status := http.StatusInternalServerError
 		if err == domain.ErrInvalidInput {
-			status = http.StatusBadRequest
+			status = http.StatusUnprocessableEntity
 		}
-		http.Error(w, "error", status)
+		code := "internal"
+		if status == http.StatusUnprocessableEntity {
+			code = "invalid_input"
+		}
+		writeAPIError(w, r, status, code, "request invalid")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -374,7 +414,7 @@ func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if s.Admin == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -394,7 +434,7 @@ func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) 
 		Offset:        offset,
 	})
 	if err != nil {
-		http.Error(w, "error", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
 	w.Header().Set("content-type", "application/json")
@@ -422,11 +462,11 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Catalog == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	if s.DB == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	currency := r.URL.Query().Get("currency")
@@ -436,7 +476,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 
 	list, err := s.Catalog.ListActiveProducts(r.Context(), s.DB, currency, 100)
 	if err != nil {
-		http.Error(w, "error", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
 
@@ -453,16 +493,16 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Catalog == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	if s.DB == nil {
-		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
 	sku := strings.TrimPrefix(r.URL.Path, "/catalog/")
 	if sku == "" {
-		w.WriteHeader(http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing sku")
 		return
 	}
 
@@ -477,7 +517,11 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 		if err == domain.ErrNotFound {
 			status = http.StatusNotFound
 		}
-		http.Error(w, "error", status)
+		code := "internal"
+		if status == http.StatusNotFound {
+			code = "not_found"
+		}
+		writeAPIError(w, r, status, code, "error")
 		return
 	}
 	price, err := s.Catalog.GetCurrentPrice(r.Context(), s.DB, p.ID, currency)
@@ -486,7 +530,11 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 		if err == domain.ErrNotFound {
 			status = http.StatusNotFound
 		}
-		http.Error(w, "error", status)
+		code := "internal"
+		if status == http.StatusNotFound {
+			code = "not_found"
+		}
+		writeAPIError(w, r, status, code, "error")
 		return
 	}
 
@@ -504,7 +552,7 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/orders/")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
 		return
 	}
 	o, items, err := s.Orders.GetOrder(r.Context(), domain.OrderID(id))
@@ -513,7 +561,11 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		if err == domain.ErrNotFound {
 			status = http.StatusNotFound
 		}
-		http.Error(w, "error", status)
+		code := "internal"
+		if status == http.StatusNotFound {
+			code = "not_found"
+		}
+		writeAPIError(w, r, status, code, "error")
 		return
 	}
 
@@ -552,7 +604,7 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 
 	var req checkoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 		return
 	}
 
@@ -567,7 +619,7 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if customerID == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing customer_id (or X-SSH-Fingerprint)")
 		return
 	}
 
@@ -592,15 +644,19 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	o, items, err := s.Orders.CreatePendingOrder(r.Context(), in)
 	if err != nil {
 		status := http.StatusInternalServerError
+		code := "internal"
 		switch err {
 		case domain.ErrInvalidInput:
-			status = http.StatusBadRequest
+			status = http.StatusUnprocessableEntity
+			code = "invalid_input"
 		case domain.ErrForbidden:
 			status = http.StatusForbidden
+			code = "forbidden"
 		case domain.ErrConflict:
 			status = http.StatusConflict
+			code = "conflict"
 		}
-		http.Error(w, "error", status)
+		writeAPIError(w, r, status, code, "error")
 		return
 	}
 
@@ -619,7 +675,7 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 			CancelURL:  req.CancelURL,
 		})
 		if err != nil {
-			http.Error(w, "stripe error", http.StatusBadGateway)
+			writeAPIError(w, r, http.StatusBadGateway, "bad_gateway", "stripe error")
 			return
 		}
 
