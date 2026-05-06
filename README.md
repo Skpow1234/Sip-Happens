@@ -58,6 +58,7 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`STRIPE_MOCK=1`**: enables a local mock Stripe checkout URL when `STRIPE_SECRET_KEY` is not set (prototype only)
 
 Database config is currently provided by Compose:
+
 - `POSTGRES_DSN` is set for the `core-api` container to reach the `postgres` service.
 
 ## Current endpoints
@@ -66,11 +67,3 @@ Database config is currently provided by Compose:
 - `POST /checkout` (creates a pending order + reserves inventory + creates Stripe Checkout Session when `STRIPE_SECRET_KEY` is set)
 - `GET /orders/{id}`
 - `POST /webhooks/stripe` (enabled when `STRIPE_WEBHOOK_SECRET` is set)
-
-## Webhook testing (local)
-
-See `docs/runbooks/stripe-webhook-local.md` for a **container-only** Stripe CLI workflow.
-
-## Design reference
-
-See `docs/DESIGN.md`.
