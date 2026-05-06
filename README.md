@@ -74,6 +74,14 @@ This background worker cancels expired `PENDING_PAYMENT` orders and releases inv
 docker compose -f infra/compose.yaml up -d order-reaper
 ```
 
+### Start the outbox dispatcher (optional)
+
+This background worker claims rows from `outbox_events` and publishes them (currently to logs, until we wire a real queue).
+
+```bash
+docker compose -f infra/compose.yaml run --rm core-api jobs outbox-dispatch
+```
+
 ### Smoke test
 
 ```bash

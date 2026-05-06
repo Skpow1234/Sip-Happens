@@ -116,6 +116,35 @@ func LoadStripeReconcileJob() (StripeReconcileJob, error) {
 	return c, nil
 }
 
+type OutboxDispatchJob struct {
+	PostgresDSN string
+	Interval    time.Duration
+	BatchLimit  int
+	RunOnce     bool
+
+	LockedBy string
+}
+
+func LoadOutboxDispatchJob() (OutboxDispatchJob, error) {
+	var c OutboxDispatchJob
+	c.PostgresDSN = os.Getenv("POSTGRES_DSN")
+	if c.PostgresDSN == "" {
+		return c, fmt.Errorf("POSTGRES_DSN is required")
+	}
+	c.Interval = time.Duration(getenvIntDefault("JOB_INTERVAL_SECONDS", 5)) * time.Second
+	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
+	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
+	c.LockedBy = getenvDefault("OUTBOX_LOCKED_BY", "outbox-dispatcher")
+
+	if c.BatchLimit <= 0 {
+		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
+	}
+	if c.Interval <= 0 {
+		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")
+	}
+	return c, nil
+}
+
 type SSHGateway struct {
 	SSHAddr     string
 	CoreAPIURL  string

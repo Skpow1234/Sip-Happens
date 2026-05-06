@@ -18,6 +18,7 @@ import (
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/migrate"
 	"sip-happens/services/core-api/internal/orders"
+	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/seed"
@@ -47,6 +48,13 @@ func main() {
 
 	if len(os.Args) >= 3 && os.Args[1] == "jobs" && os.Args[2] == "stripe-reconcile" {
 		if err := runStripeReconcileJob(context.Background()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	if len(os.Args) >= 3 && os.Args[1] == "jobs" && os.Args[2] == "outbox-dispatch" {
+		if err := runOutboxDispatchJob(context.Background()); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -286,6 +294,53 @@ func runStripeReconcileJob(ctx context.Context) error {
 		}
 		if n > 0 {
 			log.Printf("job stripe-reconcile: processed=%d", n)
+		}
+
+		if jobCfg.RunOnce {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+func runOutboxDispatchJob(ctx context.Context) error {
+	jobCfg, err := config.LoadOutboxDispatchJob()
+	if err != nil {
+		return err
+	}
+	sqlDB, err := sql.Open("postgres", jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return err
+	}
+
+	d := &outbox.Dispatcher{
+		Store:     outbox.NewSQLStore(),
+		Publisher: outbox.LogPublisher{},
+		LockedBy:  jobCfg.LockedBy,
+		Batch:     jobCfg.BatchLimit,
+	}
+
+	tick := time.NewTicker(jobCfg.Interval)
+	defer tick.Stop()
+
+	log.Printf("job outbox-dispatch starting (interval=%s, limit=%d, once=%v, locked_by=%s)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, jobCfg.LockedBy)
+
+	for {
+		n, err := d.RunOnce(ctx, sqlDB, time.Now())
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			log.Printf("job outbox-dispatch: sent=%d", n)
 		}
 
 		if jobCfg.RunOnce {

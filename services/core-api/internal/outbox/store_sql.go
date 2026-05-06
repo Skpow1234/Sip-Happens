@@ -47,10 +47,127 @@ insert into outbox_events (
 	return err
 }
 
+func (s *SQLStore) ClaimPending(ctx context.Context, db *sql.DB, now time.Time, limit int, lockedBy string) ([]Event, error) {
+	if db == nil {
+		return nil, fmt.Errorf("missing db")
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	if lockedBy == "" {
+		lockedBy = "outbox-dispatcher"
+	}
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, `
+select id, type, occurred_at, aggregate_type, aggregate_id, version,
+       coalesce(request_id,''), payload_json
+from outbox_events
+where status='PENDING'
+  and next_attempt_at <= $1
+  and (locked_at is null or locked_at < $1 - interval '5 minutes')
+order by next_attempt_at asc, occurred_at asc
+for update skip locked
+limit $2
+`, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	var out []Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.Type, &e.OccurredAt, &e.AggregateType, &e.AggregateID, &e.Version, &e.RequestID, &e.PayloadJSON); err != nil {
+			return nil, err
+		}
+		ids = append(ids, e.ID)
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	// Lock metadata update.
+	_, err = tx.ExecContext(ctx, `
+update outbox_events
+set locked_at=$2,
+    locked_by=$3,
+    updated_at=now()
+where id = any($1)
+`, pqStringArray(ids), now, lockedBy)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *SQLStore) MarkSent(ctx context.Context, db *sql.DB, id string, sentAt time.Time) error {
+	if db == nil {
+		return fmt.Errorf("missing db")
+	}
+	if id == "" {
+		return fmt.Errorf("missing id")
+	}
+	_, err := db.ExecContext(ctx, `
+update outbox_events
+set status='SENT',
+    locked_at=null,
+    locked_by=null,
+    updated_at=$2
+where id=$1
+`, id, sentAt)
+	return err
+}
+
+func (s *SQLStore) MarkFailed(ctx context.Context, db *sql.DB, id string, now time.Time, errMsg string, nextAttemptAt time.Time) error {
+	if db == nil {
+		return fmt.Errorf("missing db")
+	}
+	if id == "" {
+		return fmt.Errorf("missing id")
+	}
+	if nextAttemptAt.IsZero() {
+		nextAttemptAt = now.Add(30 * time.Second)
+	}
+	_, err := db.ExecContext(ctx, `
+update outbox_events
+set status='PENDING',
+    attempts=attempts+1,
+    next_attempt_at=$2,
+    locked_at=null,
+    locked_by=null,
+    updated_at=$3
+where id=$1
+`, id, nextAttemptAt, now)
+	_ = errMsg
+	return err
+}
+
 func nullable(s string) any {
 	if s == "" {
 		return nil
 	}
 	return s
 }
+
+// pqStringArray formats a slice for Postgres ANY($1) usage without adding new dependencies.
+// It relies on lib/pq's array support via []string.
+func pqStringArray(v []string) any { return v }
 
