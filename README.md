@@ -82,6 +82,12 @@ This background worker claims rows from `outbox_events` and publishes them (curr
 docker compose -f infra/compose.yaml run --rm core-api jobs outbox-dispatch
 ```
 
+Environment knobs:
+
+- `OUTBOX_MAX_ATTEMPTS` (default `10`)
+- `OUTBOX_BASE_BACKOFF_SECONDS` (default `30`)
+- `OUTBOX_LOCKED_BY` (default `outbox-dispatcher`)
+
 ### Smoke test
 
 ```bash

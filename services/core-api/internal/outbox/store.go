@@ -20,6 +20,8 @@ type Event struct {
 
 	RequestID string
 	PayloadJSON string
+
+	Attempts int
 }
 
 func FromEnvelope(e events.Envelope) (Event, error) {
@@ -46,5 +48,6 @@ type Store interface {
 	ClaimPending(ctx context.Context, db *sql.DB, now time.Time, limit int, lockedBy string) ([]Event, error)
 	MarkSent(ctx context.Context, db *sql.DB, id string, sentAt time.Time) error
 	MarkFailed(ctx context.Context, db *sql.DB, id string, now time.Time, errMsg string, nextAttemptAt time.Time) error
+	MarkTerminalFailed(ctx context.Context, db *sql.DB, id string, now time.Time, errMsg string) error
 }
 

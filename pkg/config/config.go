@@ -123,6 +123,8 @@ type OutboxDispatchJob struct {
 	RunOnce     bool
 
 	LockedBy string
+	MaxAttempts int
+	BaseBackoff time.Duration
 }
 
 func LoadOutboxDispatchJob() (OutboxDispatchJob, error) {
@@ -135,12 +137,20 @@ func LoadOutboxDispatchJob() (OutboxDispatchJob, error) {
 	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
 	c.LockedBy = getenvDefault("OUTBOX_LOCKED_BY", "outbox-dispatcher")
+	c.MaxAttempts = getenvIntDefault("OUTBOX_MAX_ATTEMPTS", 10)
+	c.BaseBackoff = time.Duration(getenvIntDefault("OUTBOX_BASE_BACKOFF_SECONDS", 30)) * time.Second
 
 	if c.BatchLimit <= 0 {
 		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
 	}
 	if c.Interval <= 0 {
 		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")
+	}
+	if c.MaxAttempts <= 0 || c.MaxAttempts > 100 {
+		return c, fmt.Errorf("OUTBOX_MAX_ATTEMPTS must be between 1 and 100")
+	}
+	if c.BaseBackoff <= 0 {
+		return c, fmt.Errorf("OUTBOX_BASE_BACKOFF_SECONDS must be > 0")
 	}
 	return c, nil
 }

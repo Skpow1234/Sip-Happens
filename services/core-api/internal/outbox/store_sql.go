@@ -66,7 +66,7 @@ func (s *SQLStore) ClaimPending(ctx context.Context, db *sql.DB, now time.Time, 
 
 	rows, err := tx.QueryContext(ctx, `
 select id, type, occurred_at, aggregate_type, aggregate_id, version,
-       coalesce(request_id,''), payload_json
+       coalesce(request_id,''), payload_json, attempts
 from outbox_events
 where status='PENDING'
   and next_attempt_at <= $1
@@ -84,7 +84,7 @@ limit $2
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.Type, &e.OccurredAt, &e.AggregateType, &e.AggregateID, &e.Version, &e.RequestID, &e.PayloadJSON); err != nil {
+		if err := rows.Scan(&e.ID, &e.Type, &e.OccurredAt, &e.AggregateType, &e.AggregateID, &e.Version, &e.RequestID, &e.PayloadJSON, &e.Attempts); err != nil {
 			return nil, err
 		}
 		ids = append(ids, e.ID)
@@ -151,12 +151,32 @@ update outbox_events
 set status='PENDING',
     attempts=attempts+1,
     next_attempt_at=$2,
+    last_error=$4,
     locked_at=null,
     locked_by=null,
     updated_at=$3
 where id=$1
-`, id, nextAttemptAt, now)
-	_ = errMsg
+`, id, nextAttemptAt, now, errMsg)
+	return err
+}
+
+func (s *SQLStore) MarkTerminalFailed(ctx context.Context, db *sql.DB, id string, now time.Time, errMsg string) error {
+	if db == nil {
+		return fmt.Errorf("missing db")
+	}
+	if id == "" {
+		return fmt.Errorf("missing id")
+	}
+	_, err := db.ExecContext(ctx, `
+update outbox_events
+set status='FAILED',
+    attempts=attempts+1,
+    last_error=$3,
+    locked_at=null,
+    locked_by=null,
+    updated_at=$2
+where id=$1
+`, id, now, errMsg)
 	return err
 }
 
