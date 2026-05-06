@@ -37,6 +37,22 @@ docker compose -f infra/compose.yaml up -d postgres
 docker compose -f infra/compose.yaml run --rm core-api migrate up
 ```
 
+### Run the Stripe reconcile job (optional)
+
+This worker re-checks stale `PENDING_PAYMENT` orders against Stripe (by `stripe_payment_intent_id`) and applies `MarkPaid` when Stripe says the payment succeeded.
+
+- Run once:
+
+```bash
+docker compose -f infra/compose.yaml run --rm -e JOB_RUN_ONCE=true core-api jobs stripe-reconcile
+```
+
+- Run continuously:
+
+```bash
+docker compose -f infra/compose.yaml up -d stripe-reconcile
+```
+
 ### Start core-api
 
 ```bash
