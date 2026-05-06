@@ -37,6 +37,13 @@ docker compose -f infra/compose.yaml run --rm core-api migrate up
 docker compose -f infra/compose.yaml up -d core-api
 ```
 
+### Start SSH gateway (TUI)
+
+```bash
+docker compose -f infra/compose.yaml up -d ssh-gateway
+ssh -p 2222 localhost
+```
+
 ### Smoke test
 
 ```bash
