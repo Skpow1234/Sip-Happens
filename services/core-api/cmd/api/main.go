@@ -20,11 +20,19 @@ import (
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+	"sip-happens/services/core-api/internal/seed"
 )
 
 func main() {
 	if len(os.Args) >= 3 && os.Args[1] == "migrate" && os.Args[2] == "up" {
 		if err := runMigrateUp(context.Background()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	if len(os.Args) >= 3 && os.Args[1] == "seed" && os.Args[2] == "demo" {
+		if err := runSeedDemo(context.Background()); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -121,5 +129,32 @@ func runServer() error {
 	}
 	log.Printf("core-api listening on %s", addr)
 	return httpSrv.ListenAndServe()
+}
+
+func runSeedDemo(ctx context.Context) error {
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn == "" {
+		return fmt.Errorf("POSTGRES_DSN is required")
+	}
+	sqlDB, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return err
+	}
+
+	out, err := seed.Demo(ctx, sqlDB)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("seeded demo data:")
+	log.Printf("  customer_id=%s", out.CustomerID)
+	for i, pid := range out.ProductIDs {
+		log.Printf("  product_id[%d]=%s", i, pid)
+	}
+	return nil
 }
 
