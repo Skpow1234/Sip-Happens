@@ -24,6 +24,7 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_MOCK: ${STRIPE_MOCK:-1}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
     depends_on:
       postgres:
         condition: service_healthy

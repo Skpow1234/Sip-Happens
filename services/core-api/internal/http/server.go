@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/domain"
 	"sip-happens/services/core-api/internal/orders"
@@ -16,6 +17,8 @@ import (
 type Server struct {
 	Orders        orders.Service
 	Catalog       catalog.Repository
+	Admin         admin.Service
+	AdminToken    string
 	DB            *sql.DB
 	Stripe        stripepayments.Service
 	StripeWebhook *stripepayments.WebhookHandler
@@ -28,6 +31,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	mux.HandleFunc("/orders/", s.handleGetOrder)
 	mux.HandleFunc("/checkout", s.handleCheckout)
+	mux.HandleFunc("/admin/products", s.handleAdminProducts)
+	mux.HandleFunc("/admin/prices", s.handleAdminPrices)
+	mux.HandleFunc("/admin/inventory", s.handleAdminInventory)
 
 	if s.StripeWebhook != nil {
 		mux.Handle("/webhooks/stripe", s.StripeWebhook)
@@ -39,6 +45,119 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if s.AdminToken == "" {
+		http.Error(w, "admin not configured", http.StatusNotFound)
+		return false
+	}
+	h := r.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if !strings.HasPrefix(h, prefix) || strings.TrimPrefix(h, prefix) != s.AdminToken {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		list, err := s.Admin.ListProducts(r.Context(), "COP", 200)
+		if err != nil {
+			http.Error(w, "error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": list})
+	case http.MethodPost:
+		var req admin.UpsertProductInput
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		id, err := s.Admin.UpsertProduct(r.Context(), req)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if err == domain.ErrInvalidInput {
+				status = http.StatusBadRequest
+			}
+			http.Error(w, "error", status)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"product_id": id})
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var req admin.SetPriceInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Currency == "" {
+		req.Currency = "COP"
+	}
+	if err := s.Admin.SetPrice(r.Context(), req); err != nil {
+		status := http.StatusInternalServerError
+		if err == domain.ErrInvalidInput {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, "error", status)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var req admin.UpsertInventoryInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := s.Admin.UpsertInventory(r.Context(), req); err != nil {
+		status := http.StatusInternalServerError
+		if err == domain.ErrInvalidInput {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, "error", status)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {

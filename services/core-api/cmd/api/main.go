@@ -12,6 +12,7 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/db"
 	httpserver "sip-happens/services/core-api/internal/http"
@@ -105,6 +106,7 @@ func runServer() error {
 	paymentsRepo := payments.NewSQLRepository()
 
 	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
+	adminSvc := &admin.SQLService{DB: sqlDB}
 
 	// Stripe webhook wiring (Stripe verifier + SQL idempotency store).
 	stripeSigningSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
@@ -120,6 +122,8 @@ func runServer() error {
 	srv := &httpserver.Server{
 		Orders:        ordersSvc,
 		Catalog:       catalogRepo,
+		Admin:         adminSvc,
+		AdminToken:    os.Getenv("ADMIN_TOKEN"),
 		DB:            sqlDB,
 		Stripe:        selectStripeClient(),
 		StripeWebhook: stripeWebhook,
