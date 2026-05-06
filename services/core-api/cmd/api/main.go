@@ -121,7 +121,7 @@ func runServer() error {
 		Orders:        ordersSvc,
 		Catalog:       catalogRepo,
 		DB:            sqlDB,
-		Stripe:        stripepayments.StripeGoClient{SecretKey: os.Getenv("STRIPE_SECRET_KEY")},
+		Stripe:        selectStripeClient(),
 		StripeWebhook: stripeWebhook,
 	}
 
@@ -131,6 +131,16 @@ func runServer() error {
 	}
 	log.Printf("core-api listening on %s", addr)
 	return httpSrv.ListenAndServe()
+}
+
+func selectStripeClient() stripepayments.Service {
+	if key := os.Getenv("STRIPE_SECRET_KEY"); key != "" {
+		return stripepayments.StripeGoClient{SecretKey: key}
+	}
+	if os.Getenv("STRIPE_MOCK") == "1" {
+		return stripepayments.MockClient{}
+	}
+	return nil
 }
 
 func runSeedDemo(ctx context.Context) error {

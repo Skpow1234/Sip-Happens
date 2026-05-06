@@ -23,6 +23,7 @@ services:
       MIGRATIONS_PATH: "/app/infra/migrations"
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_MOCK: ${STRIPE_MOCK:-1}
     depends_on:
       postgres:
         condition: service_healthy

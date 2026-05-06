@@ -55,6 +55,7 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 
 - **`STRIPE_SECRET_KEY`**: required to create Stripe Checkout Sessions from `POST /checkout`
 - **`STRIPE_WEBHOOK_SECRET`**: required to verify incoming `POST /webhooks/stripe`
+- **`STRIPE_MOCK=1`**: enables a local mock Stripe checkout URL when `STRIPE_SECRET_KEY` is not set (prototype only)
 
 Database config is currently provided by Compose:
 - `POSTGRES_DSN` is set for the `core-api` container to reach the `postgres` service.
