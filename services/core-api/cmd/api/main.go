@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -34,6 +35,13 @@ func main() {
 
 	if len(os.Args) >= 3 && os.Args[1] == "seed" && os.Args[2] == "demo" {
 		if err := runSeedDemo(context.Background()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	if len(os.Args) >= 3 && os.Args[1] == "jobs" && os.Args[2] == "cancel-expired" {
+		if err := runCancelExpiredJob(context.Background()); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -172,5 +180,67 @@ func runSeedDemo(ctx context.Context) error {
 		log.Printf("  product_id[%d]=%s", i, pid)
 	}
 	return nil
+}
+
+func runCancelExpiredJob(ctx context.Context) error {
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn == "" {
+		return fmt.Errorf("POSTGRES_DSN is required")
+	}
+	sqlDB, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return err
+	}
+
+	d := db.New(sqlDB)
+	ordersRepo := orders.NewSQLRepository()
+	invRepo := inventory.NewSQLRepository()
+	catalogRepo := catalog.NewSQLRepository()
+	paymentsRepo := payments.NewSQLRepository()
+	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
+
+	interval := 30 * time.Second
+	if v := os.Getenv("JOB_INTERVAL_SECONDS"); v != "" {
+		if secs, err := time.ParseDuration(v + "s"); err == nil && secs > 0 {
+			interval = secs
+		}
+	}
+	limit := 100
+	if v := os.Getenv("JOB_BATCH_LIMIT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	runOnce := os.Getenv("JOB_RUN_ONCE") == "1"
+
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+
+	log.Printf("job cancel-expired starting (interval=%s, limit=%d, once=%v)", interval, limit, runOnce)
+
+	for {
+		n, err := ordersSvc.CancelExpiredPendingOrders(ctx, time.Now(), limit)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			log.Printf("job cancel-expired: cancelled=%d", n)
+		}
+
+		if runOnce {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
 }
 

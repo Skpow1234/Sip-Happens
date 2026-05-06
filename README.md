@@ -44,6 +44,14 @@ docker compose -f infra/compose.yaml up -d ssh-gateway
 ssh -p 2222 localhost
 ```
 
+### Start the “order reaper” (expires pending orders)
+
+This background worker cancels expired `PENDING_PAYMENT` orders and releases inventory reservations.
+
+```bash
+docker compose -f infra/compose.yaml up -d order-reaper
+```
+
 ### Smoke test
 
 ```bash
