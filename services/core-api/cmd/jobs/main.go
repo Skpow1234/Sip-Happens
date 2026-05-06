@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -25,21 +27,24 @@ func main() {
 	}
 	cmd := os.Args[1]
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	switch cmd {
 	case "cancel-expired":
-		if err := runCancelExpiredJob(context.Background()); err != nil {
+		if err := runCancelExpiredJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	case "stripe-reconcile":
-		if err := runStripeReconcileJob(context.Background()); err != nil {
+		if err := runStripeReconcileJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	case "outbox-dispatch":
-		if err := runOutboxDispatchJob(context.Background()); err != nil {
+		if err := runOutboxDispatchJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	case "outbox-replay":
-		if err := runOutboxReplayJob(context.Background()); err != nil {
+		if err := runOutboxReplayJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	default:
