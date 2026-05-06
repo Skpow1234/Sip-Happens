@@ -134,3 +134,21 @@ Database config is currently provided by Compose:
 - **Request IDs**: `ssh-gateway` sends `X-Request-Id` to `core-api` and `core-api` echoes it back on responses.
 - **Metrics**: scrape `GET /metrics`
 - **Readiness**: `GET /readyz` checks DB connectivity
+
+## Tests
+
+Unit tests run without any dependencies.
+
+Integration/contract tests require a Postgres DSN available to the `go test` process:
+
+- **Run all tests** (skips DB-backed tests if `POSTGRES_DSN` is missing):
+
+```bash
+go test ./...
+```
+
+- **Run DB-backed tests** (example DSN, adjust as needed):
+
+```bash
+POSTGRES_DSN="postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" go test ./...
+```
