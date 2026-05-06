@@ -60,6 +60,13 @@ func main() {
 		return
 	}
 
+	if len(os.Args) >= 3 && os.Args[1] == "jobs" && os.Args[2] == "outbox-replay" {
+		if err := runOutboxReplayJob(context.Background()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	if err := runServer(); err != nil {
 		log.Fatal(err)
 	}
@@ -353,5 +360,30 @@ func runOutboxDispatchJob(ctx context.Context) error {
 		case <-tick.C:
 		}
 	}
+}
+
+func runOutboxReplayJob(ctx context.Context) error {
+	jobCfg, err := config.LoadOutboxReplayJob()
+	if err != nil {
+		return err
+	}
+	sqlDB, err := sql.Open("postgres", jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return err
+	}
+
+	store := outbox.NewSQLStore()
+
+	log.Printf("job outbox-replay starting (limit=%d)", jobCfg.Limit)
+	n, err := store.ReplayDeadLetters(ctx, sqlDB, jobCfg.Limit)
+	if err != nil {
+		return err
+	}
+	log.Printf("job outbox-replay: requeued=%d", n)
+	return nil
 }
 

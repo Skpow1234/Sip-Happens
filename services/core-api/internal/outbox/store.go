@@ -49,5 +49,8 @@ type Store interface {
 	MarkSent(ctx context.Context, db *sql.DB, id string, sentAt time.Time) error
 	MarkFailed(ctx context.Context, db *sql.DB, id string, now time.Time, errMsg string, nextAttemptAt time.Time) error
 	MarkTerminalFailed(ctx context.Context, db *sql.DB, id string, now time.Time, errMsg string) error
+
+	// ReplayDeadLetters re-queues up to limit dead letters back into outbox_events.
+	ReplayDeadLetters(ctx context.Context, db *sql.DB, limit int) (int, error)
 }
 

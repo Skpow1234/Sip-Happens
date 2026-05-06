@@ -167,17 +167,114 @@ func (s *SQLStore) MarkTerminalFailed(ctx context.Context, db *sql.DB, id string
 	if id == "" {
 		return fmt.Errorf("missing id")
 	}
-	_, err := db.ExecContext(ctx, `
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Snapshot row into dead letters.
+	_, err = tx.ExecContext(ctx, `
+insert into outbox_dead_letters (
+  outbox_event_id, type, occurred_at,
+  aggregate_type, aggregate_id, version,
+  request_id, payload_json, attempts, last_error, failed_at
+)
+select id, type, occurred_at,
+       aggregate_type, aggregate_id, version,
+       request_id, payload_json, attempts+1, $2, $3
+from outbox_events
+where id=$1
+`, id, errMsg, now)
+	if err != nil {
+		return err
+	}
+
+	// Mark terminal failed.
+	_, err = tx.ExecContext(ctx, `
 update outbox_events
 set status='FAILED',
     attempts=attempts+1,
-    last_error=$3,
+    last_error=$2,
     locked_at=null,
     locked_by=null,
-    updated_at=$2
+    updated_at=$3
 where id=$1
-`, id, now, errMsg)
-	return err
+`, id, errMsg, now)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (s *SQLStore) ReplayDeadLetters(ctx context.Context, db *sql.DB, limit int) (int, error) {
+	if db == nil {
+		return 0, fmt.Errorf("missing db")
+	}
+	if limit <= 0 || limit > 10000 {
+		limit = 100
+	}
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Pick newest dead letters first.
+	rows, err := tx.QueryContext(ctx, `
+select outbox_event_id
+from outbox_dead_letters
+order by failed_at desc
+limit $1
+for update skip locked
+`, limit)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+
+	// Re-queue events: reset status/attempts/next_attempt.
+	res, err := tx.ExecContext(ctx, `
+update outbox_events
+set status='PENDING',
+    attempts=0,
+    next_attempt_at=now(),
+    locked_at=null,
+    locked_by=null,
+    last_error=null,
+    updated_at=now()
+where id = any($1)
+`, pqStringArray(ids))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+
+	// Keep dead letters for auditability; they can be pruned later.
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(n), nil
 }
 
 func nullable(s string) any {

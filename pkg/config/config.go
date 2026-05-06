@@ -155,6 +155,26 @@ func LoadOutboxDispatchJob() (OutboxDispatchJob, error) {
 	return c, nil
 }
 
+type OutboxReplayJob struct {
+	PostgresDSN string
+	Limit       int
+	RunOnce     bool
+}
+
+func LoadOutboxReplayJob() (OutboxReplayJob, error) {
+	var c OutboxReplayJob
+	c.PostgresDSN = os.Getenv("POSTGRES_DSN")
+	if c.PostgresDSN == "" {
+		return c, fmt.Errorf("POSTGRES_DSN is required")
+	}
+	c.Limit = getenvIntDefault("OUTBOX_REPLAY_LIMIT", 100)
+	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", true)
+	if c.Limit <= 0 || c.Limit > 10000 {
+		return c, fmt.Errorf("OUTBOX_REPLAY_LIMIT must be between 1 and 10000")
+	}
+	return c, nil
+}
+
 type SSHGateway struct {
 	SSHAddr     string
 	CoreAPIURL  string

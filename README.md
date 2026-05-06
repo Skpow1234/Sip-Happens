@@ -88,6 +88,19 @@ Environment knobs:
 - `OUTBOX_BASE_BACKOFF_SECONDS` (default `30`)
 - `OUTBOX_LOCKED_BY` (default `outbox-dispatcher`)
 
+### Replay outbox dead letters (optional)
+
+If some events reach terminal `FAILED`, they are copied into `outbox_dead_letters`.
+You can re-queue a batch back into `outbox_events` with:
+
+```bash
+docker compose -f infra/compose.yaml run --rm core-api jobs outbox-replay
+```
+
+Environment knobs:
+
+- `OUTBOX_REPLAY_LIMIT` (default `100`)
+
 ### Smoke test
 
 ```bash
