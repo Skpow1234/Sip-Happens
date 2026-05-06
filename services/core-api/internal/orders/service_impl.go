@@ -8,7 +8,7 @@ import (
 	"sip-happens/pkg/ids"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/db"
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/payments"
 )

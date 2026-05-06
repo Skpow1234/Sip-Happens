@@ -20,10 +20,10 @@ type Product struct {
 }
 
 type Price struct {
-	ProductID    ProductID
-	Currency     string
+	ProductID        ProductID
+	Currency         string
 	AmountMinorUnits int64
-	ValidFrom    time.Time
-	ValidThrough *time.Time
+	ValidFrom        time.Time
+	ValidThrough     *time.Time
 }
 

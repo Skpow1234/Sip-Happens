@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 )
 
 type Repository interface {

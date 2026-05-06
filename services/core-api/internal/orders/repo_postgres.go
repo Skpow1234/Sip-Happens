@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 )
 
 type PostgresRepository struct{}

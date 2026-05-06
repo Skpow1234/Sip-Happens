@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 )
 
 // Repository persists order state. All methods must be safe to call inside a transaction.

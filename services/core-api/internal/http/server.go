@@ -9,7 +9,7 @@ import (
 
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 )

@@ -41,11 +41,13 @@ type Order struct {
 }
 
 type OrderItem struct {
-	OrderID         OrderID
-	ProductID       ProductID
-	SKU             string
-	Name            string
-	Qty             int
+	OrderID OrderID
+
+	ProductID ProductID
+	SKU       string
+	Name      string
+	Qty       int
+
 	UnitPriceMinorUnits int64
 	Currency            string
 	LineTotalMinorUnits int64

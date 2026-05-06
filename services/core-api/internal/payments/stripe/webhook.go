@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 	"sip-happens/services/core-api/internal/orders"
 )
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"sip-happens/pkg/ids"
-	"sip-happens/services/core-api/internal/domain"
+	"sip-happens/pkg/domain"
 )
 
 type Service interface {
