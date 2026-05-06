@@ -55,7 +55,34 @@ services:
       POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
       JOB_INTERVAL_SECONDS: ${JOB_INTERVAL_SECONDS:-30}
       JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
-    command: ["jobs", "cancel-expired"]
+    command: ["/app/core-jobs", "cancel-expired"]
+
+  stripe-reconcile:
+    image: infra-core-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      JOB_INTERVAL_SECONDS: ${JOB_INTERVAL_SECONDS:-60}
+      JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_MOCK: ${STRIPE_MOCK:-1}
+    command: ["/app/core-jobs", "stripe-reconcile"]
+
+  outbox-dispatch:
+    image: infra-core-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      JOB_INTERVAL_SECONDS: ${JOB_INTERVAL_SECONDS:-5}
+      JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
+      OUTBOX_LOCKED_BY: ${OUTBOX_LOCKED_BY:-outbox-dispatcher}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-10}
+      OUTBOX_BASE_BACKOFF_SECONDS: ${OUTBOX_BASE_BACKOFF_SECONDS:-30}
+    command: ["/app/core-jobs", "outbox-dispatch"]
 
   # Optional: run Stripe CLI in a container (so you don't need local installs).
   # Usage examples are documented in docs/runbooks/stripe-webhook-local.md

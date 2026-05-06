@@ -37,6 +37,12 @@ docker compose -f infra/compose.yaml up -d postgres
 docker compose -f infra/compose.yaml run --rm core-api migrate up
 ```
 
+Or using the dedicated migrator binary (preferred going forward):
+
+```bash
+docker compose -f infra/compose.yaml run --rm core-api /app/core-migrate up
+```
+
 ### Run the Stripe reconcile job (optional)
 
 This worker re-checks stale `PENDING_PAYMENT` orders against Stripe (by `stripe_payment_intent_id`) and applies `MarkPaid` when Stripe says the payment succeeded.
@@ -79,7 +85,7 @@ docker compose -f infra/compose.yaml up -d order-reaper
 This background worker claims rows from `outbox_events` and publishes them (currently to logs, until we wire a real queue).
 
 ```bash
-docker compose -f infra/compose.yaml run --rm core-api jobs outbox-dispatch
+docker compose -f infra/compose.yaml up -d outbox-dispatch
 ```
 
 Environment knobs:

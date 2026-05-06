@@ -54,7 +54,7 @@ jobs:
 
       - name: Migration smoke (core-api migrate up)
         run: |
-          go run ./services/core-api/cmd/api migrate up
+          go run ./services/core-api/cmd/migrate up
 
       - name: Docker build (compose)
         run: |
