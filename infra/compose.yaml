@@ -30,6 +30,21 @@ services:
     ports:
       - "8080:8080"
 
+  ssh-gateway:
+    build:
+      context: ..
+      dockerfile: services/ssh-gateway/Dockerfile
+    environment:
+      CORE_API_URL: "http://core-api:8080"
+      SSH_ADDR: "0.0.0.0:2222"
+      SSH_HOST_KEY_PATH: "/data/ssh_host_ed25519_key"
+    depends_on:
+      - core-api
+    ports:
+      - "2222:2222"
+    volumes:
+      - sshkeys:/data
+
   # Optional: run Stripe CLI in a container (so you don't need local installs).
   # Usage examples are documented in docs/runbooks/stripe-webhook-local.md
   stripe-cli:
@@ -38,3 +53,6 @@ services:
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
     depends_on:
       - core-api
+
+volumes:
+  sshkeys:

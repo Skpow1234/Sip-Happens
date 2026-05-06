@@ -49,3 +49,4 @@ docker-compose.override.yml
 docs/DESIGN.md
 infra/migrations/*.sql
 docs
+services/ssh-gateway/entrypoint.sh
