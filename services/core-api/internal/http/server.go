@@ -69,7 +69,16 @@ func (s *Server) requireSigned(next http.Handler) http.Handler {
 	if strings.TrimSpace(s.CoreAPIHMACSecret) == "" {
 		return next
 	}
-	m := &HMACMiddleware{Secret: []byte(s.CoreAPIHMACSecret), Tolerance: 5 * time.Minute}
+	if s.DB == nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		})
+	}
+	m := &HMACMiddleware{
+		Secret:    []byte(s.CoreAPIHMACSecret),
+		Tolerance: 5 * time.Minute,
+		Nonces:    &SQLNonceStore{DB: s.DB},
+	}
 	return m.Wrap(next)
 }
 
