@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"sip-happens/pkg/ids"
@@ -11,10 +12,13 @@ import (
 )
 
 type Service interface {
-	ListProducts(ctx context.Context, currency string, limit int) ([]ProductRow, error)
-	UpsertProduct(ctx context.Context, in UpsertProductInput) (domain.ProductID, error)
-	SetPrice(ctx context.Context, in SetPriceInput) error
-	UpsertInventory(ctx context.Context, in UpsertInventoryInput) error
+	ListProducts(ctx context.Context, in ListProductsInput) ([]ProductRow, error)
+	UpsertProduct(ctx context.Context, actor string, in UpsertProductInput) (domain.ProductID, error)
+	DeactivateProduct(ctx context.Context, actor string, productID domain.ProductID, reason string) error
+	SetPrice(ctx context.Context, actor string, in SetPriceInput) error
+	UpsertInventory(ctx context.Context, actor string, in UpsertInventoryInput) error
+
+	ListAuditEvents(ctx context.Context, in ListAuditEventsInput) ([]domain.AuditEvent, error)
 }
 
 type SQLService struct {
@@ -24,6 +28,14 @@ type SQLService struct {
 type ProductRow struct {
 	Product domain.Product
 	Price   *domain.Price
+}
+
+type ListProductsInput struct {
+	Currency string
+	Limit    int
+	Offset   int
+	Query    string
+	IsActive *bool
 }
 
 type UpsertProductInput struct {
@@ -49,21 +61,47 @@ type UpsertInventoryInput struct {
 	SafetyStock int
 }
 
-func (s *SQLService) ListProducts(ctx context.Context, currency string, limit int) ([]ProductRow, error) {
+type ListAuditEventsInput struct {
+	AggregateType string
+	AggregateID   string
+	Limit         int
+	Offset        int
+}
+
+func (s *SQLService) ListProducts(ctx context.Context, in ListProductsInput) ([]ProductRow, error) {
 	if s.DB == nil {
 		return nil, fmt.Errorf("missing db")
 	}
+
+	currency := in.Currency
 	if currency == "" {
 		currency = "COP"
 	}
+	limit := in.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 100
+	}
+	offset := in.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	q := strings.TrimSpace(in.Query)
+	var qLike any
+	if q != "" {
+		qLike = "%" + q + "%"
+	}
+	var active any
+	if in.IsActive != nil {
+		active = *in.IsActive
 	}
 
 	rows, err := s.DB.QueryContext(ctx, `
 select p.id, p.sku, p.name, p.brewery, p.style, p.abv, p.volume_ml, p.invima_reg, p.is_active, p.created_at, p.updated_at,
        pr.product_id, pr.currency, pr.amount_minor_units, pr.valid_from, pr.valid_through
 from products p
+where ($3::text is null or p.sku ilike $3 or p.name ilike $3 or p.brewery ilike $3)
+  and ($4::boolean is null or p.is_active = $4)
 left join lateral (
   select product_id, currency, amount_minor_units, valid_from, valid_through
   from prices
@@ -76,7 +114,8 @@ left join lateral (
 ) pr on true
 order by p.sku asc
 limit $2
-`, currency, limit)
+offset $5
+`, currency, limit, qLike, active, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +156,7 @@ limit $2
 	return out, rows.Err()
 }
 
-func (s *SQLService) UpsertProduct(ctx context.Context, in UpsertProductInput) (domain.ProductID, error) {
+func (s *SQLService) UpsertProduct(ctx context.Context, actor string, in UpsertProductInput) (domain.ProductID, error) {
 	if s.DB == nil {
 		return "", fmt.Errorf("missing db")
 	}
@@ -148,6 +187,7 @@ values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		if err != nil {
 			return "", err
 		}
+		_ = s.insertAudit(ctx, "product", id, actor, "product.created", fmt.Sprintf(`{"sku":%q}`, in.SKU))
 		return domain.ProductID(id), nil
 	}
 
@@ -159,10 +199,30 @@ where id=$9
 	if err != nil {
 		return "", err
 	}
+	_ = s.insertAudit(ctx, "product", id, actor, "product.updated", fmt.Sprintf(`{"sku":%q}`, in.SKU))
 	return domain.ProductID(id), nil
 }
 
-func (s *SQLService) SetPrice(ctx context.Context, in SetPriceInput) error {
+func (s *SQLService) DeactivateProduct(ctx context.Context, actor string, productID domain.ProductID, reason string) error {
+	if s.DB == nil {
+		return fmt.Errorf("missing db")
+	}
+	if productID == "" {
+		return domain.ErrInvalidInput
+	}
+	res, err := s.DB.ExecContext(ctx, `update products set is_active=false, updated_at=now() where id=$1`, string(productID))
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	_ = s.insertAudit(ctx, "product", string(productID), actor, "product.deactivated", fmt.Sprintf(`{"reason":%q}`, reason))
+	return nil
+}
+
+func (s *SQLService) SetPrice(ctx context.Context, actor string, in SetPriceInput) error {
 	if s.DB == nil {
 		return fmt.Errorf("missing db")
 	}
@@ -175,10 +235,14 @@ func (s *SQLService) SetPrice(ctx context.Context, in SetPriceInput) error {
 insert into prices (product_id, currency, amount_minor_units, valid_from)
 values ($1,$2,$3,$4)
 `, string(in.ProductID), in.Currency, in.AmountMinorUnits, now)
-	return err
+	if err != nil {
+		return err
+	}
+	_ = s.insertAudit(ctx, "product", string(in.ProductID), actor, "price.set", fmt.Sprintf(`{"currency":%q,"amount_minor_units":%d}`, in.Currency, in.AmountMinorUnits))
+	return nil
 }
 
-func (s *SQLService) UpsertInventory(ctx context.Context, in UpsertInventoryInput) error {
+func (s *SQLService) UpsertInventory(ctx context.Context, actor string, in UpsertInventoryInput) error {
 	if s.DB == nil {
 		return fmt.Errorf("missing db")
 	}
@@ -193,6 +257,65 @@ set on_hand=excluded.on_hand,
     safety_stock=excluded.safety_stock,
     updated_at=now()
 `, string(in.ProductID), in.OnHand, in.SafetyStock)
+	if err != nil {
+		return err
+	}
+	_ = s.insertAudit(ctx, "product", string(in.ProductID), actor, "inventory.upserted", fmt.Sprintf(`{"on_hand":%d,"safety_stock":%d}`, in.OnHand, in.SafetyStock))
+	return nil
+}
+
+func (s *SQLService) ListAuditEvents(ctx context.Context, in ListAuditEventsInput) ([]domain.AuditEvent, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("missing db")
+	}
+	limit := in.Limit
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	offset := in.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	rows, err := s.DB.QueryContext(ctx, `
+select aggregate_type, aggregate_id, actor, event_type, payload_json, created_at
+from audit_events
+where ($1::text is null or aggregate_type = $1)
+  and ($2::text is null or aggregate_id = $2)
+order by id desc
+limit $3 offset $4
+`, nullableStr(strings.TrimSpace(in.AggregateType)), nullableStr(strings.TrimSpace(in.AggregateID)), limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.AuditEvent
+	for rows.Next() {
+		var e domain.AuditEvent
+		if err := rows.Scan(&e.AggregateType, &e.AggregateID, &e.Actor, &e.EventType, &e.PayloadJSON, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLService) insertAudit(ctx context.Context, aggType, aggID, actor, eventType, payload string) error {
+	if actor == "" {
+		actor = "admin"
+	}
+	_, err := s.DB.ExecContext(ctx, `
+insert into audit_events (aggregate_type, aggregate_id, actor, event_type, payload_json, created_at)
+values ($1,$2,$3,$4,$5,now())
+`, aggType, aggID, actor, eventType, payload)
 	return err
+}
+
+func nullableStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 

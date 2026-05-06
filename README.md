@@ -120,7 +120,9 @@ Database config is currently provided by Compose:
 - `POST /checkout` (creates a pending order + reserves inventory + creates Stripe Checkout Session when `STRIPE_SECRET_KEY` is set)
 - `GET /orders/{id}`
 - `POST /webhooks/stripe` (enabled when `STRIPE_WEBHOOK_SECRET` is set)
-- `GET /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`)
+- `GET /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `q`, `active`, `currency`)
 - `POST /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`)
+- `DELETE /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; deactivates product)
 - `POST /admin/prices` (requires `Authorization: Bearer $ADMIN_TOKEN`)
 - `POST /admin/inventory` (requires `Authorization: Bearer $ADMIN_TOKEN`)
+- `GET /admin/audit-events` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `aggregate_type`, `aggregate_id`)

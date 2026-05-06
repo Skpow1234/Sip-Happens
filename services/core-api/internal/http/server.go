@@ -36,8 +36,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("/checkout", s.requireSigned(http.HandlerFunc(s.handleCheckout)))
 	mux.HandleFunc("/admin/products", s.handleAdminProducts)
+	mux.HandleFunc("/admin/products/", s.handleAdminProductDetail)
 	mux.HandleFunc("/admin/prices", s.handleAdminPrices)
 	mux.HandleFunc("/admin/inventory", s.handleAdminInventory)
+	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
 
 	if s.StripeWebhook != nil {
 		mux.Handle("/webhooks/stripe", s.StripeWebhook)
@@ -85,20 +87,39 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		list, err := s.Admin.ListProducts(r.Context(), "COP", 200)
+		currency := r.URL.Query().Get("currency")
+		if currency == "" {
+			currency = "COP"
+		}
+		limit := parseIntDefault(r.URL.Query().Get("limit"), 200)
+		offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+		q := r.URL.Query().Get("q")
+		var isActivePtr *bool
+		if v := strings.TrimSpace(r.URL.Query().Get("active")); v != "" {
+			b := v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+			isActivePtr = &b
+		}
+
+		list, err := s.Admin.ListProducts(r.Context(), admin.ListProductsInput{
+			Currency: currency,
+			Limit:    limit,
+			Offset:   offset,
+			Query:    q,
+			IsActive: isActivePtr,
+		})
 		if err != nil {
 			http.Error(w, "error", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("content-type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"items": list})
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": list, "limit": limit, "offset": offset})
 	case http.MethodPost:
 		var req admin.UpsertProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		id, err := s.Admin.UpsertProduct(r.Context(), req)
+		id, err := s.Admin.UpsertProduct(r.Context(), "admin", req)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
@@ -109,6 +130,40 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"product_id": id})
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/admin/products/")
+	if id == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodDelete:
+		reason := r.URL.Query().Get("reason")
+		err := s.Admin.DeactivateProduct(r.Context(), "admin", domain.ProductID(id), reason)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if err == domain.ErrInvalidInput {
+				status = http.StatusBadRequest
+			}
+			if err == domain.ErrNotFound {
+				status = http.StatusNotFound
+			}
+			http.Error(w, "error", status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -134,7 +189,7 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 	if req.Currency == "" {
 		req.Currency = "COP"
 	}
-	if err := s.Admin.SetPrice(r.Context(), req); err != nil {
+	if err := s.Admin.SetPrice(r.Context(), "admin", req); err != nil {
 		status := http.StatusInternalServerError
 		if err == domain.ErrInvalidInput {
 			status = http.StatusBadRequest
@@ -162,7 +217,7 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if err := s.Admin.UpsertInventory(r.Context(), req); err != nil {
+	if err := s.Admin.UpsertInventory(r.Context(), "admin", req); err != nil {
 		status := http.StatusInternalServerError
 		if err == domain.ErrInvalidInput {
 			status = http.StatusBadRequest
@@ -171,6 +226,53 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil {
+		http.Error(w, "server misconfigured", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 200)
+	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	aggType := r.URL.Query().Get("aggregate_type")
+	aggID := r.URL.Query().Get("aggregate_id")
+
+	evts, err := s.Admin.ListAuditEvents(r.Context(), admin.ListAuditEventsInput{
+		AggregateType: aggType,
+		AggregateID:   aggID,
+		Limit:         limit,
+		Offset:        offset,
+	})
+	if err != nil {
+		http.Error(w, "error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"items": evts, "limit": limit, "offset": offset})
+}
+
+func parseIntDefault(s string, def int) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return def
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
 }
 
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
