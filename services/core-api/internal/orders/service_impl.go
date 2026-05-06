@@ -262,3 +262,9 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 	})
 }
 
+func (s *service) SetStripeRefs(ctx context.Context, id domain.OrderID, checkoutSessionID, paymentIntentID string) error {
+	return s.db.WithTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted}, func(tx *sql.Tx) error {
+		return s.orders.SetStripeRefs(ctx, tx, id, checkoutSessionID, paymentIntentID)
+	})
+}
+

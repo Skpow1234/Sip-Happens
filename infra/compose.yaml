@@ -1,1 +1,30 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: beer_shop
+      POSTGRES_USER: beer
+      POSTGRES_PASSWORD: beer
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beer -d beer_shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  core-api:
+    build:
+      context: ..
+      dockerfile: services/core-api/Dockerfile
+    environment:
+      HTTP_ADDR: ":8080"
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      MIGRATIONS_PATH: "/app/infra/migrations"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
