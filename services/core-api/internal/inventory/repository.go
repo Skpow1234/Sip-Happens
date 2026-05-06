@@ -13,5 +13,18 @@ type Repository interface {
 
 	// Update writes updated inventory values.
 	Update(ctx context.Context, tx *sql.Tx, inv domain.Inventory) error
+
+	// Reservation ledger operations.
+	CreateReservation(ctx context.Context, tx *sql.Tx, orderID domain.OrderID, productID domain.ProductID, qty int) error
+	ListActiveReservations(ctx context.Context, tx *sql.Tx, orderID domain.OrderID) ([]Reservation, error)
+	MarkReservationReleased(ctx context.Context, tx *sql.Tx, orderID domain.OrderID, productID domain.ProductID) error
+	MarkReservationConsumed(ctx context.Context, tx *sql.Tx, orderID domain.OrderID, productID domain.ProductID) error
+}
+
+type Reservation struct {
+	OrderID   domain.OrderID
+	ProductID domain.ProductID
+	Qty       int
+	Status    string
 }
 

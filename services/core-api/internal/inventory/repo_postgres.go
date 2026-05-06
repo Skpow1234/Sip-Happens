@@ -49,3 +49,59 @@ where product_id=$4
 	return nil
 }
 
+func (r *SQLRepository) CreateReservation(ctx context.Context, tx *sql.Tx, orderID domain.OrderID, productID domain.ProductID, qty int) error {
+	if qty <= 0 {
+		return domain.ErrInvalidInput
+	}
+	_, err := tx.ExecContext(ctx, `
+insert into inventory_reservations (order_id, product_id, qty, status, created_at, updated_at)
+values ($1,$2,$3,'ACTIVE',now(),now())
+on conflict (order_id, product_id) do update
+set qty=excluded.qty,
+    status='ACTIVE',
+    updated_at=now()
+`, string(orderID), string(productID), qty)
+	return err
+}
+
+func (r *SQLRepository) ListActiveReservations(ctx context.Context, tx *sql.Tx, orderID domain.OrderID) ([]Reservation, error) {
+	rows, err := tx.QueryContext(ctx, `
+select order_id, product_id, qty, status
+from inventory_reservations
+where order_id=$1 and status='ACTIVE'
+order by product_id
+`, string(orderID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Reservation
+	for rows.Next() {
+		var rr Reservation
+		if err := rows.Scan(&rr.OrderID, &rr.ProductID, &rr.Qty, &rr.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, rr)
+	}
+	return out, rows.Err()
+}
+
+func (r *SQLRepository) MarkReservationReleased(ctx context.Context, tx *sql.Tx, orderID domain.OrderID, productID domain.ProductID) error {
+	_, err := tx.ExecContext(ctx, `
+update inventory_reservations
+set status='RELEASED', updated_at=now()
+where order_id=$1 and product_id=$2 and status='ACTIVE'
+`, string(orderID), string(productID))
+	return err
+}
+
+func (r *SQLRepository) MarkReservationConsumed(ctx context.Context, tx *sql.Tx, orderID domain.OrderID, productID domain.ProductID) error {
+	_, err := tx.ExecContext(ctx, `
+update inventory_reservations
+set status='CONSUMED', updated_at=now()
+where order_id=$1 and product_id=$2 and status='ACTIVE'
+`, string(orderID), string(productID))
+	return err
+}
+

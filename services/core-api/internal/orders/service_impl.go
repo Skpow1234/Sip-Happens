@@ -56,6 +56,11 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 		}
 
 		now := time.Now()
+		orderUUID, err := ids.UUIDv4()
+		if err != nil {
+			return err
+		}
+		orderID := domain.OrderID(orderUUID)
 
 		// Price snapshot + product snapshot + reservation.
 		var subtotal int64
@@ -92,6 +97,9 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 			if err := s.inventory.Update(ctx, tx, *inv); err != nil {
 				return err
 			}
+			if err := s.inventory.CreateReservation(ctx, tx, orderID, it.ProductID, it.Qty); err != nil {
+				return err
+			}
 
 			unit := price.AmountMinorUnits
 			line := unit * int64(it.Qty)
@@ -109,13 +117,8 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 		}
 
 		exp := now.Add(15 * time.Minute)
-		orderUUID, err := ids.UUIDv4()
-		if err != nil {
-			return err
-		}
-
 		order := domain.Order{
-			ID:         domain.OrderID(orderUUID),
+			ID:         orderID,
 			Status:     domain.OrderStatusPendingPayment,
 			CustomerID: in.CustomerID,
 
@@ -174,17 +177,16 @@ func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time,
 				return nil
 			}
 
-			items, err := s.orders.GetItems(ctx, tx, id)
+			res, err := s.inventory.ListActiveReservations(ctx, tx, id)
 			if err != nil {
 				return err
 			}
-
-			for _, it := range items {
-				inv, err := s.inventory.LockForUpdate(ctx, tx, it.ProductID)
+			for _, rr := range res {
+				inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
 				if err != nil {
 					return err
 				}
-				inv.Reserved -= it.Qty
+				inv.Reserved -= rr.Qty
 				if inv.Reserved < 0 {
 					inv.Reserved = 0
 				}
@@ -192,6 +194,7 @@ func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time,
 				if err := s.inventory.Update(ctx, tx, *inv); err != nil {
 					return err
 				}
+				_ = s.inventory.MarkReservationReleased(ctx, tx, id, rr.ProductID)
 			}
 
 			return s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusCancelled)
@@ -221,21 +224,33 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 		if err != nil {
 			return err
 		}
+		// Prefer reservations as the source of truth for reserved qty.
+		res, err := s.inventory.ListActiveReservations(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if len(res) == 0 {
+			// fallback to order items
+			for _, it := range items {
+				res = append(res, inventory.Reservation{OrderID: id, ProductID: it.ProductID, Qty: it.Qty, Status: "ACTIVE"})
+			}
+		}
 
-		for _, it := range items {
-			inv, err := s.inventory.LockForUpdate(ctx, tx, it.ProductID)
+		for _, rr := range res {
+			inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
 			if err != nil {
 				return err
 			}
-			if inv.Reserved < it.Qty || inv.OnHand < it.Qty {
+			if inv.Reserved < rr.Qty || inv.OnHand < rr.Qty {
 				return domain.ErrConflict
 			}
-			inv.Reserved -= it.Qty
-			inv.OnHand -= it.Qty
+			inv.Reserved -= rr.Qty
+			inv.OnHand -= rr.Qty
 			inv.LastModified = time.Now()
 			if err := s.inventory.Update(ctx, tx, *inv); err != nil {
 				return err
 			}
+			_ = s.inventory.MarkReservationConsumed(ctx, tx, id, rr.ProductID)
 		}
 
 		if s.payments != nil {
