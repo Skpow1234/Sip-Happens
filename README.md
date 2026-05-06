@@ -108,6 +108,7 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`STRIPE_WEBHOOK_SECRET`**: required to verify incoming `POST /webhooks/stripe`
 - **`STRIPE_MOCK=1`**: enables a local mock Stripe checkout URL when `STRIPE_SECRET_KEY` is not set (prototype only)
 - **`ADMIN_TOKEN`**: bearer token to access admin endpoints (prototype only)
+- **`CORE_API_HMAC_SECRET`**: shared secret used to sign requests from `ssh-gateway` to `core-api` (enables auth + replay protection for `/checkout` and `/orders/*`)
 
 Database config is currently provided by Compose:
 

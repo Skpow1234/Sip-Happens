@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/ids"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 )
@@ -22,6 +24,8 @@ type Server struct {
 	DB            *sql.DB
 	Stripe        stripepayments.Service
 	StripeWebhook *stripepayments.WebhookHandler
+
+	CoreAPIHMACSecret string
 }
 
 func (s *Server) Handler() http.Handler {
@@ -29,8 +33,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/catalog", s.handleCatalog)
 	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
-	mux.HandleFunc("/orders/", s.handleGetOrder)
-	mux.HandleFunc("/checkout", s.handleCheckout)
+	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
+	mux.Handle("/checkout", s.requireSigned(http.HandlerFunc(s.handleCheckout)))
 	mux.HandleFunc("/admin/products", s.handleAdminProducts)
 	mux.HandleFunc("/admin/prices", s.handleAdminPrices)
 	mux.HandleFunc("/admin/inventory", s.handleAdminInventory)
@@ -40,6 +44,15 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	return mux
+}
+
+func (s *Server) requireSigned(next http.Handler) http.Handler {
+	// For local prototyping, if no secret is configured we accept unsigned requests.
+	if strings.TrimSpace(s.CoreAPIHMACSecret) == "" {
+		return next
+	}
+	m := &HMACMiddleware{Secret: []byte(s.CoreAPIHMACSecret), Tolerance: 5 * time.Minute}
+	return m.Wrap(next)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -300,8 +313,23 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customerID := domain.CustomerID(req.CustomerID)
+	if customerID == "" {
+		fp := r.Header.Get("X-SSH-Fingerprint")
+		if fp != "" && s.DB != nil {
+			id, err := s.getOrCreateCustomerIDByFingerprint(r.Context(), fp)
+			if err == nil {
+				customerID = id
+			}
+		}
+	}
+	if customerID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
 	in := orders.CreatePendingOrderInput{
-		CustomerID: domain.CustomerID(req.CustomerID),
+		CustomerID: customerID,
 		Currency:   req.Currency,
 
 		City:         req.City,
@@ -361,5 +389,38 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		"items": items,
 		"stripe": stripeOut,
 	})
+}
+
+func (s *Server) getOrCreateCustomerIDByFingerprint(ctx context.Context, fp string) (domain.CustomerID, error) {
+	if fp == "" {
+		return "", domain.ErrInvalidInput
+	}
+	// Lookup by fingerprint first.
+	row := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
+	var id string
+	if err := row.Scan(&id); err == nil {
+		return domain.CustomerID(id), nil
+	}
+
+	// Insert.
+	uuid, err := ids.UUIDv4()
+	if err != nil {
+		return "", err
+	}
+	newID := uuid
+	_, err = s.DB.ExecContext(ctx, `
+insert into customers (id, ssh_fingerprint, created_at, updated_at)
+values ($1,$2,now(),now())
+on conflict (ssh_fingerprint) do nothing
+`, newID, fp)
+	if err != nil {
+		return "", err
+	}
+	// Re-read to return canonical id.
+	row2 := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
+	if err := row2.Scan(&id); err != nil {
+		return "", err
+	}
+	return domain.CustomerID(id), nil
 }
 

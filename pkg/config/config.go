@@ -20,6 +20,8 @@ type CoreAPI struct {
 	StripeMock          bool
 
 	AdminToken string
+
+	CoreAPIHMACSecret string
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -38,6 +40,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.StripeMock = getenvBoolDefault("STRIPE_MOCK", true)
 
 	c.AdminToken = os.Getenv("ADMIN_TOKEN")
+	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 
 	return c, nil
 }
@@ -106,6 +109,8 @@ type SSHGateway struct {
 	SSHAddr     string
 	CoreAPIURL  string
 	HostKeyPath string
+
+	CoreAPIHMACSecret string
 }
 
 func LoadSSHGateway() (SSHGateway, error) {
@@ -113,6 +118,7 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.SSHAddr = getenvDefault("SSH_ADDR", "0.0.0.0:2222")
 	c.CoreAPIURL = getenvDefault("CORE_API_URL", "http://core-api:8080")
 	c.HostKeyPath = getenvDefault("SSH_HOST_KEY_PATH", "/data/ssh_host_ed25519_key")
+	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 
 	if _, err := url.ParseRequestURI(c.CoreAPIURL); err != nil {
 		return c, fmt.Errorf("CORE_API_URL invalid: %w", err)

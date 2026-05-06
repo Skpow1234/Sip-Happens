@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"log"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,8 +34,17 @@ func main() {
 		wish.WithMiddleware(
 			logging.Middleware(),
 			wishbubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-				_ = s
-				client := api.NewClient(cfg.CoreAPIURL)
+				fp := ""
+				if pk := s.PublicKey(); pk != nil {
+					sum := sha256.Sum256(pk.Marshal())
+					fp = "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
+				}
+				var client *api.Client
+				if cfg.CoreAPIHMACSecret != "" {
+					client = api.NewSignedClient(cfg.CoreAPIURL, cfg.CoreAPIHMACSecret, fp)
+				} else {
+					client = api.NewClient(cfg.CoreAPIURL)
+				}
 				model := tui.NewRootModel(client)
 				opts := []tea.ProgramOption{tea.WithAltScreen()}
 				return model, opts

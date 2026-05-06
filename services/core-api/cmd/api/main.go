@@ -131,6 +131,7 @@ func runServer() error {
 		Admin:         adminSvc,
 		AdminToken:    cfg.AdminToken,
 		DB:            sqlDB,
+		CoreAPIHMACSecret: cfg.CoreAPIHMACSecret,
 		Stripe:        selectStripeClient(cfg),
 		StripeWebhook: stripeWebhook,
 	}

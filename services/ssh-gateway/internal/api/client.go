@@ -24,6 +24,21 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
+func NewSignedClient(baseURL string, hmacSecret string, sshFingerprint string) *Client {
+	baseURL = strings.TrimRight(baseURL, "/")
+	secret := []byte(hmacSecret)
+	return &Client{
+		baseURL: baseURL,
+		http: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: SigningRoundTripper{
+				Secret:      secret,
+				Fingerprint: sshFingerprint,
+			},
+		},
+	}
+}
+
 type CatalogItem struct {
 	Product struct {
 		ID       string
