@@ -13,6 +13,12 @@ Users connect via **SSH** to a TUI, browse a beer catalog, build a cart, and sta
 
 From the repo root:
 
+### One-command dev bring-up (recommended)
+
+```bash
+bash scripts/dev-up.sh
+```
+
 ### Build
 
 ```bash
@@ -62,6 +68,20 @@ Expected:
 
 ```json
 {"ok":true}
+```
+
+## Stop / clean
+
+- Stop containers (keep DB volume/data):
+
+```bash
+bash scripts/dev-down.sh
+```
+
+- Full reset (removes volumes, deletes local DB data):
+
+```bash
+bash scripts/dev-reset.sh
 ```
 
 ## Environment variables
