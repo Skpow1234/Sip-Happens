@@ -29,3 +29,12 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
+
+  # Optional: run Stripe CLI in a container (so you don't need local installs).
+  # Usage examples are documented in docs/runbooks/stripe-webhook-local.md
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    environment:
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+    depends_on:
+      - core-api

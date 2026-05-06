@@ -48,3 +48,4 @@ docker-compose.override.yml
 .cursorrules
 docs/DESIGN.md
 infra/migrations/*.sql
+docs

@@ -66,3 +66,11 @@ Database config is currently provided by Compose:
 - `POST /checkout` (creates a pending order + reserves inventory + creates Stripe Checkout Session when `STRIPE_SECRET_KEY` is set)
 - `GET /orders/{id}`
 - `POST /webhooks/stripe` (enabled when `STRIPE_WEBHOOK_SECRET` is set)
+
+## Webhook testing (local)
+
+See `docs/runbooks/stripe-webhook-local.md` for a **container-only** Stripe CLI workflow.
+
+## Design reference
+
+See `docs/DESIGN.md`.
