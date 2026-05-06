@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"log"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/keygen"
@@ -14,6 +15,7 @@ import (
 
 	"sip-happens/pkg/config"
 	"sip-happens/services/ssh-gateway/internal/api"
+	"sip-happens/services/ssh-gateway/internal/security"
 	"sip-happens/services/ssh-gateway/internal/tui"
 )
 
@@ -33,6 +35,7 @@ func main() {
 		wish.WithHostKeyPath(cfg.HostKeyPath),
 		wish.WithMiddleware(
 			logging.Middleware(),
+			(&security.SSHRateLimiter{Window: time.Minute, Limit: 30}).Middleware(),
 			wishbubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				fp := ""
 				if pk := s.PublicKey(); pk != nil {

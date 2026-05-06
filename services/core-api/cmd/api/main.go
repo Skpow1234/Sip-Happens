@@ -130,10 +130,12 @@ func runServer() error {
 		Catalog:       catalogRepo,
 		Admin:         adminSvc,
 		AdminToken:    cfg.AdminToken,
+		AdminTokens:   cfg.AdminTokens,
 		DB:            sqlDB,
 		CoreAPIHMACSecret: cfg.CoreAPIHMACSecret,
 		Stripe:        selectStripeClient(cfg),
 		StripeWebhook: stripeWebhook,
+		StripeWebhookPath: cfg.StripeWebhookPath,
 	}
 
 	httpSrv := &http.Server{

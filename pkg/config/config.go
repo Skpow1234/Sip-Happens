@@ -17,9 +17,11 @@ type CoreAPI struct {
 
 	StripeSecretKey     string
 	StripeWebhookSecret string
+	StripeWebhookPath   string
 	StripeMock          bool
 
 	AdminToken string
+	AdminTokens []string
 
 	CoreAPIHMACSecret string
 }
@@ -37,9 +39,18 @@ func LoadCoreAPI() (CoreAPI, error) {
 
 	c.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
 	c.StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
+	c.StripeWebhookPath = getenvDefault("STRIPE_WEBHOOK_PATH", "/webhooks/stripe")
 	c.StripeMock = getenvBoolDefault("STRIPE_MOCK", true)
 
 	c.AdminToken = os.Getenv("ADMIN_TOKEN")
+	if v := strings.TrimSpace(os.Getenv("ADMIN_TOKENS")); v != "" {
+		for _, tok := range strings.Split(v, ",") {
+			tok = strings.TrimSpace(tok)
+			if tok != "" {
+				c.AdminTokens = append(c.AdminTokens, tok)
+			}
+		}
+	}
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 
 	return c, nil

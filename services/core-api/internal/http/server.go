@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/subtle"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -23,9 +24,11 @@ type Server struct {
 	Catalog       catalog.Repository
 	Admin         admin.Service
 	AdminToken    string
+	AdminTokens   []string
 	DB            *sql.DB
 	Stripe        stripepayments.Service
 	StripeWebhook *stripepayments.WebhookHandler
+	StripeWebhookPath string
 
 	CoreAPIHMACSecret string
 }
@@ -48,7 +51,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
 
 	if s.StripeWebhook != nil {
-		mux.Handle("/webhooks/stripe", s.StripeWebhook)
+		path := s.StripeWebhookPath
+		if strings.TrimSpace(path) == "" {
+			path = "/webhooks/stripe"
+		}
+		mux.Handle(path, s.wrapWebhook(s.StripeWebhook))
 	}
 
 	h := http.Handler(mux)
@@ -91,17 +98,58 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if s.AdminToken == "" {
+	if s.AdminToken == "" && len(s.AdminTokens) == 0 {
 		http.Error(w, "admin not configured", http.StatusNotFound)
 		return false
 	}
 	h := r.Header.Get("Authorization")
 	const prefix = "Bearer "
-	if !strings.HasPrefix(h, prefix) || strings.TrimPrefix(h, prefix) != s.AdminToken {
+	if !strings.HasPrefix(h, prefix) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	provided := strings.TrimSpace(strings.TrimPrefix(h, prefix))
+	if provided == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+
+	// Allow rotation: ADMIN_TOKENS takes precedence, ADMIN_TOKEN is legacy.
+	if len(s.AdminTokens) > 0 {
+		ok := false
+		for _, tok := range s.AdminTokens {
+			if tok == "" {
+				continue
+			}
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(tok)) == 1 {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return false
+		}
+		return true
+	}
+
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(s.AdminToken)) != 1 {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return false
 	}
 	return true
+}
+
+func (s *Server) wrapWebhook(next http.Handler) http.Handler {
+	// Basic hardening: method + body size limit.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
