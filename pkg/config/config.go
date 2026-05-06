@@ -67,6 +67,41 @@ func LoadCancelExpiredJob() (CancelExpiredJob, error) {
 	return c, nil
 }
 
+type StripeReconcileJob struct {
+	PostgresDSN string
+	Interval    time.Duration
+	BatchLimit  int
+	RunOnce     bool
+
+	StripeSecretKey string
+	StripeMock      bool
+}
+
+func LoadStripeReconcileJob() (StripeReconcileJob, error) {
+	var c StripeReconcileJob
+	c.PostgresDSN = os.Getenv("POSTGRES_DSN")
+	if c.PostgresDSN == "" {
+		return c, fmt.Errorf("POSTGRES_DSN is required")
+	}
+	c.Interval = time.Duration(getenvIntDefault("JOB_INTERVAL_SECONDS", 60)) * time.Second
+	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
+	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
+	if c.BatchLimit <= 0 {
+		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
+	}
+	if c.Interval <= 0 {
+		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")
+	}
+
+	c.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
+	c.StripeMock = getenvBoolDefault("STRIPE_MOCK", true)
+
+	if c.StripeSecretKey == "" && !c.StripeMock {
+		return c, fmt.Errorf("STRIPE_SECRET_KEY is required when STRIPE_MOCK=false")
+	}
+	return c, nil
+}
+
 type SSHGateway struct {
 	SSHAddr     string
 	CoreAPIURL  string

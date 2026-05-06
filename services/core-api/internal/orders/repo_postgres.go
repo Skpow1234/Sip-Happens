@@ -150,6 +150,30 @@ where id=$3
 	return nil
 }
 
+func (r *SQLRepository) FindByStripeCheckoutSessionID(ctx context.Context, q Querier, checkoutSessionID string) (domain.OrderID, error) {
+	row := q.QueryRowContext(ctx, `select id from orders where stripe_checkout_session_id=$1`, checkoutSessionID)
+	var id string
+	if err := row.Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return "", domain.ErrNotFound
+		}
+		return "", err
+	}
+	return domain.OrderID(id), nil
+}
+
+func (r *SQLRepository) FindByStripePaymentIntentID(ctx context.Context, q Querier, paymentIntentID string) (domain.OrderID, error) {
+	row := q.QueryRowContext(ctx, `select id from orders where stripe_payment_intent_id=$1`, paymentIntentID)
+	var id string
+	if err := row.Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return "", domain.ErrNotFound
+		}
+		return "", err
+	}
+	return domain.OrderID(id), nil
+}
+
 func (r *SQLRepository) ListExpiredPending(ctx context.Context, q Querier, now time.Time, limit int) ([]domain.OrderID, error) {
 	rows, err := q.QueryContext(ctx, `
 select id

@@ -11,6 +11,9 @@ type Service interface {
 	// CreateCheckout starts an off-terminal Stripe hosted checkout.
 	// It must set Stripe metadata to include internal order_id and use idempotency keys.
 	CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*CreateCheckoutOutput, error)
+
+	// PaymentIntentStatus returns Stripe payment intent status (e.g. "succeeded", "processing", "requires_payment_method").
+	PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error)
 }
 
 type CreateCheckoutInput struct {

@@ -45,6 +45,13 @@ func main() {
 		return
 	}
 
+	if len(os.Args) >= 3 && os.Args[1] == "jobs" && os.Args[2] == "stripe-reconcile" {
+		if err := runStripeReconcileJob(context.Background()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	if err := runServer(); err != nil {
 		log.Fatal(err)
 	}
@@ -111,7 +118,10 @@ func runServer() error {
 		stripeWebhook = &stripepayments.WebhookHandler{
 			Verifier:   stripepayments.StripeGoVerifier{SigningSecret: stripeSigningSecret, ToleranceSec: 300},
 			EventStore: &stripepayments.SQLEventStore{DB: sqlDB},
+			EventLog:   &stripepayments.SQLEventLogStore{DB: sqlDB},
 			Orders:     ordersSvc,
+			OrderRepo:  ordersRepo,
+			OrderQuery: sqlDB,
 		}
 	}
 
@@ -203,6 +213,76 @@ func runCancelExpiredJob(ctx context.Context) error {
 		}
 		if n > 0 {
 			log.Printf("job cancel-expired: cancelled=%d", n)
+		}
+
+		if jobCfg.RunOnce {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+func runStripeReconcileJob(ctx context.Context) error {
+	jobCfg, err := config.LoadStripeReconcileJob()
+	if err != nil {
+		return err
+	}
+	sqlDB, err := sql.Open("postgres", jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return err
+	}
+
+	d := db.New(sqlDB)
+	ordersRepo := orders.NewSQLRepository()
+	invRepo := inventory.NewSQLRepository()
+	catalogRepo := catalog.NewSQLRepository()
+	paymentsRepo := payments.NewSQLRepository()
+	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
+
+	var stripeClient stripepayments.Service
+	if jobCfg.StripeSecretKey != "" {
+		stripeClient = stripepayments.StripeGoClient{SecretKey: jobCfg.StripeSecretKey}
+	} else if jobCfg.StripeMock {
+		stripeClient = stripepayments.MockClient{}
+	}
+	if stripeClient == nil {
+		return nil
+	}
+
+	job := &stripepayments.ReconcileJob{
+		DB:        sqlDB,
+		Orders:    ordersSvc,
+		OrderRepo: ordersRepo,
+		Stripe:    stripeClient,
+		Log:       &stripepayments.SQLEventLogStore{DB: sqlDB},
+		Queue:     &stripepayments.SQLReconcileQueue{DB: sqlDB},
+	}
+
+	tick := time.NewTicker(jobCfg.Interval)
+	defer tick.Stop()
+
+	log.Printf("job stripe-reconcile starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
+
+	for {
+		_, err := job.EnqueueStalePending(ctx, time.Now(), 2*time.Minute, jobCfg.BatchLimit)
+		if err != nil {
+			return err
+		}
+		n, err := job.RunBatch(ctx, time.Now(), jobCfg.BatchLimit)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			log.Printf("job stripe-reconcile: processed=%d", n)
 		}
 
 		if jobCfg.RunOnce {

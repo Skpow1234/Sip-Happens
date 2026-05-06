@@ -36,3 +36,10 @@ func (c MockClient) CreateCheckout(ctx context.Context, in CreateCheckoutInput) 
 	}, nil
 }
 
+func (c MockClient) PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error) {
+	_ = ctx
+	_ = paymentIntentID
+	// For prototype flows, treat all mock payment intents as succeeded.
+	return "succeeded", nil
+}
+

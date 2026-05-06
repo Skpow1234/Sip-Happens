@@ -27,7 +27,10 @@ type EventStore interface {
 type WebhookHandler struct {
 	Verifier   Verifier
 	EventStore EventStore
+	EventLog   EventLogStore
 	Orders     orders.Service
+	OrderRepo  orders.Repository
+	OrderQuery orders.Querier
 }
 
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +57,11 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orderIDFromPayload := evt.ExtractOrderID()
+	if h.EventLog != nil {
+		_ = h.EventLog.UpsertReceived(ctx, evt.ID, evt.Type, orderIDFromPayload, evt.RawObject, time.Now())
+	}
+
 	if h.EventStore != nil {
 		seen, err := h.EventStore.HasProcessed(ctx, evt.ID)
 		if err != nil {
@@ -69,8 +77,15 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := h.applyEvent(ctx, evt); err != nil {
 		// Domain already applied is a success response for Stripe retry semantics.
 		if errors.Is(err, domain.ErrAlreadyApplied) {
+			if h.EventLog != nil {
+				_ = h.EventLog.MarkProcessed(ctx, evt.ID, time.Now())
+			}
 			w.WriteHeader(http.StatusOK)
 			return
+		}
+		if h.EventLog != nil {
+			_ = h.EventLog.MarkFailed(ctx, evt.ID, time.Now(), err.Error())
+			_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "apply_failed", evt.RawObject)
 		}
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
@@ -79,30 +94,85 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.EventStore != nil {
 		_ = h.EventStore.MarkProcessed(ctx, evt.ID, time.Now())
 	}
+	if h.EventLog != nil {
+		_ = h.EventLog.MarkProcessed(ctx, evt.ID, time.Now())
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error {
-	// We intentionally keep event parsing minimal here.
-	// Concrete mapping can be expanded once Stripe client choice is finalized.
-
 	switch evt.Type {
 	case "checkout.session.completed":
-		// Expect metadata.order_id to exist.
-		orderID := domain.OrderID(evt.Data.Object.Metadata.OrderID)
+		obj, err := evt.AsCheckoutSession()
+		if err != nil {
+			if h.EventLog != nil {
+				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "invalid_checkout_session_payload", evt.RawObject)
+			}
+			return domain.ErrInvalidInput
+		}
+
+		orderID := domain.OrderID(obj.Metadata.OrderID)
 		if orderID == "" {
+			// Fallback to DB lookup by Stripe checkout session id.
+			if h.OrderRepo != nil && obj.ID != "" {
+				found, err := h.OrderRepo.FindByStripeCheckoutSessionID(ctx, h.OrderQuery, obj.ID)
+				if err == nil {
+					orderID = found
+				}
+			}
+		}
+		if orderID == "" {
+			if h.EventLog != nil {
+				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "missing_order_id", evt.RawObject)
+			}
 			return domain.ErrInvalidInput
 		}
 		payment := domain.Payment{
 			Provider:    domain.PaymentProviderStripe,
-			ProviderRef: evt.Data.Object.ID,
+			ProviderRef: obj.ID,
+			Status:      domain.PaymentStatusSucceeded,
+			RawPayload:  evt.RawObject,
+		}
+		return h.Orders.MarkPaid(ctx, orderID, payment)
+	case "payment_intent.succeeded":
+		obj, err := evt.AsPaymentIntent()
+		if err != nil {
+			if h.EventLog != nil {
+				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "invalid_payment_intent_payload", evt.RawObject)
+			}
+			return domain.ErrInvalidInput
+		}
+
+		orderID := domain.OrderID(obj.Metadata.OrderID)
+		if orderID == "" {
+			// Fallback to DB lookup by Stripe payment intent id.
+			if h.OrderRepo != nil && obj.ID != "" {
+				found, err := h.OrderRepo.FindByStripePaymentIntentID(ctx, h.OrderQuery, obj.ID)
+				if err == nil {
+					orderID = found
+				}
+			}
+		}
+		if orderID == "" {
+			if h.EventLog != nil {
+				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "missing_order_id", evt.RawObject)
+			}
+			return domain.ErrInvalidInput
+		}
+
+		payment := domain.Payment{
+			Provider:    domain.PaymentProviderStripe,
+			ProviderRef: obj.ID,
 			Status:      domain.PaymentStatusSucceeded,
 			RawPayload:  evt.RawObject,
 		}
 		return h.Orders.MarkPaid(ctx, orderID, payment)
 	default:
 		// Ignore unsupported event types.
+		if h.EventLog != nil {
+			_ = h.EventLog.MarkIgnored(ctx, evt.ID, time.Now())
+		}
 		return nil
 	}
 }
@@ -117,7 +187,7 @@ type stripeEvent struct {
 	RawObject string `json:"-"`
 
 	Data struct {
-		Object stripeCheckoutSession `json:"object"`
+		Object json.RawMessage `json:"object"`
 	} `json:"data"`
 }
 
@@ -132,7 +202,57 @@ func (e *stripeEvent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (e stripeEvent) ExtractOrderID() string {
+	// Best-effort extraction for logging/indexing purposes.
+	switch e.Type {
+	case "checkout.session.completed":
+		if cs, err := e.AsCheckoutSession(); err == nil {
+			return cs.Metadata.OrderID
+		}
+	case "payment_intent.succeeded":
+		if pi, err := e.AsPaymentIntent(); err == nil {
+			return pi.Metadata.OrderID
+		}
+	}
+	return ""
+}
+
+func (e stripeEvent) AsCheckoutSession() (stripeCheckoutSession, error) {
+	var cs stripeCheckoutSession
+	if len(e.Data.Object) == 0 {
+		return cs, errors.New("missing object")
+	}
+	if err := json.Unmarshal(e.Data.Object, &cs); err != nil {
+		return cs, err
+	}
+	if cs.ID == "" {
+		return cs, errors.New("missing id")
+	}
+	return cs, nil
+}
+
+func (e stripeEvent) AsPaymentIntent() (stripePaymentIntent, error) {
+	var pi stripePaymentIntent
+	if len(e.Data.Object) == 0 {
+		return pi, errors.New("missing object")
+	}
+	if err := json.Unmarshal(e.Data.Object, &pi); err != nil {
+		return pi, err
+	}
+	if pi.ID == "" {
+		return pi, errors.New("missing id")
+	}
+	return pi, nil
+}
+
 type stripeCheckoutSession struct {
+	ID       string `json:"id"`
+	Metadata struct {
+		OrderID string `json:"order_id"`
+	} `json:"metadata"`
+}
+
+type stripePaymentIntent struct {
 	ID       string `json:"id"`
 	Metadata struct {
 		OrderID string `json:"order_id"`

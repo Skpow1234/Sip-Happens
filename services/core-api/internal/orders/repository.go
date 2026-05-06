@@ -17,6 +17,8 @@ type Repository interface {
 	UpdateStatus(ctx context.Context, tx *sql.Tx, id domain.OrderID, status domain.OrderStatus) error
 
 	SetStripeRefs(ctx context.Context, tx *sql.Tx, id domain.OrderID, checkoutSessionID, paymentIntentID string) error
+	FindByStripeCheckoutSessionID(ctx context.Context, q Querier, checkoutSessionID string) (domain.OrderID, error)
+	FindByStripePaymentIntentID(ctx context.Context, q Querier, paymentIntentID string) (domain.OrderID, error)
 
 	ListExpiredPending(ctx context.Context, q Querier, now time.Time, limit int) ([]domain.OrderID, error)
 }

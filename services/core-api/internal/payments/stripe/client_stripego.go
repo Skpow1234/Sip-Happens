@@ -8,6 +8,7 @@ import (
 
 	"github.com/stripe/stripe-go/v82"
 	checkoutsession "github.com/stripe/stripe-go/v82/checkout/session"
+	paymentintent "github.com/stripe/stripe-go/v82/paymentintent"
 )
 
 type StripeGoClient struct {
@@ -83,5 +84,22 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 	_ = time.Second
 
 	return out, nil
+}
+
+func (c StripeGoClient) PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error) {
+	if c.SecretKey == "" {
+		return "", errors.New("missing stripe secret key")
+	}
+	if paymentIntentID == "" {
+		return "", errors.New("missing payment intent id")
+	}
+	stripe.Key = c.SecretKey
+
+	pi, err := paymentintent.Get(paymentIntentID, nil)
+	if err != nil {
+		return "", err
+	}
+	_ = ctx
+	return string(pi.Status), nil
 }
 
