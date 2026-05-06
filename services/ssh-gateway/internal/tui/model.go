@@ -108,7 +108,7 @@ func (m Model) View() string {
 }
 
 func (m Model) viewWelcome() string {
-	title := lipgloss.NewStyle().Bold(true).Render("POLA.SSH")
+	title := lipgloss.NewStyle().Bold(true).Render("Sip-Happens")
 	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("Prohibited sale of alcohol to minors.")
 	help := "Press Enter to browse catalog. Press q to quit."
 	return fmt.Sprintf("%s\n%s\n\n%s\n", title, warn, help)
