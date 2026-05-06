@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"sip-happens/pkg/events"
 )
 
 type Event struct {
@@ -18,6 +20,22 @@ type Event struct {
 
 	RequestID string
 	PayloadJSON string
+}
+
+func FromEnvelope(e events.Envelope) (Event, error) {
+	if err := e.Validate(); err != nil {
+		return Event{}, err
+	}
+	return Event{
+		ID:            e.ID,
+		Type:          e.Type,
+		OccurredAt:    e.OccurredAt,
+		AggregateType: e.AggregateType,
+		AggregateID:   e.AggregateID,
+		Version:       e.Version,
+		RequestID:     e.RequestID,
+		PayloadJSON:   string(e.Payload),
+	}, nil
 }
 
 type Store interface {
