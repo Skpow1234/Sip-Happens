@@ -3,18 +3,16 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
 	"time"
 
 	_ "github.com/lib/pq"
 
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/pkg/config"
 	"sip-happens/services/core-api/internal/db"
 	httpserver "sip-happens/services/core-api/internal/http"
 	"sip-happens/services/core-api/internal/inventory"
@@ -53,11 +51,11 @@ func main() {
 }
 
 func runMigrateUp(ctx context.Context) error {
-	dsn := os.Getenv("POSTGRES_DSN")
-	if dsn == "" {
-		return fmt.Errorf("POSTGRES_DSN is required")
+	cfg, err := config.LoadCoreAPI()
+	if err != nil {
+		return err
 	}
-	sqlDB, err := sql.Open("postgres", dsn)
+	sqlDB, err := sql.Open("postgres", cfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
@@ -67,15 +65,9 @@ func runMigrateUp(ctx context.Context) error {
 		return err
 	}
 
-	// Container-first note: images must include `infra/migrations` (copied into the image).
-	migrationsPath := os.Getenv("MIGRATIONS_PATH")
-	if migrationsPath == "" {
-		migrationsPath = filepath.FromSlash("infra/migrations")
-	}
-
 	m := migrate.Migrator{
 		DB:  sqlDB,
-		FS:  os.DirFS(migrationsPath),
+		FS:  os.DirFS(cfg.MigrationsPath),
 		Dir: ".",
 	}
 	return m.Up(ctx)
@@ -84,16 +76,12 @@ func runMigrateUp(ctx context.Context) error {
 func runServer() error {
 	ctx := context.Background()
 
-	dsn := os.Getenv("POSTGRES_DSN")
-	if dsn == "" {
-		return fmt.Errorf("POSTGRES_DSN is required")
-	}
-	addr := os.Getenv("HTTP_ADDR")
-	if addr == "" {
-		addr = ":8080"
+	cfg, err := config.LoadCoreAPI()
+	if err != nil {
+		return err
 	}
 
-	sqlDB, err := sql.Open("postgres", dsn)
+	sqlDB, err := sql.Open("postgres", cfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
@@ -117,7 +105,7 @@ func runServer() error {
 	adminSvc := &admin.SQLService{DB: sqlDB}
 
 	// Stripe webhook wiring (Stripe verifier + SQL idempotency store).
-	stripeSigningSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	stripeSigningSecret := cfg.StripeWebhookSecret
 	var stripeWebhook *stripepayments.WebhookHandler
 	if stripeSigningSecret != "" {
 		stripeWebhook = &stripepayments.WebhookHandler{
@@ -131,36 +119,36 @@ func runServer() error {
 		Orders:        ordersSvc,
 		Catalog:       catalogRepo,
 		Admin:         adminSvc,
-		AdminToken:    os.Getenv("ADMIN_TOKEN"),
+		AdminToken:    cfg.AdminToken,
 		DB:            sqlDB,
-		Stripe:        selectStripeClient(),
+		Stripe:        selectStripeClient(cfg),
 		StripeWebhook: stripeWebhook,
 	}
 
 	httpSrv := &http.Server{
-		Addr:    addr,
+		Addr:    cfg.HTTPAddr,
 		Handler: srv.Handler(),
 	}
-	log.Printf("core-api listening on %s", addr)
+	log.Printf("core-api listening on %s", cfg.HTTPAddr)
 	return httpSrv.ListenAndServe()
 }
 
-func selectStripeClient() stripepayments.Service {
-	if key := os.Getenv("STRIPE_SECRET_KEY"); key != "" {
+func selectStripeClient(cfg config.CoreAPI) stripepayments.Service {
+	if key := cfg.StripeSecretKey; key != "" {
 		return stripepayments.StripeGoClient{SecretKey: key}
 	}
-	if os.Getenv("STRIPE_MOCK") == "1" {
+	if cfg.StripeMock {
 		return stripepayments.MockClient{}
 	}
 	return nil
 }
 
 func runSeedDemo(ctx context.Context) error {
-	dsn := os.Getenv("POSTGRES_DSN")
-	if dsn == "" {
-		return fmt.Errorf("POSTGRES_DSN is required")
+	cfg, err := config.LoadCoreAPI()
+	if err != nil {
+		return err
 	}
-	sqlDB, err := sql.Open("postgres", dsn)
+	sqlDB, err := sql.Open("postgres", cfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
@@ -183,11 +171,11 @@ func runSeedDemo(ctx context.Context) error {
 }
 
 func runCancelExpiredJob(ctx context.Context) error {
-	dsn := os.Getenv("POSTGRES_DSN")
-	if dsn == "" {
-		return fmt.Errorf("POSTGRES_DSN is required")
+	jobCfg, err := config.LoadCancelExpiredJob()
+	if err != nil {
+		return err
 	}
-	sqlDB, err := sql.Open("postgres", dsn)
+	sqlDB, err := sql.Open("postgres", jobCfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
@@ -203,28 +191,13 @@ func runCancelExpiredJob(ctx context.Context) error {
 	paymentsRepo := payments.NewSQLRepository()
 	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
 
-	interval := 30 * time.Second
-	if v := os.Getenv("JOB_INTERVAL_SECONDS"); v != "" {
-		if secs, err := time.ParseDuration(v + "s"); err == nil && secs > 0 {
-			interval = secs
-		}
-	}
-	limit := 100
-	if v := os.Getenv("JOB_BATCH_LIMIT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
-
-	runOnce := os.Getenv("JOB_RUN_ONCE") == "1"
-
-	tick := time.NewTicker(interval)
+	tick := time.NewTicker(jobCfg.Interval)
 	defer tick.Stop()
 
-	log.Printf("job cancel-expired starting (interval=%s, limit=%d, once=%v)", interval, limit, runOnce)
+	log.Printf("job cancel-expired starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
 
 	for {
-		n, err := ordersSvc.CancelExpiredPendingOrders(ctx, time.Now(), limit)
+		n, err := ordersSvc.CancelExpiredPendingOrders(ctx, time.Now(), jobCfg.BatchLimit)
 		if err != nil {
 			return err
 		}
@@ -232,7 +205,7 @@ func runCancelExpiredJob(ctx context.Context) error {
 			log.Printf("job cancel-expired: cancelled=%d", n)
 		}
 
-		if runOnce {
+		if jobCfg.RunOnce {
 			return nil
 		}
 
