@@ -7,11 +7,15 @@ import (
 	"sip-happens/services/core-api/internal/domain"
 )
 
-type PostgresRepository struct{}
+// SQLRepository is a SQL database implementation of inventory.Repository.
+//
+// This file currently uses PostgreSQL-compatible SQL, but the interface remains
+// database-agnostic and can be re-implemented for a different database.
+type SQLRepository struct{}
 
-func NewPostgresRepository() *PostgresRepository { return &PostgresRepository{} }
+func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
-func (r *PostgresRepository) LockForUpdate(ctx context.Context, tx *sql.Tx, productID domain.ProductID) (*domain.Inventory, error) {
+func (r *SQLRepository) LockForUpdate(ctx context.Context, tx *sql.Tx, productID domain.ProductID) (*domain.Inventory, error) {
 	row := tx.QueryRowContext(ctx, `
 select product_id, on_hand, reserved, safety_stock, updated_at
 from inventory
@@ -29,7 +33,7 @@ for update
 	return &inv, nil
 }
 
-func (r *PostgresRepository) Update(ctx context.Context, tx *sql.Tx, inv domain.Inventory) error {
+func (r *SQLRepository) Update(ctx context.Context, tx *sql.Tx, inv domain.Inventory) error {
 	res, err := tx.ExecContext(ctx, `
 update inventory
 set on_hand=$1, reserved=$2, safety_stock=$3, updated_at=now()

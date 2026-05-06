@@ -10,9 +10,16 @@ import (
 
 type PostgresRepository struct{}
 
-func NewPostgresRepository() *PostgresRepository { return &PostgresRepository{} }
+// SQLRepository is a SQL database implementation of Repository.
+//
+// This file currently uses PostgreSQL-compatible SQL, but the key point is that the
+// *interface* (`orders.Repository`) is database-agnostic and can be re-implemented
+// for a different database without changing domain/services.
+type SQLRepository struct{}
 
-func (r *PostgresRepository) Get(ctx context.Context, q Querier, id domain.OrderID) (*domain.Order, error) {
+func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
+
+func (r *SQLRepository) Get(ctx context.Context, q Querier, id domain.OrderID) (*domain.Order, error) {
 	row := q.QueryRowContext(ctx, `
 select id, status, customer_id,
        subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
@@ -44,7 +51,7 @@ where id = $1
 	return &o, nil
 }
 
-func (r *PostgresRepository) GetItems(ctx context.Context, q Querier, id domain.OrderID) ([]domain.OrderItem, error) {
+func (r *SQLRepository) GetItems(ctx context.Context, q Querier, id domain.OrderID) ([]domain.OrderItem, error) {
 	rows, err := q.QueryContext(ctx, `
 select order_id, product_id, sku, name, qty,
        unit_price_minor_units, currency, line_total_minor_units
@@ -71,7 +78,7 @@ order by sku
 	return out, rows.Err()
 }
 
-func (r *PostgresRepository) Insert(ctx context.Context, tx *sql.Tx, order domain.Order, items []domain.OrderItem) error {
+func (r *SQLRepository) Insert(ctx context.Context, tx *sql.Tx, order domain.Order, items []domain.OrderItem) error {
 	// NOTE: Order ID generation strategy will be defined later (UUID/ULID).
 	// For now, we assume the caller sets order.ID, or the DB provides it via default.
 	_, err := tx.ExecContext(ctx, `
@@ -113,7 +120,7 @@ insert into order_items (
 	return nil
 }
 
-func (r *PostgresRepository) UpdateStatus(ctx context.Context, tx *sql.Tx, id domain.OrderID, status domain.OrderStatus) error {
+func (r *SQLRepository) UpdateStatus(ctx context.Context, tx *sql.Tx, id domain.OrderID, status domain.OrderStatus) error {
 	res, err := tx.ExecContext(ctx, `update orders set status=$1, updated_at=now() where id=$2`, status, string(id))
 	if err != nil {
 		return err
@@ -125,7 +132,7 @@ func (r *PostgresRepository) UpdateStatus(ctx context.Context, tx *sql.Tx, id do
 	return nil
 }
 
-func (r *PostgresRepository) SetStripeRefs(ctx context.Context, tx *sql.Tx, id domain.OrderID, checkoutSessionID, paymentIntentID string) error {
+func (r *SQLRepository) SetStripeRefs(ctx context.Context, tx *sql.Tx, id domain.OrderID, checkoutSessionID, paymentIntentID string) error {
 	res, err := tx.ExecContext(ctx, `
 update orders
 set stripe_checkout_session_id=$1,
@@ -143,7 +150,7 @@ where id=$3
 	return nil
 }
 
-func (r *PostgresRepository) ListExpiredPending(ctx context.Context, q Querier, now time.Time, limit int) ([]domain.OrderID, error) {
+func (r *SQLRepository) ListExpiredPending(ctx context.Context, q Querier, now time.Time, limit int) ([]domain.OrderID, error) {
 	rows, err := q.QueryContext(ctx, `
 select id
 from orders
