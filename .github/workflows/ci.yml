@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "master"]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: beer_shop
+          POSTGRES_USER: beer
+          POSTGRES_PASSWORD: beer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beer -d beer_shop"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      POSTGRES_DSN: postgres://beer:beer@localhost:5432/beer_shop?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go fmt check
+        run: |
+          test -z "$(gofmt -l .)"
+
+      - name: Go test
+        run: |
+          go test ./...
+
+      - name: Migration smoke (core-api migrate up)
+        run: |
+          go run ./services/core-api/cmd/api migrate up
+
+      - name: Docker build (compose)
+        run: |
+          docker compose -f infra/compose.yaml build
+
