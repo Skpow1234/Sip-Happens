@@ -1,0 +1,49 @@
+# OS / misc
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Environment / secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Go build outputs
+bin/
+dist/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage/
+*.coverprofile
+
+# Go workspace / tool caches
+/go.work
+/go.work.sum
+
+# Local DB / storage mounts (when used)
+*.sqlite
+*.sqlite3
+data/
+tmp/
+
+# Docker local overrides
+docker-compose.override.yml
+
+.cursorrules
+docs/DESIGN.md
