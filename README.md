@@ -34,12 +34,6 @@ docker compose -f infra/compose.yaml up -d postgres
 ### Run migrations
 
 ```bash
-docker compose -f infra/compose.yaml run --rm core-api migrate up
-```
-
-Or using the dedicated migrator binary (preferred going forward):
-
-```bash
 docker compose -f infra/compose.yaml run --rm core-api /app/core-migrate up
 ```
 
@@ -50,7 +44,7 @@ This worker re-checks stale `PENDING_PAYMENT` orders against Stripe (by `stripe_
 - Run once:
 
 ```bash
-docker compose -f infra/compose.yaml run --rm -e JOB_RUN_ONCE=true core-api jobs stripe-reconcile
+docker compose -f infra/compose.yaml run --rm -e JOB_RUN_ONCE=true core-api /app/core-jobs stripe-reconcile
 ```
 
 - Run continuously:
@@ -100,7 +94,7 @@ If some events reach terminal `FAILED`, they are copied into `outbox_dead_letter
 You can re-queue a batch back into `outbox_events` with:
 
 ```bash
-docker compose -f infra/compose.yaml run --rm core-api jobs outbox-replay
+docker compose -f infra/compose.yaml run --rm core-api /app/core-jobs outbox-replay
 ```
 
 Environment knobs:

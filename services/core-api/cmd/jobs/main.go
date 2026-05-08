@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/nats-io/nats.go"
 
 	"sip-happens/pkg/config"
 	"sip-happens/services/core-api/internal/catalog"
@@ -210,9 +212,15 @@ func runOutboxDispatchJob(ctx context.Context) error {
 	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
 	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
+	publisher, cleanup, err := outboxPublisherFromEnv()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
 	d := &outbox.Dispatcher{
 		Store:       outbox.NewSQLStore(),
-		Publisher:   outbox.LogPublisher{},
+		Publisher:   publisher,
 		LockedBy:    jobCfg.LockedBy,
 		Batch:       jobCfg.BatchLimit,
 		MaxAttempts: jobCfg.MaxAttempts,
@@ -267,6 +275,50 @@ func runOutboxReplayJob(ctx context.Context) error {
 	}
 	log.Printf("job outbox-replay: requeued=%d", n)
 	return nil
+}
+
+func outboxPublisherFromEnv() (outbox.Publisher, func(), error) {
+	kind := os.Getenv("OUTBOX_PUBLISHER")
+	if kind == "" || kind == "log" {
+		return outbox.LogPublisher{}, func() {}, nil
+	}
+	if kind != "nats" {
+		return nil, nil, fmt.Errorf("unknown OUTBOX_PUBLISHER=%q (expected 'log' or 'nats')", kind)
+	}
+
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		return nil, nil, fmt.Errorf("NATS_URL is required when OUTBOX_PUBLISHER=nats")
+	}
+	stream := os.Getenv("NATS_STREAM")
+	if stream == "" {
+		return nil, nil, fmt.Errorf("NATS_STREAM is required when OUTBOX_PUBLISHER=nats")
+	}
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		namespace = "dev"
+	}
+	subjectPrefix := os.Getenv("NATS_SUBJECT_PREFIX")
+	if subjectPrefix == "" {
+		subjectPrefix = fmt.Sprintf("sip_happens.%s.events", namespace)
+	}
+
+	nc, err := nats.Connect(natsURL, nats.Name("sip-happens outbox-dispatch"))
+	if err != nil {
+		return nil, nil, err
+	}
+	js, err := nc.JetStream()
+	if err != nil {
+		nc.Close()
+		return nil, nil, err
+	}
+
+	pub := &outbox.JetStreamPublisher{
+		JS:            js,
+		Stream:        stream,
+		SubjectPrefix: subjectPrefix,
+	}
+	return pub, func() { nc.Close() }, nil
 }
 
 func runInventoryReconcileJob(ctx context.Context) error {
@@ -397,4 +449,3 @@ func minInt(a, b int) int {
 	}
 	return b
 }
-
