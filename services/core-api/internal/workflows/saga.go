@@ -11,7 +11,7 @@ import (
 // centralize saga steps without embedding transport or SQL details.
 
 type FulfillmentStarter interface {
-	CreateShipment(ctx context.Context, now time.Time, orderID domain.OrderID) error
+	CreateShipment(ctx context.Context, now time.Time, orderID domain.OrderID) (domain.Shipment, error)
 }
 
 type Saga struct {
@@ -24,6 +24,7 @@ func (s *Saga) OnOrderPaid(ctx context.Context, now time.Time, orderID domain.Or
 	if s == nil || s.Fulfillment == nil {
 		return nil
 	}
-	return s.Fulfillment.CreateShipment(ctx, now, orderID)
+	_, err := s.Fulfillment.CreateShipment(ctx, now, orderID)
+	return err
 }
 

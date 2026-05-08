@@ -14,6 +14,7 @@ import (
 	"sip-happens/pkg/config"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/db"
+	"sip-happens/services/core-api/internal/fulfillment"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/outbox"
@@ -23,7 +24,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|inventory-reconcile>")
+		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|inventory-reconcile|fulfillment-runner>")
 	}
 	cmd := os.Args[1]
 
@@ -49,6 +50,10 @@ func main() {
 		}
 	case "inventory-reconcile":
 		if err := runInventoryReconcileJob(ctx); err != nil {
+			log.Fatal(err)
+		}
+	case "fulfillment-runner":
+		if err := runFulfillmentRunner(ctx); err != nil {
 			log.Fatal(err)
 		}
 	default:
@@ -301,6 +306,48 @@ func runInventoryReconcileJob(ctx context.Context) error {
 		}
 		if flagged > 0 || fixed > 0 {
 			log.Printf("job inventory-reconcile: flagged=%d fixed=%d", flagged, fixed)
+		}
+		if jobCfg.RunOnce {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+func runFulfillmentRunner(ctx context.Context) error {
+	jobCfg, err := config.LoadInventoryReconcileJob()
+	if err != nil {
+		return err
+	}
+	// Reuse JOB_* + DB_* for now; add dedicated config later if needed.
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
+
+	svc := &fulfillment.SQLService{DB: sqlDB}
+	tick := time.NewTicker(jobCfg.Interval)
+	defer tick.Stop()
+
+	log.Printf("job fulfillment-runner starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
+	for {
+		n, err := svc.RunOnce(ctx, time.Now(), jobCfg.BatchLimit)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			log.Printf("job fulfillment-runner: advanced=%d", n)
 		}
 		if jobCfg.RunOnce {
 			return nil
