@@ -78,6 +78,10 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}
+		if fp == "" {
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "missing fingerprint")
+			return
+		}
 		if m.Nonces == nil {
 			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 			return
