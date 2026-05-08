@@ -47,6 +47,29 @@ services:
     ports:
       - "8080:8080"
 
+  core-migrate:
+    image: infra-core-api
+    entrypoint: ["/app/core-migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      MIGRATIONS_PATH: "/app/infra/migrations"
+
+  core-jobs:
+    image: infra-core-api
+    entrypoint: ["/app/core-jobs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      NATS_STREAM: ${NATS_STREAM:-sip_happens}
+
   ssh-gateway:
     build:
       context: ..
@@ -64,6 +87,7 @@ services:
 
   order-reaper:
     image: infra-core-api
+    entrypoint: ["/app/core-jobs"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,10 +95,11 @@ services:
       POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
       JOB_INTERVAL_SECONDS: ${JOB_INTERVAL_SECONDS:-30}
       JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
-    command: ["/app/core-jobs", "cancel-expired"]
+    command: ["cancel-expired"]
 
   stripe-reconcile:
     image: infra-core-api
+    entrypoint: ["/app/core-jobs"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,10 +109,11 @@ services:
       JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_MOCK: ${STRIPE_MOCK:-1}
-    command: ["/app/core-jobs", "stripe-reconcile"]
+    command: ["stripe-reconcile"]
 
   outbox-dispatch:
     image: infra-core-api
+    entrypoint: ["/app/core-jobs"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,7 +129,7 @@ services:
       OUTBOX_LOCKED_BY: ${OUTBOX_LOCKED_BY:-outbox-dispatcher}
       OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-10}
       OUTBOX_BASE_BACKOFF_SECONDS: ${OUTBOX_BASE_BACKOFF_SECONDS:-30}
-    command: ["/app/core-jobs", "outbox-dispatch"]
+    command: ["outbox-dispatch"]
 
   # Optional: run Stripe CLI in a container (so you don't need local installs).
   # Usage examples are documented in docs/runbooks/stripe-webhook-local.md

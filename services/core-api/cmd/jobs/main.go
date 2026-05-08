@@ -351,6 +351,31 @@ func runNATSConsumeJob(ctx context.Context) error {
 		return err
 	}
 
+	// Ensure the stream exists so a fresh environment can start consumers
+	// before any publisher has emitted messages.
+	{
+		ensureCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		if _, err := js.StreamInfo(stream, nats.Context(ensureCtx)); err != nil {
+			if err != nats.ErrStreamNotFound {
+				return err
+			}
+			cfg := &nats.StreamConfig{
+				Name: stream,
+				Subjects: []string{
+					fmt.Sprintf("sip_happens.%s.events.>", namespace),
+					fmt.Sprintf("sip_happens.%s.dlq", namespace),
+				},
+				Storage:   nats.FileStorage,
+				Retention: nats.LimitsPolicy,
+			}
+			if _, err := js.AddStream(cfg, nats.Context(ensureCtx)); err != nil {
+				return err
+			}
+		}
+	}
+
 	r := &consumers.JetStreamRuntime{
 		JS:            js,
 		Stream:        stream,
