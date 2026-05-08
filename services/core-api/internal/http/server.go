@@ -43,6 +43,8 @@ func (s *Server) Handler() http.Handler {
 	}
 	idem := &IdempotencyMiddleware{Store: idemStore, TTL: 24 * time.Hour}
 
+	catalogCache := &SWRCache{FreshFor: 15 * time.Second, StaleFor: 45 * time.Second}
+
 	// Best-effort rate limiting. This is not relied on for correctness and is safe
 	// to be in-memory. For multi-node, limits will be per-node unless we later
 	// switch to a shared backend (e.g., Redis).
@@ -59,8 +61,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/catalog", s.handleCatalog)
-	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
+	mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {
+		return "catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+	}))
+	mux.Handle("/catalog/", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalogDetail), func(r *http.Request) string {
+		// sku is part of the path already.
+		return "catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+	}))
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
