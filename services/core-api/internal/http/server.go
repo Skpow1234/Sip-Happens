@@ -43,6 +43,18 @@ func (s *Server) Handler() http.Handler {
 	}
 	idem := &IdempotencyMiddleware{Store: idemStore, TTL: 24 * time.Hour}
 
+	// Best-effort rate limiting. This is not relied on for correctness and is safe
+	// to be in-memory. For multi-node, limits will be per-node unless we later
+	// switch to a shared backend (e.g., Redis).
+	checkoutRL := (&RateLimitMiddleware{
+		Limiter: &TokenBucketLimiter{Capacity: 10, RefillRate: 10.0 / 60.0, TTL: 30 * time.Minute}, // 10/min burst 10
+		KeyFn:   KeyByFingerprintOrIP,
+	})
+	adminRL := (&RateLimitMiddleware{
+		Limiter: &TokenBucketLimiter{Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute}, // 60/min burst 60
+		KeyFn:   KeyByAdminTokenOrIP,
+	})
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/readyz", s.handleReadyz)
@@ -50,11 +62,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/catalog", s.handleCatalog)
 	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
-	mux.Handle("/checkout", s.requireSigned(idem.Wrap(http.HandlerFunc(s.handleCheckout))))
-	mux.Handle("/admin/products", idem.Wrap(http.HandlerFunc(s.handleAdminProducts)))
-	mux.Handle("/admin/products/", idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail)))
-	mux.Handle("/admin/prices", idem.Wrap(http.HandlerFunc(s.handleAdminPrices)))
-	mux.Handle("/admin/inventory", idem.Wrap(http.HandlerFunc(s.handleAdminInventory)))
+	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
+	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
+	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
+	mux.Handle("/admin/prices", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminPrices))))
+	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
 
 	if s.StripeWebhook != nil {
