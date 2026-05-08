@@ -23,7 +23,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay>")
+		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|inventory-reconcile>")
 	}
 	cmd := os.Args[1]
 
@@ -45,6 +45,10 @@ func main() {
 		}
 	case "outbox-replay":
 		if err := runOutboxReplayJob(ctx); err != nil {
+			log.Fatal(err)
+		}
+	case "inventory-reconcile":
+		if err := runInventoryReconcileJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	default:
@@ -258,5 +262,54 @@ func runOutboxReplayJob(ctx context.Context) error {
 	}
 	log.Printf("job outbox-replay: requeued=%d", n)
 	return nil
+}
+
+func runInventoryReconcileJob(ctx context.Context) error {
+	jobCfg, err := config.LoadInventoryReconcileJob()
+	if err != nil {
+		return err
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
+
+	job := &inventory.ReconcileJob{
+		DB:          sqlDB,
+		Inventory:   inventory.NewSQLRepository(),
+		BatchLimit:  jobCfg.BatchLimit,
+		ExpireGrace: jobCfg.ExpireGrace,
+		Fix:         jobCfg.Fix,
+	}
+
+	tick := time.NewTicker(jobCfg.Interval)
+	defer tick.Stop()
+
+	log.Printf("job inventory-reconcile starting (interval=%s, limit=%d, once=%v, fix=%v, expire_grace=%s)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, jobCfg.Fix, jobCfg.ExpireGrace)
+
+	for {
+		fixed, flagged, err := job.RunOnce(ctx, time.Now())
+		if err != nil {
+			return err
+		}
+		if flagged > 0 || fixed > 0 {
+			log.Printf("job inventory-reconcile: flagged=%d fixed=%d", flagged, fixed)
+		}
+		if jobCfg.RunOnce {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
 }
 

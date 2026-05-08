@@ -209,6 +209,40 @@ func LoadOutboxReplayJob() (OutboxReplayJob, error) {
 	return c, nil
 }
 
+type InventoryReconcileJob struct {
+	PostgresDSN string
+	Interval    time.Duration
+	BatchLimit  int
+	RunOnce     bool
+	Fix         bool
+	ExpireGrace time.Duration
+	DBPool      DBPool
+}
+
+func LoadInventoryReconcileJob() (InventoryReconcileJob, error) {
+	var c InventoryReconcileJob
+	c.PostgresDSN = os.Getenv("POSTGRES_DSN")
+	if c.PostgresDSN == "" {
+		return c, fmt.Errorf("POSTGRES_DSN is required")
+	}
+	c.Interval = time.Duration(getenvIntDefault("JOB_INTERVAL_SECONDS", 300)) * time.Second
+	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 500)
+	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
+	c.Fix = getenvBoolDefault("INV_RECONCILE_FIX", false)
+	c.ExpireGrace = time.Duration(getenvIntDefault("INV_EXPIRE_GRACE_SECONDS", 300)) * time.Second
+	c.DBPool = loadDBPool()
+	if c.BatchLimit <= 0 || c.BatchLimit > 10000 {
+		return c, fmt.Errorf("JOB_BATCH_LIMIT must be between 1 and 10000")
+	}
+	if c.Interval <= 0 {
+		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")
+	}
+	if c.ExpireGrace < 0 {
+		c.ExpireGrace = 0
+	}
+	return c, nil
+}
+
 type SSHGateway struct {
 	SSHAddr     string
 	CoreAPIURL  string
