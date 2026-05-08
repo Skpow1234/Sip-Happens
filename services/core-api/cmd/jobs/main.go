@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -385,7 +386,18 @@ func runNATSConsumeJob(ctx context.Context) error {
 		DLQSubject:    dlq,
 	}
 
-	return r.Run(ctx, logConsumer{name: consumerName})
+	runOnce := os.Getenv("JOB_RUN_ONCE") == "true" || os.Getenv("JOB_RUN_ONCE") == "1"
+	if !runOnce {
+		return r.Run(ctx, logConsumer{name: consumerName})
+	}
+
+	onceCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	err = r.Run(onceCtx, logConsumer{name: consumerName})
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }
 
 func outboxPublisherFromEnv() (outbox.Publisher, func(), error) {
