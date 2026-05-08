@@ -17,6 +17,7 @@ import (
 
 	"sip-happens/pkg/config"
 	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/fulfillment"
 	"sip-happens/services/core-api/internal/inventory"
@@ -28,7 +29,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|inventory-reconcile|fulfillment-runner>")
+		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|nats-consume|inventory-reconcile|fulfillment-runner>")
 	}
 	cmd := os.Args[1]
 
@@ -50,6 +51,10 @@ func main() {
 		}
 	case "outbox-replay":
 		if err := runOutboxReplayJob(ctx); err != nil {
+			log.Fatal(err)
+		}
+	case "nats-consume":
+		if err := runNATSConsumeJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	case "inventory-reconcile":
@@ -275,6 +280,87 @@ func runOutboxReplayJob(ctx context.Context) error {
 	}
 	log.Printf("job outbox-replay: requeued=%d", n)
 	return nil
+}
+
+type logConsumer struct {
+	name string
+}
+
+func (c logConsumer) ConsumerName() string { return c.name }
+
+func (c logConsumer) Handle(ctx context.Context, m *nats.Msg) error {
+	_ = ctx
+	log.Printf("consume subject=%s event_id=%s event_type=%s request_id=%s", m.Subject, m.Header.Get(outbox.NatsHeaderEventID), m.Header.Get(outbox.NatsHeaderEventType), m.Header.Get(outbox.NatsHeaderRequestID))
+	return nil
+}
+
+func runNATSConsumeJob(ctx context.Context) error {
+	jobCfg, err := config.LoadOutboxDispatchJob()
+	if err != nil {
+		return err
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
+
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		return fmt.Errorf("NATS_URL is required")
+	}
+	stream := os.Getenv("NATS_STREAM")
+	if stream == "" {
+		return fmt.Errorf("NATS_STREAM is required")
+	}
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		namespace = "dev"
+	}
+
+	filter := os.Getenv("NATS_CONSUME_SUBJECT")
+	if filter == "" {
+		filter = fmt.Sprintf("sip_happens.%s.events.>", namespace)
+	}
+	durable := os.Getenv("NATS_DURABLE")
+	if durable == "" {
+		durable = "core-api"
+	}
+	consumerName := os.Getenv("NATS_CONSUMER_NAME")
+	if consumerName == "" {
+		consumerName = "core-api"
+	}
+	dlq := os.Getenv("NATS_DLQ_SUBJECT")
+	if dlq == "" {
+		dlq = fmt.Sprintf("sip_happens.%s.dlq", namespace)
+	}
+
+	nc, err := nats.Connect(natsURL, nats.Name("sip-happens consumer"))
+	if err != nil {
+		return err
+	}
+	defer nc.Close()
+	js, err := nc.JetStream()
+	if err != nil {
+		return err
+	}
+
+	r := &consumers.JetStreamRuntime{
+		JS:            js,
+		Stream:        stream,
+		FilterSubject: filter,
+		Durable:       durable,
+		Idempotency:   &consumers.SQLIdempotencyStore{DB: sqlDB},
+		DLQSubject:    dlq,
+	}
+
+	return r.Run(ctx, logConsumer{name: consumerName})
 }
 
 func outboxPublisherFromEnv() (outbox.Publisher, func(), error) {
