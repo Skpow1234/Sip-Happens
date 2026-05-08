@@ -69,11 +69,17 @@ func runCancelExpiredJob(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sqlDB, err := openDB(ctx, jobCfg.PostgresDSN)
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
 	d := db.New(sqlDB)
 	ordersRepo := orders.NewSQLRepository()
@@ -111,11 +117,17 @@ func runStripeReconcileJob(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sqlDB, err := openDB(ctx, jobCfg.PostgresDSN)
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
 	d := db.New(sqlDB)
 	ordersRepo := orders.NewSQLRepository()
@@ -176,11 +188,17 @@ func runOutboxDispatchJob(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sqlDB, err := openDB(ctx, jobCfg.PostgresDSN)
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
 	d := &outbox.Dispatcher{
 		Store:       outbox.NewSQLStore(),
@@ -220,11 +238,17 @@ func runOutboxReplayJob(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sqlDB, err := openDB(ctx, jobCfg.PostgresDSN)
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
 	store := outbox.NewSQLStore()
 	log.Printf("job outbox-replay starting (limit=%d)", jobCfg.Limit)

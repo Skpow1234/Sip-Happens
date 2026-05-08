@@ -108,11 +108,14 @@ func runServer() error {
 		return err
 	}
 	defer sqlDB.Close()
-	sqlDB.SetMaxOpenConns(10)
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetMaxOpenConns(cfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(cfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(cfg.DBPool.ConnMaxIdleTime)
 
-	if err := sqlDB.PingContext(ctx); err != nil {
+	pingCtx, cancel := context.WithTimeout(ctx, cfg.DBPool.PingTimeout)
+	defer cancel()
+	if err := sqlDB.PingContext(pingCtx); err != nil {
 		return err
 	}
 

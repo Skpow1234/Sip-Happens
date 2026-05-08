@@ -14,6 +14,7 @@ type CoreAPI struct {
 
 	PostgresDSN    string
 	MigrationsPath string
+	DBPool         DBPool
 
 	StripeSecretKey     string
 	StripeWebhookSecret string
@@ -40,6 +41,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 	}
 
 	c.MigrationsPath = getenvDefault("MIGRATIONS_PATH", "infra/migrations")
+	c.DBPool = loadDBPool()
 
 	c.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
 	c.StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
@@ -62,11 +64,30 @@ func LoadCoreAPI() (CoreAPI, error) {
 	return c, nil
 }
 
+type DBPool struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+	PingTimeout     time.Duration
+}
+
+func loadDBPool() DBPool {
+	return DBPool{
+		MaxOpenConns:    getenvIntDefault("DB_MAX_OPEN_CONNS", 10),
+		MaxIdleConns:    getenvIntDefault("DB_MAX_IDLE_CONNS", 10),
+		ConnMaxLifetime: time.Duration(getenvIntDefault("DB_CONN_MAX_LIFETIME_SECONDS", 1800)) * time.Second, // 30m
+		ConnMaxIdleTime: time.Duration(getenvIntDefault("DB_CONN_MAX_IDLE_SECONDS", 300)) * time.Second,        // 5m
+		PingTimeout:     time.Duration(getenvIntDefault("DB_PING_TIMEOUT_SECONDS", 2)) * time.Second,
+	}
+}
+
 type CancelExpiredJob struct {
 	PostgresDSN string
 	Interval    time.Duration
 	BatchLimit  int
 	RunOnce     bool
+	DBPool      DBPool
 }
 
 func LoadCancelExpiredJob() (CancelExpiredJob, error) {
@@ -78,6 +99,7 @@ func LoadCancelExpiredJob() (CancelExpiredJob, error) {
 	c.Interval = time.Duration(getenvIntDefault("JOB_INTERVAL_SECONDS", 30)) * time.Second
 	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
+	c.DBPool = loadDBPool()
 	if c.BatchLimit <= 0 {
 		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
 	}
@@ -92,6 +114,7 @@ type StripeReconcileJob struct {
 	Interval    time.Duration
 	BatchLimit  int
 	RunOnce     bool
+	DBPool      DBPool
 
 	StripeSecretKey string
 	StripeMock      bool
@@ -106,6 +129,7 @@ func LoadStripeReconcileJob() (StripeReconcileJob, error) {
 	c.Interval = time.Duration(getenvIntDefault("JOB_INTERVAL_SECONDS", 60)) * time.Second
 	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
+	c.DBPool = loadDBPool()
 	if c.BatchLimit <= 0 {
 		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
 	}
@@ -127,6 +151,7 @@ type OutboxDispatchJob struct {
 	Interval    time.Duration
 	BatchLimit  int
 	RunOnce     bool
+	DBPool      DBPool
 
 	LockedBy string
 	MaxAttempts int
@@ -142,6 +167,7 @@ func LoadOutboxDispatchJob() (OutboxDispatchJob, error) {
 	c.Interval = time.Duration(getenvIntDefault("JOB_INTERVAL_SECONDS", 5)) * time.Second
 	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
+	c.DBPool = loadDBPool()
 	c.LockedBy = getenvDefault("OUTBOX_LOCKED_BY", "outbox-dispatcher")
 	c.MaxAttempts = getenvIntDefault("OUTBOX_MAX_ATTEMPTS", 10)
 	c.BaseBackoff = time.Duration(getenvIntDefault("OUTBOX_BASE_BACKOFF_SECONDS", 30)) * time.Second
@@ -165,6 +191,7 @@ type OutboxReplayJob struct {
 	PostgresDSN string
 	Limit       int
 	RunOnce     bool
+	DBPool      DBPool
 }
 
 func LoadOutboxReplayJob() (OutboxReplayJob, error) {
@@ -175,6 +202,7 @@ func LoadOutboxReplayJob() (OutboxReplayJob, error) {
 	}
 	c.Limit = getenvIntDefault("OUTBOX_REPLAY_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", true)
+	c.DBPool = loadDBPool()
 	if c.Limit <= 0 || c.Limit > 10000 {
 		return c, fmt.Errorf("OUTBOX_REPLAY_LIMIT must be between 1 and 10000")
 	}
