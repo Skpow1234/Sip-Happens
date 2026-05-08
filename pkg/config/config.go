@@ -11,6 +11,7 @@ import (
 
 type CoreAPI struct {
 	HTTPAddr string
+	Namespace string
 
 	PostgresDSN    string
 	MigrationsPath string
@@ -35,6 +36,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 	var c CoreAPI
 
 	c.HTTPAddr = getenvDefault("HTTP_ADDR", ":8080")
+	c.Namespace = getenvDefault("NAMESPACE", "dev")
 	c.PostgresDSN = os.Getenv("POSTGRES_DSN")
 	if c.PostgresDSN == "" {
 		return c, fmt.Errorf("POSTGRES_DSN is required")

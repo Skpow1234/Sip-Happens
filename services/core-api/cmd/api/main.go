@@ -150,6 +150,7 @@ func runServer() error {
 		AdminToken:    cfg.AdminToken,
 		AdminTokens:   cfg.AdminTokens,
 		DB:            sqlDB,
+		Namespace:     cfg.Namespace,
 		CoreAPIHMACSecret: cfg.CoreAPIHMACSecret,
 		CoreAPIHMACKeys:   cfg.CoreAPIHMACKeys,
 		Stripe:        selectStripeClient(cfg),

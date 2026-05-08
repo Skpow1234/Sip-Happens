@@ -68,6 +68,7 @@ on conflict (scope, idem_key, method, path) do nothing
 type IdempotencyMiddleware struct {
 	Store IdempotencyStore
 	TTL   time.Duration
+	Prefix string
 }
 
 func (m *IdempotencyMiddleware) Wrap(next http.Handler) http.Handler {
@@ -91,6 +92,9 @@ func (m *IdempotencyMiddleware) Wrap(next http.Handler) http.Handler {
 		}
 
 		scope := scopeFromRequest(r)
+		if p := strings.TrimSpace(m.Prefix); p != "" {
+			scope = p + ":" + scope
+		}
 		path := r.URL.Path // do not include query string in idempotency keying
 
 		bodyBytes, err := readAndRestoreBody(r)

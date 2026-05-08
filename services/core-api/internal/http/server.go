@@ -32,6 +32,10 @@ type Server struct {
 
 	CoreAPIHMACSecret string
 	CoreAPIHMACKeys   map[string]string
+
+	// Namespace prefixes process-level keys (cache/ratelimit/idempotency scopes)
+	// to avoid collisions if infrastructure is shared across environments.
+	Namespace string
 }
 
 func (s *Server) Handler() http.Handler {
@@ -41,7 +45,7 @@ func (s *Server) Handler() http.Handler {
 	if s.DB != nil {
 		idemStore = &SQLIdempotencyStore{DB: s.DB}
 	}
-	idem := &IdempotencyMiddleware{Store: idemStore, TTL: 24 * time.Hour}
+	idem := &IdempotencyMiddleware{Store: idemStore, TTL: 24 * time.Hour, Prefix: strings.TrimSpace(s.Namespace)}
 
 	catalogCache := &SWRCache{FreshFor: 15 * time.Second, StaleFor: 45 * time.Second}
 
@@ -50,11 +54,23 @@ func (s *Server) Handler() http.Handler {
 	// switch to a shared backend (e.g., Redis).
 	checkoutRL := (&RateLimitMiddleware{
 		Limiter: &TokenBucketLimiter{Capacity: 10, RefillRate: 10.0 / 60.0, TTL: 30 * time.Minute}, // 10/min burst 10
-		KeyFn:   KeyByFingerprintOrIP,
+		KeyFn: func(r *http.Request) string {
+			p := strings.TrimSpace(s.Namespace)
+			if p == "" {
+				p = "dev"
+			}
+			return p + ":" + KeyByFingerprintOrIP(r)
+		},
 	})
 	adminRL := (&RateLimitMiddleware{
 		Limiter: &TokenBucketLimiter{Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute}, // 60/min burst 60
-		KeyFn:   KeyByAdminTokenOrIP,
+		KeyFn: func(r *http.Request) string {
+			p := strings.TrimSpace(s.Namespace)
+			if p == "" {
+				p = "dev"
+			}
+			return p + ":" + KeyByAdminTokenOrIP(r)
+		},
 	})
 
 	mux := http.NewServeMux()
@@ -62,11 +78,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {
-		return "catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+		p := strings.TrimSpace(s.Namespace)
+		if p == "" {
+			p = "dev"
+		}
+		return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
 	}))
 	mux.Handle("/catalog/", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalogDetail), func(r *http.Request) string {
 		// sku is part of the path already.
-		return "catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+		p := strings.TrimSpace(s.Namespace)
+		if p == "" {
+			p = "dev"
+		}
+		return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
 	}))
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
