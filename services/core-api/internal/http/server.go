@@ -36,6 +36,12 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	metrics := NewMetrics()
 
+	var idemStore IdempotencyStore
+	if s.DB != nil {
+		idemStore = &SQLIdempotencyStore{DB: s.DB}
+	}
+	idem := &IdempotencyMiddleware{Store: idemStore, TTL: 24 * time.Hour}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/readyz", s.handleReadyz)
@@ -43,11 +49,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/catalog", s.handleCatalog)
 	mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
-	mux.Handle("/checkout", s.requireSigned(http.HandlerFunc(s.handleCheckout)))
-	mux.HandleFunc("/admin/products", s.handleAdminProducts)
-	mux.HandleFunc("/admin/products/", s.handleAdminProductDetail)
-	mux.HandleFunc("/admin/prices", s.handleAdminPrices)
-	mux.HandleFunc("/admin/inventory", s.handleAdminInventory)
+	mux.Handle("/checkout", s.requireSigned(idem.Wrap(http.HandlerFunc(s.handleCheckout))))
+	mux.Handle("/admin/products", idem.Wrap(http.HandlerFunc(s.handleAdminProducts)))
+	mux.Handle("/admin/products/", idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail)))
+	mux.Handle("/admin/prices", idem.Wrap(http.HandlerFunc(s.handleAdminPrices)))
+	mux.Handle("/admin/inventory", idem.Wrap(http.HandlerFunc(s.handleAdminInventory)))
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
 
 	if s.StripeWebhook != nil {
