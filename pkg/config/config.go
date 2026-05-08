@@ -7,11 +7,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"sip-happens/pkg/featureflags"
 )
 
 type CoreAPI struct {
 	HTTPAddr string
 	Namespace string
+	Flags     featureflags.Flags
 
 	PostgresDSN    string
 	MigrationsPath string
@@ -37,6 +40,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 
 	c.HTTPAddr = getenvDefault("HTTP_ADDR", ":8080")
 	c.Namespace = getenvDefault("NAMESPACE", "dev")
+	c.Flags = featureflags.Parse(os.Getenv("FEATURE_FLAGS"))
 	c.PostgresDSN = os.Getenv("POSTGRES_DSN")
 	if c.PostgresDSN == "" {
 		return c, fmt.Errorf("POSTGRES_DSN is required")

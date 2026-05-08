@@ -36,6 +36,10 @@ type Server struct {
 	// Namespace prefixes process-level keys (cache/ratelimit/idempotency scopes)
 	// to avoid collisions if infrastructure is shared across environments.
 	Namespace string
+
+	// Feature flags for gradual rollout.
+	// Names are lowercased strings (e.g. "catalog_cache").
+	FeatureFlags map[string]struct{}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -77,21 +81,27 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.Handle("/metrics", promhttp.Handler())
-	mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {
-		p := strings.TrimSpace(s.Namespace)
-		if p == "" {
-			p = "dev"
-		}
-		return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
-	}))
-	mux.Handle("/catalog/", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalogDetail), func(r *http.Request) string {
-		// sku is part of the path already.
-		p := strings.TrimSpace(s.Namespace)
-		if p == "" {
-			p = "dev"
-		}
-		return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
-	}))
+	// Feature flag: catalog_cache
+	if _, ok := s.FeatureFlags["catalog_cache"]; ok {
+		mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {
+			p := strings.TrimSpace(s.Namespace)
+			if p == "" {
+				p = "dev"
+			}
+			return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+		}))
+		mux.Handle("/catalog/", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalogDetail), func(r *http.Request) string {
+			// sku is part of the path already.
+			p := strings.TrimSpace(s.Namespace)
+			if p == "" {
+				p = "dev"
+			}
+			return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+		}))
+	} else {
+		mux.HandleFunc("/catalog", s.handleCatalog)
+		mux.HandleFunc("/catalog/", s.handleCatalogDetail)
+	}
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
