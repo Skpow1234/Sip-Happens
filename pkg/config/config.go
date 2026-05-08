@@ -106,8 +106,8 @@ func LoadCancelExpiredJob() (CancelExpiredJob, error) {
 	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
 	c.DBPool = loadDBPool()
-	if c.BatchLimit <= 0 {
-		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
+	if c.BatchLimit <= 0 || c.BatchLimit > 1000 {
+		return c, fmt.Errorf("JOB_BATCH_LIMIT must be between 1 and 1000")
 	}
 	if c.Interval <= 0 {
 		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")
@@ -136,8 +136,8 @@ func LoadStripeReconcileJob() (StripeReconcileJob, error) {
 	c.BatchLimit = getenvIntDefault("JOB_BATCH_LIMIT", 100)
 	c.RunOnce = getenvBoolDefault("JOB_RUN_ONCE", false)
 	c.DBPool = loadDBPool()
-	if c.BatchLimit <= 0 {
-		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
+	if c.BatchLimit <= 0 || c.BatchLimit > 1000 {
+		return c, fmt.Errorf("JOB_BATCH_LIMIT must be between 1 and 1000")
 	}
 	if c.Interval <= 0 {
 		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")
@@ -178,8 +178,8 @@ func LoadOutboxDispatchJob() (OutboxDispatchJob, error) {
 	c.MaxAttempts = getenvIntDefault("OUTBOX_MAX_ATTEMPTS", 10)
 	c.BaseBackoff = time.Duration(getenvIntDefault("OUTBOX_BASE_BACKOFF_SECONDS", 30)) * time.Second
 
-	if c.BatchLimit <= 0 {
-		return c, fmt.Errorf("JOB_BATCH_LIMIT must be > 0")
+	if c.BatchLimit <= 0 || c.BatchLimit > 1000 {
+		return c, fmt.Errorf("JOB_BATCH_LIMIT must be between 1 and 1000")
 	}
 	if c.Interval <= 0 {
 		return c, fmt.Errorf("JOB_INTERVAL_SECONDS must be > 0")

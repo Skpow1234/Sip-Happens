@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -97,11 +99,9 @@ func runCancelExpiredJob(ctx context.Context) error {
 	paymentsRepo := payments.NewSQLRepository()
 	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
 
-	tick := time.NewTicker(jobCfg.Interval)
-	defer tick.Stop()
-
 	log.Printf("job cancel-expired starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
 
+	idle := 0
 	for {
 		n, err := ordersSvc.CancelExpiredPendingOrders(ctx, time.Now(), jobCfg.BatchLimit)
 		if err != nil {
@@ -113,10 +113,11 @@ func runCancelExpiredJob(ctx context.Context) error {
 		if jobCfg.RunOnce {
 			return nil
 		}
+		idle = updateIdle(idle, n > 0)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-tick.C:
+		case <-time.After(nextPollDelay(jobCfg.Interval, idle)):
 		}
 	}
 }
@@ -164,13 +165,11 @@ func runStripeReconcileJob(ctx context.Context) error {
 		Queue:     &stripepayments.SQLReconcileQueue{DB: sqlDB},
 	}
 
-	tick := time.NewTicker(jobCfg.Interval)
-	defer tick.Stop()
-
 	log.Printf("job stripe-reconcile starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
 
+	idle := 0
 	for {
-		_, err := job.EnqueueStalePending(ctx, time.Now(), 2*time.Minute, jobCfg.BatchLimit)
+		enq, err := job.EnqueueStalePending(ctx, time.Now(), 2*time.Minute, jobCfg.BatchLimit)
 		if err != nil {
 			return err
 		}
@@ -178,16 +177,18 @@ func runStripeReconcileJob(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		work := n > 0 || enq > 0
 		if n > 0 {
 			log.Printf("job stripe-reconcile: processed=%d", n)
 		}
 		if jobCfg.RunOnce {
 			return nil
 		}
+		idle = updateIdle(idle, work)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-tick.C:
+		case <-time.After(nextPollDelay(jobCfg.Interval, idle)):
 		}
 	}
 }
@@ -218,11 +219,9 @@ func runOutboxDispatchJob(ctx context.Context) error {
 		BaseBackoff: jobCfg.BaseBackoff,
 	}
 
-	tick := time.NewTicker(jobCfg.Interval)
-	defer tick.Stop()
-
 	log.Printf("job outbox-dispatch starting (interval=%s, limit=%d, once=%v, locked_by=%s)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, jobCfg.LockedBy)
 
+	idle := 0
 	for {
 		n, err := d.RunOnce(ctx, sqlDB, time.Now())
 		if err != nil {
@@ -234,10 +233,11 @@ func runOutboxDispatchJob(ctx context.Context) error {
 		if jobCfg.RunOnce {
 			return nil
 		}
+		idle = updateIdle(idle, n > 0)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-tick.C:
+		case <-time.After(nextPollDelay(jobCfg.Interval, idle)):
 		}
 	}
 }
@@ -294,11 +294,9 @@ func runInventoryReconcileJob(ctx context.Context) error {
 		Fix:         jobCfg.Fix,
 	}
 
-	tick := time.NewTicker(jobCfg.Interval)
-	defer tick.Stop()
-
 	log.Printf("job inventory-reconcile starting (interval=%s, limit=%d, once=%v, fix=%v, expire_grace=%s)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, jobCfg.Fix, jobCfg.ExpireGrace)
 
+	idle := 0
 	for {
 		fixed, flagged, err := job.RunOnce(ctx, time.Now())
 		if err != nil {
@@ -310,10 +308,11 @@ func runInventoryReconcileJob(ctx context.Context) error {
 		if jobCfg.RunOnce {
 			return nil
 		}
+		idle = updateIdle(idle, (fixed+flagged) > 0)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-tick.C:
+		case <-time.After(nextPollDelay(jobCfg.Interval, idle)):
 		}
 	}
 }
@@ -337,10 +336,8 @@ func runFulfillmentRunner(ctx context.Context) error {
 	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
 	svc := &fulfillment.SQLService{DB: sqlDB}
-	tick := time.NewTicker(jobCfg.Interval)
-	defer tick.Stop()
-
 	log.Printf("job fulfillment-runner starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
+	idle := 0
 	for {
 		n, err := svc.RunOnce(ctx, time.Now(), jobCfg.BatchLimit)
 		if err != nil {
@@ -352,11 +349,52 @@ func runFulfillmentRunner(ctx context.Context) error {
 		if jobCfg.RunOnce {
 			return nil
 		}
+		idle = updateIdle(idle, n > 0)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-tick.C:
+		case <-time.After(nextPollDelay(jobCfg.Interval, idle)):
 		}
 	}
+}
+
+func updateIdle(idle int, didWork bool) int {
+	if didWork {
+		return 0
+	}
+	if idle < 30 {
+		return idle + 1
+	}
+	return idle
+}
+
+func nextPollDelay(base time.Duration, idle int) time.Duration {
+	if base <= 0 {
+		base = 1 * time.Second
+	}
+	// Backpressure/cost control: if idle, exponentially back off up to 5 minutes.
+	max := 5 * time.Minute
+	if idle <= 0 {
+		return base
+	}
+	f := math.Pow(2, float64(minInt(idle, 10)))
+	d := time.Duration(float64(base) * f)
+	if d > max {
+		d = max
+	}
+	// Add jitter (+/- 10%) to avoid thundering herds.
+	j := 0.1 * (rand.Float64()*2 - 1)
+	d = time.Duration(float64(d) * (1 + j))
+	if d < base {
+		d = base
+	}
+	return d
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
