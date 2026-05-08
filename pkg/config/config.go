@@ -23,7 +23,11 @@ type CoreAPI struct {
 	AdminToken string
 	AdminTokens []string
 
+	// CoreAPIHMACSecret is legacy v1 signing shared secret.
 	CoreAPIHMACSecret string
+	// CoreAPIHMACKeyID and CoreAPIHMACKeys enable v2 signing (key-id + rotation).
+	CoreAPIHMACKeyID string
+	CoreAPIHMACKeys  map[string]string
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -52,6 +56,8 @@ func LoadCoreAPI() (CoreAPI, error) {
 		}
 	}
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
+	c.CoreAPIHMACKeyID = strings.TrimSpace(os.Getenv("CORE_API_HMAC_KEY_ID"))
+	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))
 
 	return c, nil
 }
@@ -180,7 +186,11 @@ type SSHGateway struct {
 	CoreAPIURL  string
 	HostKeyPath string
 
+	// CoreAPIHMACSecret is legacy v1 signing shared secret.
 	CoreAPIHMACSecret string
+	// CoreAPIHMACKeyID and CoreAPIHMACKeys enable v2 signing (key-id + rotation).
+	CoreAPIHMACKeyID string
+	CoreAPIHMACKeys  map[string]string
 }
 
 func LoadSSHGateway() (SSHGateway, error) {
@@ -189,11 +199,39 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.CoreAPIURL = getenvDefault("CORE_API_URL", "http://core-api:8080")
 	c.HostKeyPath = getenvDefault("SSH_HOST_KEY_PATH", "/data/ssh_host_ed25519_key")
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
+	c.CoreAPIHMACKeyID = strings.TrimSpace(os.Getenv("CORE_API_HMAC_KEY_ID"))
+	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))
 
 	if _, err := url.ParseRequestURI(c.CoreAPIURL); err != nil {
 		return c, fmt.Errorf("CORE_API_URL invalid: %w", err)
 	}
 	return c, nil
+}
+
+// parseKeyRing parses "kid1:secret1,kid2:secret2" into a map.
+func parseKeyRing(s string) map[string]string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	out := map[string]string{}
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		kid, sec, ok := strings.Cut(part, ":")
+		kid = strings.TrimSpace(kid)
+		sec = strings.TrimSpace(sec)
+		if !ok || kid == "" || sec == "" {
+			continue
+		}
+		out[kid] = sec
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func getenvDefault(k, def string) string {

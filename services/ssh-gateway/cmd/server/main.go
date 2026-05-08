@@ -43,9 +43,15 @@ func main() {
 					fp = "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
 				}
 				var client *api.Client
-				if cfg.CoreAPIHMACSecret != "" {
+				if cfg.CoreAPIHMACKeyID != "" && len(cfg.CoreAPIHMACKeys) > 0 {
+					if sec, ok := cfg.CoreAPIHMACKeys[cfg.CoreAPIHMACKeyID]; ok && sec != "" {
+						client = api.NewSignedClientV2(cfg.CoreAPIURL, cfg.CoreAPIHMACKeyID, sec, fp)
+					}
+				}
+				if client == nil && cfg.CoreAPIHMACSecret != "" {
 					client = api.NewSignedClient(cfg.CoreAPIURL, cfg.CoreAPIHMACSecret, fp)
-				} else {
+				}
+				if client == nil {
 					client = api.NewClient(cfg.CoreAPIURL)
 				}
 				model := tui.NewRootModel(client)

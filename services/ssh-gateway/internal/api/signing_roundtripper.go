@@ -17,6 +17,7 @@ import (
 type SigningRoundTripper struct {
 	Next        http.RoundTripper
 	Secret      []byte
+	KeyID       string
 	Fingerprint string
 	Now         func() time.Time
 }
@@ -50,9 +51,15 @@ func (rt SigningRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	if strings.TrimSpace(req.Header.Get("X-Request-Id")) == "" {
 		req.Header.Set("X-Request-Id", randomHex(16))
 	}
+	reqID := req.Header.Get("X-Request-Id")
 
 	path := req.URL.RequestURI()
-	canonical := auth.Canonical(req.Method, path, ts, nonce, bodySHA)
+	var canonical string
+	if strings.TrimSpace(rt.KeyID) != "" {
+		canonical = auth.CanonicalV2(req.Method, path, ts, nonce, reqID, bodySHA)
+	} else {
+		canonical = auth.Canonical(req.Method, path, ts, nonce, bodySHA)
+	}
 	sig := auth.Sign(rt.Secret, canonical)
 
 	req2 := req.Clone(context.Background())
@@ -60,6 +67,9 @@ func (rt SigningRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	req2.Header.Set(auth.HeaderTimestamp, ts)
 	req2.Header.Set(auth.HeaderNonce, nonce)
 	req2.Header.Set(auth.HeaderSignature, sig)
+	if strings.TrimSpace(rt.KeyID) != "" {
+		req2.Header.Set(auth.HeaderKeyID, strings.TrimSpace(rt.KeyID))
+	}
 	if rt.Fingerprint != "" {
 		req2.Header.Set(auth.HeaderFingerprint, rt.Fingerprint)
 	}

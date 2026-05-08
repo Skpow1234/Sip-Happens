@@ -44,7 +44,10 @@ on conflict (fingerprint, nonce, ts) do nothing
 }
 
 type HMACMiddleware struct {
-	Secret    []byte
+	// LegacySecret is the v1 secret (no key-id, no request-id binding).
+	LegacySecret []byte
+	// Secrets is a v2 key ring, looked up by X-SipHappens-Key-Id.
+	Secrets   map[string][]byte
 	Tolerance time.Duration
 	Nonces   NonceStore
 }
@@ -55,7 +58,7 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(m.Secret) == 0 {
+		if len(m.LegacySecret) == 0 && len(m.Secrets) == 0 {
 			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 			return
 		}
@@ -63,6 +66,8 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 		ts := r.Header.Get(auth.HeaderTimestamp)
 		nonce := r.Header.Get(auth.HeaderNonce)
 		sig := r.Header.Get(auth.HeaderSignature)
+		kid := r.Header.Get(auth.HeaderKeyID)
+		reqID := r.Header.Get(auth.HeaderRequestID)
 		fp := r.Header.Get(auth.HeaderFingerprint)
 
 		if err := auth.ParseUnixSeconds(ts, time.Now(), m.Tolerance); err != nil {
@@ -106,8 +111,20 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 
 		bodySHA := auth.BodySHA256Hex(bodyBytes)
 		path := r.URL.RequestURI()
-		canonical := auth.Canonical(r.Method, path, ts, nonce, bodySHA)
-		if err := auth.Verify(m.Secret, canonical, sig); err != nil {
+		var canonical string
+		var secret []byte
+		if kid != "" && len(m.Secrets) > 0 {
+			secret = m.Secrets[kid]
+			canonical = auth.CanonicalV2(r.Method, path, ts, nonce, reqID, bodySHA)
+		} else {
+			secret = m.LegacySecret
+			canonical = auth.Canonical(r.Method, path, ts, nonce, bodySHA)
+		}
+		if len(secret) == 0 {
+			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
+			return
+		}
+		if err := auth.Verify(secret, canonical, sig); err != nil {
 			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}

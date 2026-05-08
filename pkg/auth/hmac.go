@@ -16,6 +16,8 @@ const (
 	HeaderNonce       = "X-SipHappens-Nonce"
 	HeaderSignature   = "X-SipHappens-Signature"
 	HeaderFingerprint = "X-SSH-Fingerprint"
+	HeaderKeyID       = "X-SipHappens-Key-Id"
+	HeaderRequestID   = "X-Request-Id"
 )
 
 func BodySHA256Hex(body []byte) string {
@@ -26,6 +28,13 @@ func BodySHA256Hex(body []byte) string {
 func Canonical(method, path, ts, nonce, bodySHA string) string {
 	// NOTE: path must include query string if present.
 	return strings.ToUpper(method) + "\n" + path + "\n" + ts + "\n" + nonce + "\n" + bodySHA
+}
+
+func CanonicalV2(method, path, ts, nonce, requestID, bodySHA string) string {
+	// NOTE: request_id is included to bind signatures to a correlation id and
+	// make replay across requests harder to disguise.
+	// NOTE: path must include query string if present.
+	return strings.ToUpper(method) + "\n" + path + "\n" + ts + "\n" + nonce + "\n" + requestID + "\n" + bodySHA
 }
 
 func Sign(secret []byte, canonical string) string {

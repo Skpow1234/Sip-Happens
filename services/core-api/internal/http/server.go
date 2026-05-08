@@ -31,6 +31,7 @@ type Server struct {
 	StripeWebhookPath string
 
 	CoreAPIHMACSecret string
+	CoreAPIHMACKeys   map[string]string
 }
 
 func (s *Server) Handler() http.Handler {
@@ -72,7 +73,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) requireSigned(next http.Handler) http.Handler {
 	// For local prototyping, if no secret is configured we accept unsigned requests.
-	if strings.TrimSpace(s.CoreAPIHMACSecret) == "" {
+	if strings.TrimSpace(s.CoreAPIHMACSecret) == "" && len(s.CoreAPIHMACKeys) == 0 {
 		return next
 	}
 	if s.DB == nil {
@@ -80,8 +81,16 @@ func (s *Server) requireSigned(next http.Handler) http.Handler {
 			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		})
 	}
+	keys := map[string][]byte{}
+	for k, v := range s.CoreAPIHMACKeys {
+		if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
+			continue
+		}
+		keys[strings.TrimSpace(k)] = []byte(strings.TrimSpace(v))
+	}
 	m := &HMACMiddleware{
-		Secret:    []byte(s.CoreAPIHMACSecret),
+		LegacySecret: []byte(s.CoreAPIHMACSecret),
+		Secrets:      keys,
 		Tolerance: 5 * time.Minute,
 		Nonces:    &SQLNonceStore{DB: s.DB},
 	}

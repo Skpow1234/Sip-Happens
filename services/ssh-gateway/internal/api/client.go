@@ -33,6 +33,23 @@ func NewSignedClient(baseURL string, hmacSecret string, sshFingerprint string) *
 			Timeout: 10 * time.Second,
 			Transport: SigningRoundTripper{
 				Secret:      secret,
+				KeyID:       "",
+				Fingerprint: sshFingerprint,
+			},
+		},
+	}
+}
+
+func NewSignedClientV2(baseURL string, keyID string, hmacSecret string, sshFingerprint string) *Client {
+	baseURL = strings.TrimRight(baseURL, "/")
+	secret := []byte(hmacSecret)
+	return &Client{
+		baseURL: baseURL,
+		http: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: SigningRoundTripper{
+				Secret:      secret,
+				KeyID:       keyID,
 				Fingerprint: sshFingerprint,
 			},
 		},
