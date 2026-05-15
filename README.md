@@ -59,12 +59,17 @@ docker compose -f infra/compose.yaml up -d stripe-reconcile
 docker compose -f infra/compose.yaml up -d core-api
 ```
 
-### Start SSH gateway (TUI)
+### TUI (SSH)
+
+`bash scripts/dev-up.sh` already starts `ssh-gateway`. Connect with:
 
 ```bash
-docker compose -f infra/compose.yaml up -d ssh-gateway
 ssh -p 2222 localhost
 ```
+
+Flow: confirm age → menu → browse catalog → cart → delivery form → Stripe checkout URL (mock when `STRIPE_MOCK=1`).
+
+Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`).
 
 ### Start the “order reaper” (expires pending orders)
 

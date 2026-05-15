@@ -39,6 +39,8 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_MOCK: ${STRIPE_MOCK:-1}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
+      CORE_API_HMAC_KEY_ID: ${CORE_API_HMAC_KEY_ID:-dev}
+      CORE_API_HMAC_KEYS: ${CORE_API_HMAC_KEYS:-dev:dev-hmac-secret}
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,6 +80,8 @@ services:
       CORE_API_URL: "http://core-api:8080"
       SSH_ADDR: "0.0.0.0:2222"
       SSH_HOST_KEY_PATH: "/data/ssh_host_ed25519_key"
+      CORE_API_HMAC_KEY_ID: ${CORE_API_HMAC_KEY_ID:-dev}
+      CORE_API_HMAC_KEYS: ${CORE_API_HMAC_KEYS:-dev:dev-hmac-secret}
     depends_on:
       - core-api
     ports:

@@ -86,4 +86,3 @@ func randomHex(nBytes int) string {
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
-
