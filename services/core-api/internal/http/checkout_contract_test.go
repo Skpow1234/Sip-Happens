@@ -83,6 +83,8 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
   "phone":"3001234567",
   "legal_id":"123",
   "full_name":"Test User",
+  "birth_date":"1995-01-01",
+  "privacy_consent":true,
   "items":[{"product_id":"` + productID + `","qty":1}]
 }`)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/checkout", bytes.NewReader(body))

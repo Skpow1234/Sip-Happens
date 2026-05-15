@@ -118,10 +118,12 @@ type CheckoutRequest struct {
 	AddressLine1 string         `json:"address_line1"`
 	Phone        string         `json:"phone"`
 	LegalID      string         `json:"legal_id"`
-	FullName     string         `json:"full_name"`
-	SuccessURL   string         `json:"success_url"`
-	CancelURL    string         `json:"cancel_url"`
-	Items        []CheckoutItem `json:"items"`
+	FullName         string         `json:"full_name"`
+	BirthDate        string         `json:"birth_date,omitempty"`
+	PrivacyConsent   bool           `json:"privacy_consent"`
+	SuccessURL       string         `json:"success_url"`
+	CancelURL        string         `json:"cancel_url"`
+	Items            []CheckoutItem `json:"items"`
 }
 
 type OrderView struct {
@@ -314,6 +316,27 @@ type CustomerView struct {
 	Phone        string `json:"Phone"`
 	LegalID      string `json:"LegalID"`
 	FullName     string `json:"FullName"`
+	BirthDate    string `json:"BirthDate"`
+}
+
+type PatchCustomerRequest struct {
+	City         *string `json:"city,omitempty"`
+	Neighborhood *string `json:"neighborhood,omitempty"`
+	AddressLine1 *string `json:"address_line1,omitempty"`
+	Phone        *string `json:"phone,omitempty"`
+	LegalID      *string `json:"legal_id,omitempty"`
+	FullName     *string `json:"full_name,omitempty"`
+	BirthDate    *string `json:"birth_date,omitempty"`
+}
+
+type CartLine struct {
+	ProductID    string `json:"product_id"`
+	SKU          string `json:"sku,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Currency     string `json:"currency,omitempty"`
+	UnitPrice    int64  `json:"unit_price_minor_units,omitempty"`
+	Qty          int    `json:"qty"`
+	AvailableQty int    `json:"available_qty,omitempty"`
 }
 
 func (c *Client) GetCustomerMe(ctx context.Context) (*CustomerView, error) {
@@ -337,6 +360,82 @@ func (c *Client) GetCustomerMe(ctx context.Context) (*CustomerView, error) {
 		return nil, err
 	}
 	return &out.Customer, nil
+}
+
+func (c *Client) PatchCustomerMe(ctx context.Context, patch PatchCustomerRequest) (*CustomerView, error) {
+	payload, err := json.Marshal(patch)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+"/customers/me", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Customer CustomerView `json:"customer"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Customer, nil
+}
+
+func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/cart", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Items []CartLine `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.Items, nil
+}
+
+func (c *Client) PutCart(ctx context.Context, items []CartLine) error {
+	if items == nil {
+		items = []CartLine{}
+	}
+	payload, err := json.Marshal(map[string]any{"items": items})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/cart", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return parseAPIError(resp.StatusCode, body)
+	}
+	return nil
 }
 
 func (c *Client) ListOrders(ctx context.Context, limit int) ([]OrderView, error) {

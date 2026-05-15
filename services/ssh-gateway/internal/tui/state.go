@@ -86,9 +86,12 @@ func (f *checkoutFields) setCurrent(v string) {
 }
 
 type AppState struct {
-	ageConfirmed bool
-	cart         []CartLine
-	checkout     checkoutFields
+	ageConfirmed    bool
+	birthDateInput  string
+	birthDate       string // YYYY-MM-DD after age gate
+	privacyAccepted bool
+	cart            []CartLine
+	checkout        checkoutFields
 
 	catalog       []api.CatalogItem
 	catalogCursor int

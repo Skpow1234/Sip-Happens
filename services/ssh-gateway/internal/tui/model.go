@@ -136,6 +136,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = false
 		if msg.customer != nil {
 			m.prefillCheckout(*msg.customer)
+			if msg.customer.BirthDate != "" && m.state.birthDate == "" {
+				m.state.birthDate = msg.customer.BirthDate
+			}
+		}
+		return m, nil
+
+	case cartLoadedMsg:
+		m.busy = false
+		if len(msg.items) > 0 {
+			m.state.cart = cartLinesFromAPI(msg.items)
 		}
 		return m, nil
 
@@ -162,11 +172,27 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.screen {
 	case screenWelcome:
 		switch msg.String() {
-		case "y", "Y":
-			m.state.ageConfirmed = true
-			m.screen = screenMenu
 		case "n", "N":
 			return m, tea.Quit
+		case "enter":
+			if err := validateAdultBirthDate(m.state.birthDateInput); err != nil {
+				m.err = err
+				m.screen = screenError
+				return m, nil
+			}
+			m.state.birthDate = strings.TrimSpace(m.state.birthDateInput)
+			m.state.ageConfirmed = true
+			m.screen = screenMenu
+			m.busy = true
+			return m, tea.Batch(m.patchBirthDateCmd(), m.loadServerCartCmd())
+		case "backspace":
+			if len(m.state.birthDateInput) > 0 {
+				m.state.birthDateInput = m.state.birthDateInput[:len(m.state.birthDateInput)-1]
+			}
+		default:
+			if len(msg.Runes) == 1 && msg.Type == tea.KeyRunes {
+				m.state.birthDateInput += string(msg.Runes)
+			}
 		}
 
 	case screenMenu:
@@ -305,8 +331,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.state.addToCart(it, 1)
+			return m, m.saveServerCartCmd()
 		case "b":
 			m.screen = screenCart
+			return m, m.saveServerCartCmd()
 		}
 
 	case screenCatalogFilters:
@@ -325,15 +353,18 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.state.addToCart(it, 1)
+				return m, m.saveServerCartCmd()
 			}
 		case "b":
 			m.screen = screenCart
+			return m, m.saveServerCartCmd()
 		}
 
 	case screenCart:
 		switch msg.String() {
 		case "esc":
 			m.screen = screenMenu
+			return m, m.saveServerCartCmd()
 		case "up", "k":
 			if m.cartCursor() > 0 {
 				m.setCartCursor(m.cartCursor() - 1)
@@ -344,10 +375,17 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "+", "=":
 			m.bumpCartQty(1)
+			if m.screen != screenError {
+				return m, m.saveServerCartCmd()
+			}
 		case "-", "_":
 			m.bumpCartQty(-1)
+			if m.screen != screenError {
+				return m, m.saveServerCartCmd()
+			}
 		case "d", "x":
 			m.removeCartLine()
+			return m, m.saveServerCartCmd()
 		case "c":
 			if len(m.state.cart) == 0 {
 				return m, nil
@@ -370,9 +408,16 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc", "n":
 			m.screen = screenCheckout
+		case "p":
+			m.state.privacyAccepted = !m.state.privacyAccepted
 		case "y":
 			if err := m.state.validateCartStock(); err != nil {
 				m.err = err
+				m.screen = screenError
+				return m, nil
+			}
+			if !m.state.privacyAccepted {
+				m.err = fmt.Errorf("accept the privacy policy (press p) before continuing")
 				m.screen = screenError
 				return m, nil
 			}
@@ -548,7 +593,14 @@ func (m Model) viewBusy() string {
 func (m Model) viewWelcome() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Sip-Happens")
 	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("Prohibited sale of alcohol to minors.")
-	body := "Are you 18 or older?\n\n  y — yes, enter the shop\n  n — no, exit\n"
+	body := fmt.Sprintf(`Enter your birth date (YYYY-MM-DD):
+
+  %s█
+
+enter — continue   n — exit
+
+Privacy: %s
+`, m.state.birthDateInput, privacyPolicyURL)
 	return fmt.Sprintf("%s\n%s\n\n%s", title, warn, body)
 }
 
@@ -662,7 +714,17 @@ func (m Model) viewCheckout() string {
 func (m Model) viewConfirm() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Confirm checkout")
 	sub := formatMoney("COP", m.state.cartSubtotal())
-	body := fmt.Sprintf("Total: %s\nItems: %d\n\ny — place order   n — back\n", sub, m.state.cartCount())
+	priv := "[ ]"
+	if m.state.privacyAccepted {
+		priv = "[x]"
+	}
+	body := fmt.Sprintf(`Total: %s
+Items: %d
+
+%s I accept the privacy policy (%s)
+
+p — toggle accept   y — place order   n — back
+`, sub, m.state.cartCount(), priv, privacyPolicyURL)
 	return title + "\n\n" + body
 }
 
@@ -680,15 +742,21 @@ func (m Model) viewPayment() string {
 			expiry = fmt.Sprintf("Pay within: %s\n\n", cd)
 		}
 	}
+	urlBlock := formatSelectableURL(m.state.stripeURL, m.width)
+	copyHint := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render(
+		"Tip: select the URL lines below (mouse drag or terminal copy) and paste into your browser.")
 	body := fmt.Sprintf(`Order: %s
 Status: %s
 %sScan the QR code or open this URL in your browser (cards are not entered in SSH):
 
 %s
+
+%s
+
 %s
 
 o — refresh order status   esc — menu
-`, m.state.lastOrderID, m.state.orderStatus, expiry, qr, m.state.stripeURL)
+`, m.state.lastOrderID, m.state.orderStatus, expiry, qr, copyHint, urlBlock)
 	return title + "\n\n" + body
 }
 
@@ -812,6 +880,7 @@ type orderLoadedMsg struct {
 type paymentTickMsg struct{ now time.Time }
 type orderHistoryLoadedMsg struct{ orders []api.OrderView }
 type customerLoadedMsg struct{ customer *api.CustomerView }
+type cartLoadedMsg struct{ items []api.CartLine }
 type errMsg struct{ err error }
 
 func (m *Model) prefillCheckout(c api.CustomerView) {
@@ -934,6 +1003,7 @@ func (m Model) submitCheckoutCmd() tea.Cmd {
 	cart := append([]CartLine(nil), m.state.cart...)
 	client := m.api
 	idem := m.state.idempotencyKey
+	birthDate := m.state.birthDate
 	if idem == "" {
 		idem = randomHex(16)
 	}
@@ -943,14 +1013,16 @@ func (m Model) submitCheckoutCmd() tea.Cmd {
 			items = append(items, api.CheckoutItem{ProductID: l.ProductID, Qty: l.Qty})
 		}
 		req := api.CheckoutRequest{
-			Currency:     "COP",
-			City:         f.city,
-			Neighborhood: f.neighborhood,
-			AddressLine1: f.address,
-			Phone:        f.phone,
-			LegalID:      f.legalID,
-			FullName:     f.fullName,
-			Items:        items,
+			Currency:       "COP",
+			City:           f.city,
+			Neighborhood:   f.neighborhood,
+			AddressLine1:   f.address,
+			Phone:          f.phone,
+			LegalID:        f.legalID,
+			FullName:       f.fullName,
+			BirthDate:      birthDate,
+			PrivacyConsent: true,
+			Items:          items,
 		}
 		res, err := client.Checkout(context.Background(), idem, req)
 		return checkoutDoneMsg{result: res, err: err}
@@ -980,6 +1052,45 @@ func paymentTickCmd() tea.Cmd {
 
 func paymentPollCmd() tea.Cmd {
 	return tea.Tick(5*time.Second, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+func (m Model) loadServerCartCmd() tea.Cmd {
+	client := m.api
+	return func() tea.Msg {
+		items, err := client.GetCart(context.Background())
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return cartLoadedMsg{items: items}
+	}
+}
+
+func (m Model) saveServerCartCmd() tea.Cmd {
+	items := cartLinesToAPI(m.state.cart)
+	client := m.api
+	return func() tea.Msg {
+		if err := client.PutCart(context.Background(), items); err != nil {
+			return errMsg{err: err}
+		}
+		return nil
+	}
+}
+
+func (m Model) patchBirthDateCmd() tea.Cmd {
+	bd := m.state.birthDate
+	client := m.api
+	return func() tea.Msg {
+		if bd == "" {
+			return nil
+		}
+		_, err := client.PatchCustomerMe(context.Background(), api.PatchCustomerRequest{
+			BirthDate: &bd,
+		})
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return nil
+	}
 }
 
 func (m Model) loadOrderHistoryCmd() tea.Cmd {
