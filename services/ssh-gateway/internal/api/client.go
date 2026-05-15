@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -146,8 +148,54 @@ type OrderResult struct {
 	Order OrderView `json:"order"`
 }
 
-func (c *Client) GetCatalog(ctx context.Context) ([]CatalogItem, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/catalog?currency=COP", nil)
+// CatalogQuery lists catalog products with optional filters and pagination.
+type CatalogQuery struct {
+	Currency string
+	Limit    int
+	Offset   int
+	Q        string
+	Style    string
+	Brewery  string
+	ABVMin   *float64
+	ABVMax   *float64
+}
+
+type CatalogPage struct {
+	Items    []CatalogItem
+	Limit    int
+	Offset   int
+	HasMore  bool
+	Currency string
+}
+
+func (c *Client) GetCatalog(ctx context.Context, q CatalogQuery) (*CatalogPage, error) {
+	if q.Currency == "" {
+		q.Currency = "COP"
+	}
+	if q.Limit <= 0 {
+		q.Limit = 15
+	}
+	params := url.Values{}
+	params.Set("currency", q.Currency)
+	params.Set("limit", strconv.Itoa(q.Limit))
+	params.Set("offset", strconv.Itoa(q.Offset))
+	if s := strings.TrimSpace(q.Q); s != "" {
+		params.Set("q", s)
+	}
+	if s := strings.TrimSpace(q.Style); s != "" {
+		params.Set("style", s)
+	}
+	if s := strings.TrimSpace(q.Brewery); s != "" {
+		params.Set("brewery", s)
+	}
+	if q.ABVMin != nil {
+		params.Set("abv_min", strconv.FormatFloat(*q.ABVMin, 'f', -1, 64))
+	}
+	if q.ABVMax != nil {
+		params.Set("abv_max", strconv.FormatFloat(*q.ABVMax, 'f', -1, 64))
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/catalog?"+params.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -164,11 +212,20 @@ func (c *Client) GetCatalog(ctx context.Context) ([]CatalogItem, error) {
 	var out struct {
 		Currency string        `json:"currency"`
 		Items    []CatalogItem `json:"items"`
+		Limit    int           `json:"limit"`
+		Offset   int           `json:"offset"`
+		HasMore  bool          `json:"has_more"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, err
 	}
-	return out.Items, nil
+	return &CatalogPage{
+		Items:    out.Items,
+		Limit:    out.Limit,
+		Offset:   out.Offset,
+		HasMore:  out.HasMore,
+		Currency: out.Currency,
+	}, nil
 }
 
 func (c *Client) GetCatalogDetail(ctx context.Context, sku string) (*CatalogDetail, error) {

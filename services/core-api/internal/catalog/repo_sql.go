@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"sip-happens/pkg/domain"
 )
@@ -45,11 +47,62 @@ where sku = $1
 	return &p, nil
 }
 
-func (r *SQLRepository) ListActiveProducts(ctx context.Context, q Querier, currency string, limit int) ([]ProductWithPrice, error) {
-	if limit <= 0 || limit > 500 {
+func (r *SQLRepository) ListActiveProducts(ctx context.Context, q Querier, filter ListCatalogFilter) (ListCatalogResult, error) {
+	currency := strings.TrimSpace(filter.Currency)
+	if currency == "" {
+		currency = "COP"
+	}
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
 		limit = 100
 	}
-	rows, err := q.QueryContext(ctx, `
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var where []string
+	var args []any
+	args = append(args, currency)
+	argN := 2
+
+	add := func(clause string, val any) {
+		where = append(where, fmt.Sprintf(clause, argN))
+		args = append(args, val)
+		argN++
+	}
+
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		pat := "%" + q + "%"
+		where = append(where, fmt.Sprintf("(p.sku ilike $%d or p.name ilike $%d or p.brewery ilike $%d)", argN, argN+1, argN+2))
+		args = append(args, pat, pat, pat)
+		argN += 3
+	}
+	if style := strings.TrimSpace(filter.Style); style != "" {
+		add("p.style ilike $%d", "%"+style+"%")
+	}
+	if brewery := strings.TrimSpace(filter.Brewery); brewery != "" {
+		add("p.brewery ilike $%d", "%"+brewery+"%")
+	}
+	if filter.ABVMin != nil {
+		add("p.abv >= $%d", *filter.ABVMin)
+	}
+	if filter.ABVMax != nil {
+		add("p.abv <= $%d", *filter.ABVMax)
+	}
+
+	whereSQL := "p.is_active = true"
+	if len(where) > 0 {
+		whereSQL += " and " + strings.Join(where, " and ")
+	}
+
+	fetchLimit := limit + 1
+	args = append(args, fetchLimit, offset)
+
+	query := fmt.Sprintf(`
 select p.id, p.sku, p.name, p.brewery, p.style, p.abv, p.volume_ml, p.invima_reg, p.is_active, p.created_at, p.updated_at,
        pr.product_id, pr.currency, pr.amount_minor_units, pr.valid_from, pr.valid_through,
        greatest(0, coalesce(i.on_hand,0) - coalesce(i.reserved,0) - coalesce(i.safety_stock,0)) as available_qty
@@ -65,12 +118,14 @@ join lateral (
   order by valid_from desc
   limit 1
 ) pr on true
-where p.is_active = true
+where %s
 order by p.sku asc
-limit $2
-`, currency, limit)
+limit $%d offset $%d
+`, whereSQL, argN, argN+1)
+
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return ListCatalogResult{}, err
 	}
 	defer rows.Close()
 
@@ -85,7 +140,7 @@ limit $2
 			&pr.ProductID, &pr.Currency, &pr.AmountMinorUnits, &pr.ValidFrom, &validThrough,
 			&available,
 		); err != nil {
-			return nil, err
+			return ListCatalogResult{}, err
 		}
 		if validThrough.Valid {
 			t := validThrough.Time
@@ -93,7 +148,15 @@ limit $2
 		}
 		out = append(out, ProductWithPrice{Product: p, Price: pr, AvailableQty: available})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListCatalogResult{}, err
+	}
+
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return ListCatalogResult{Items: out, HasMore: hasMore}, nil
 }
 
 func (r *SQLRepository) GetCurrentPrice(ctx context.Context, q Querier, productID domain.ProductID, currency string) (*domain.Price, error) {
@@ -122,4 +185,3 @@ limit 1
 	}
 	return &pr, nil
 }
-

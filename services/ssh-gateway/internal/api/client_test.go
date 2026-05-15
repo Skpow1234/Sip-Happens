@@ -28,12 +28,12 @@ func TestGetCatalog_Unsigned(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(srv.URL)
-	items, err := c.GetCatalog(context.Background())
+	page, err := c.GetCatalog(context.Background(), CatalogQuery{Limit: 15})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 || items[0].Product.SKU != "SKU-1" || items[0].AvailableQty != 5 {
-		t.Fatalf("unexpected items: %#v", items)
+	if len(page.Items) != 1 || page.Items[0].Product.SKU != "SKU-1" || page.Items[0].AvailableQty != 5 {
+		t.Fatalf("unexpected items: %#v", page.Items)
 	}
 }
 

@@ -62,7 +62,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case catalogLoadedMsg:
 		m.busy = false
-		m.state.catalog = msg.items
+		m.state.catalog = msg.page.Items
+		m.state.catalogHasMore = msg.page.HasMore
 		if m.state.catalogCursor >= len(m.state.catalog) {
 			m.state.catalogCursor = 0
 		}
@@ -152,6 +153,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case screenMenu:
 		switch msg.String() {
 		case "1", "c":
+			m.state.resetCatalogPage()
 			m.screen = screenCatalog
 			m.busy = true
 			return m, m.loadCatalogCmd()
@@ -210,9 +212,37 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case screenCatalog:
+		if m.state.catalogSearchEdit {
+			return m.updateCatalogSearchKey(msg)
+		}
 		switch msg.String() {
 		case "esc":
 			m.screen = screenMenu
+		case "/":
+			m.state.catalogSearchEdit = true
+			m.state.catalogSearchBuf = m.state.catalogQuery.Q
+		case "f":
+			m.state.syncCatalogFilterForm()
+			m.state.catalogFilter.focus = 0
+			m.screen = screenCatalogFilters
+		case "n":
+			if m.state.catalogHasMore {
+				m.state.catalogQuery.Offset += catalogPageSize
+				m.state.catalogCursor = 0
+				m.busy = true
+				return m, m.loadCatalogCmd()
+			}
+		case "p":
+			if m.state.catalogQuery.Offset > 0 {
+				off := m.state.catalogQuery.Offset - catalogPageSize
+				if off < 0 {
+					off = 0
+				}
+				m.state.catalogQuery.Offset = off
+				m.state.catalogCursor = 0
+				m.busy = true
+				return m, m.loadCatalogCmd()
+			}
 		case "up", "k":
 			if m.state.catalogCursor > 0 {
 				m.state.catalogCursor--
@@ -246,6 +276,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "b":
 			m.screen = screenCart
 		}
+
+	case screenCatalogFilters:
+		return m.updateCatalogFilterKey(msg)
 
 	case screenProduct:
 		switch msg.String() {
@@ -431,6 +464,8 @@ func (m Model) View() string {
 		return m.viewMenu()
 	case screenCatalog:
 		return m.viewCatalog()
+	case screenCatalogFilters:
+		return m.viewCatalogFilters()
 	case screenProduct:
 		return m.viewProduct()
 	case screenCart:
@@ -481,12 +516,20 @@ func (m Model) viewMenu() string {
 
 func (m Model) viewCatalog() string {
 	header := lipgloss.NewStyle().Bold(true).Render("Catalog")
-	help := "↑/↓ move  enter detail  a add  b cart  r refresh  esc menu\n\n"
+	page := m.state.catalogQuery.Offset/catalogPageSize + 1
+	meta := fmt.Sprintf("page %d  offset %d", page, m.state.catalogQuery.Offset)
+	if sum := m.state.catalogFilterSummary(); sum != "" {
+		meta += "  |  " + sum
+	}
+	help := "↑/↓  enter  a add  b cart  / search  f filters  n/p page  r refresh  esc menu\n\n"
+	if m.state.catalogSearchEdit {
+		return header + "\n\n" + meta + "\n\nSearch: " + m.state.catalogSearchBuf + "█\n\nenter apply  esc cancel\n"
+	}
 	if len(m.state.catalog) == 0 {
-		return header + "\n\n(Empty catalog — press r to refresh)\n" + help
+		return header + "\n\n" + meta + "\n\n(No matches — adjust filters or press r)\n" + help
 	}
 	var b strings.Builder
-	b.WriteString(header + "\n\n")
+	b.WriteString(header + "\n\n" + meta + "\n\n")
 	for i, it := range m.state.catalog {
 		cur := "  "
 		if i == m.state.catalogCursor {
@@ -566,16 +609,34 @@ func (m Model) viewConfirm() string {
 
 func (m Model) viewPayment() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Pay off-terminal")
+	qr := asciiQR(m.state.stripeURL, m.width)
 	body := fmt.Sprintf(`Order: %s
 Status: %s
 
-Open this URL in your browser to pay (cards are not entered in SSH):
+Scan the QR code or open this URL in your browser (cards are not entered in SSH):
 
+%s
 %s
 
 o — refresh order status   esc — menu
-`, m.state.lastOrderID, m.state.orderStatus, m.state.stripeURL)
+`, m.state.lastOrderID, m.state.orderStatus, qr, m.state.stripeURL)
 	return title + "\n\n" + body
+}
+
+func (m Model) viewCatalogFilters() string {
+	f := m.state.catalogFilter
+	title := lipgloss.NewStyle().Bold(true).Render("Catalog filters")
+	var b strings.Builder
+	b.WriteString(title + "\n\n")
+	for i, label := range f.labels() {
+		mark := "  "
+		if i == f.focus {
+			mark = "> "
+		}
+		b.WriteString(fmt.Sprintf("%s%-12s %s\n", mark, label+":", f.values()[i]))
+	}
+	b.WriteString("\ntab / enter — next  esc — back without saving  y — apply\n")
+	return b.String()
 }
 
 func (m Model) viewOrderHistory() string {
@@ -632,7 +693,7 @@ func truncate(s string, n int) string {
 
 // --- commands ---
 
-type catalogLoadedMsg struct{ items []api.CatalogItem }
+type catalogLoadedMsg struct{ page *api.CatalogPage }
 type detailLoadedMsg struct{ detail *api.CatalogDetail }
 type checkoutDoneMsg struct {
 	result *api.CheckoutResult
@@ -670,13 +731,85 @@ func (m *Model) prefillCheckout(c api.CustomerView) {
 type tickMsg struct{}
 
 func (m Model) loadCatalogCmd() tea.Cmd {
+	q := catalogQueryForLoad(m.state)
 	return func() tea.Msg {
-		items, err := m.api.GetCatalog(context.Background())
+		page, err := m.api.GetCatalog(context.Background(), q)
 		if err != nil {
 			return errMsg{err: err}
 		}
-		return catalogLoadedMsg{items: items}
+		return catalogLoadedMsg{page: page}
 	}
+}
+
+func (m Model) updateCatalogSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.state.catalogSearchEdit = false
+		m.state.catalogSearchBuf = ""
+	case "enter":
+		m.state.catalogQuery.Q = strings.TrimSpace(m.state.catalogSearchBuf)
+		m.state.catalogQuery.Offset = 0
+		m.state.catalogSearchEdit = false
+		m.busy = true
+		return m, m.loadCatalogCmd()
+	case "backspace":
+		buf := m.state.catalogSearchBuf
+		if len(buf) > 0 {
+			m.state.catalogSearchBuf = buf[:len(buf)-1]
+		}
+	default:
+		if len(msg.Runes) == 1 && msg.Type == tea.KeyRunes {
+			m.state.catalogSearchBuf += string(msg.Runes)
+		}
+	}
+	return m, nil
+}
+
+func (m Model) updateCatalogFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	f := &m.state.catalogFilter
+	switch msg.String() {
+	case "esc":
+		m.screen = screenCatalog
+	case "tab":
+		f.focus = (f.focus + 1) % len(f.labels())
+	case "shift+tab":
+		f.focus--
+		if f.focus < 0 {
+			f.focus = len(f.labels()) - 1
+		}
+	case "y":
+		if err := m.state.applyCatalogFiltersFromForm(); err != nil {
+			m.err = err
+			m.screen = screenError
+			return m, nil
+		}
+		m.screen = screenCatalog
+		m.busy = true
+		return m, m.loadCatalogCmd()
+	case "enter":
+		if f.focus < len(f.labels())-1 {
+			f.focus++
+			return m, nil
+		}
+		if err := m.state.applyCatalogFiltersFromForm(); err != nil {
+			m.err = err
+			m.screen = screenError
+			return m, nil
+		}
+		m.screen = screenCatalog
+		m.busy = true
+		return m, m.loadCatalogCmd()
+	case "backspace":
+		cur := f.current()
+		if len(cur) > 0 {
+			f.setCurrent(cur[:len(cur)-1])
+		}
+	default:
+		if len(msg.Runes) == 1 && msg.Type == tea.KeyRunes {
+			f.setCurrent(f.current() + string(msg.Runes))
+		}
+	}
+	return m, nil
 }
 
 func (m Model) loadDetailCmd(sku string) tea.Cmd {

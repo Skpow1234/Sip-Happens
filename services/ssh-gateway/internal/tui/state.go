@@ -1,6 +1,11 @@
 package tui
 
-import "sip-happens/services/ssh-gateway/internal/api"
+import (
+	"fmt"
+	"strings"
+
+	"sip-happens/services/ssh-gateway/internal/api"
+)
 
 type screen int
 
@@ -15,8 +20,11 @@ const (
 	screenPayment
 	screenOrderStatus
 	screenOrderHistory
+	screenCatalogFilters
 	screenError
 )
+
+const catalogPageSize = 15
 
 type CartLine struct {
 	ProductID string
@@ -80,6 +88,11 @@ type AppState struct {
 
 	catalog       []api.CatalogItem
 	catalogCursor int
+	catalogQuery  api.CatalogQuery
+	catalogHasMore bool
+	catalogSearchEdit bool
+	catalogSearchBuf  string
+	catalogFilter     catalogFilterFields
 	productSKU    string
 	productDetail *api.CatalogDetail
 
@@ -157,6 +170,74 @@ func (s *AppState) addToCart(item api.CatalogItem, qty int) {
 		UnitPrice: item.Price.AmountMinorUnits,
 		Qty:       qty,
 	})
+}
+
+type catalogFilterFields struct {
+	style, brewery, abvMin, abvMax string
+	focus                          int
+}
+
+func (f *catalogFilterFields) labels() []string {
+	return []string{"Style", "Brewery", "ABV min %", "ABV max %"}
+}
+
+func (f *catalogFilterFields) values() []string {
+	return []string{f.style, f.brewery, f.abvMin, f.abvMax}
+}
+
+func (f *catalogFilterFields) set(idx int, v string) {
+	switch idx {
+	case 0:
+		f.style = v
+	case 1:
+		f.brewery = v
+	case 2:
+		f.abvMin = v
+	case 3:
+		f.abvMax = v
+	}
+}
+
+func (f *catalogFilterFields) current() string {
+	vals := f.values()
+	if f.focus < 0 || f.focus >= len(vals) {
+		return ""
+	}
+	return vals[f.focus]
+}
+
+func (f *catalogFilterFields) setCurrent(v string) {
+	f.set(f.focus, v)
+}
+
+func (s *AppState) resetCatalogPage() {
+	s.catalogQuery = api.CatalogQuery{Limit: catalogPageSize, Offset: 0}
+	s.catalogHasMore = false
+	s.catalogSearchBuf = ""
+	s.catalogSearchEdit = false
+}
+
+func (s *AppState) catalogFilterSummary() string {
+	var parts []string
+	if s.catalogQuery.Q != "" {
+		parts = append(parts, "q="+s.catalogQuery.Q)
+	}
+	if s.catalogQuery.Style != "" {
+		parts = append(parts, "style="+s.catalogQuery.Style)
+	}
+	if s.catalogQuery.Brewery != "" {
+		parts = append(parts, "brewery="+s.catalogQuery.Brewery)
+	}
+	if s.catalogQuery.ABVMin != nil {
+		parts = append(parts, fmt.Sprintf("abv>=%.1f", *s.catalogQuery.ABVMin))
+	}
+	if s.catalogQuery.ABVMax != nil {
+		parts = append(parts, fmt.Sprintf("abv<=%.1f", *s.catalogQuery.ABVMax))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "  ")
 }
 
 func (s *AppState) findCartIndex(productID string) int {

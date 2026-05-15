@@ -259,6 +259,10 @@ type SSHGateway struct {
 	AuthorizedKeysPath    string
 	// DevFingerprint is used when the client has no public key (dev only; empty disables).
 	DevFingerprint string
+	// DisablePasswordAuth rejects SSH password logins (recommended in production).
+	DisablePasswordAuth bool
+	// DisablePortForwarding denies SSH local/reverse port forwarding.
+	DisablePortForwarding bool
 
 	// CoreAPIHMACSecret is legacy v1 signing shared secret.
 	CoreAPIHMACSecret string
@@ -275,6 +279,8 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.RequireAuthorizedKeys = getenvBoolDefault("SSH_REQUIRE_AUTHORIZED_KEYS", false)
 	c.AuthorizedKeysPath = getenvDefault("SSH_AUTHORIZED_KEYS_PATH", "/data/authorized_keys")
 	c.DevFingerprint = strings.TrimSpace(os.Getenv("SSH_DEV_FINGERPRINT"))
+	c.DisablePasswordAuth = getenvBoolDefault("SSH_DISABLE_PASSWORD_AUTH", false)
+	c.DisablePortForwarding = getenvBoolDefault("SSH_DISABLE_PORT_FORWARDING", true)
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 	c.CoreAPIHMACKeyID = strings.TrimSpace(os.Getenv("CORE_API_HMAC_KEY_ID"))
 	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))

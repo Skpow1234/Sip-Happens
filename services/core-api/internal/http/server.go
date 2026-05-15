@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -90,7 +91,7 @@ func (s *Server) Handler() http.Handler {
 			if p == "" {
 				p = "dev"
 			}
-			return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+			return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency", "limit", "offset", "q", "style", "brewery", "abv_min", "abv_max")
 		}))
 		mux.Handle("/catalog/", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalogDetail), func(r *http.Request) string {
 			// sku is part of the path already.
@@ -98,7 +99,7 @@ func (s *Server) Handler() http.Handler {
 			if p == "" {
 				p = "dev"
 			}
-			return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency")
+			return p + ":catalog:" + r.URL.Path + "?" + canonicalQuery(r, "currency", "limit", "offset", "q", "style", "brewery", "abv_min", "abv_max")
 		}))
 	} else {
 		mux.HandleFunc("/catalog", s.handleCatalog)
@@ -548,6 +549,26 @@ func parseLimitQuery(r *http.Request, def, max int) int {
 	return n
 }
 
+func parseOffsetQuery(r *http.Request) int {
+	n := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+func parseOptionalFloatQuery(r *http.Request, key string) (*float64, error) {
+	s := strings.TrimSpace(r.URL.Query().Get(key))
+	if s == "" {
+		return nil, nil
+	}
+	var f float64
+	if _, err := fmt.Sscanf(s, "%f", &f); err != nil {
+		return nil, domain.ErrInvalidInput
+	}
+	return &f, nil
+}
+
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -565,8 +586,30 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	if currency == "" {
 		currency = "COP"
 	}
+	abvMin, err := parseOptionalFloatQuery(r, "abv_min")
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid abv_min")
+		return
+	}
+	abvMax, err := parseOptionalFloatQuery(r, "abv_max")
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid abv_max")
+		return
+	}
 
-	list, err := s.Catalog.ListActiveProducts(r.Context(), s.DB, currency, 100)
+	limit := parseLimitQuery(r, 50, 100)
+	offset := parseOffsetQuery(r)
+
+	page, err := s.Catalog.ListActiveProducts(r.Context(), s.DB, catalog.ListCatalogFilter{
+		Currency: currency,
+		Limit:    limit,
+		Offset:   offset,
+		Query:    r.URL.Query().Get("q"),
+		Style:    r.URL.Query().Get("style"),
+		Brewery:  r.URL.Query().Get("brewery"),
+		ABVMin:   abvMin,
+		ABVMax:   abvMax,
+	})
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
@@ -575,7 +618,10 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"currency": currency,
-		"items":    list,
+		"items":    page.Items,
+		"limit":    limit,
+		"offset":   offset,
+		"has_more": page.HasMore,
 	})
 }
 

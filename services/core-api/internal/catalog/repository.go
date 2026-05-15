@@ -10,8 +10,25 @@ import (
 type Repository interface {
 	GetProduct(ctx context.Context, q Querier, id domain.ProductID) (*domain.Product, error)
 	GetProductBySKU(ctx context.Context, q Querier, sku string) (*domain.Product, error)
-	ListActiveProducts(ctx context.Context, q Querier, currency string, limit int) ([]ProductWithPrice, error)
+	ListActiveProducts(ctx context.Context, q Querier, filter ListCatalogFilter) (ListCatalogResult, error)
 	GetCurrentPrice(ctx context.Context, q Querier, productID domain.ProductID, currency string) (*domain.Price, error)
+}
+
+// ListCatalogFilter selects a page of active catalog products.
+type ListCatalogFilter struct {
+	Currency string
+	Limit    int
+	Offset   int
+	Query    string
+	Style    string
+	Brewery  string
+	ABVMin   *float64
+	ABVMax   *float64
+}
+
+type ListCatalogResult struct {
+	Items   []ProductWithPrice
+	HasMore bool
 }
 
 type ProductWithPrice struct {
@@ -26,4 +43,3 @@ type Querier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
-

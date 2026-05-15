@@ -33,9 +33,16 @@ func main() {
 		wish.WithHostKeyPath(cfg.HostKeyPath),
 	}
 	opts = append(opts, security.SSHOptions(cfg.RequireAuthorizedKeys, cfg.AuthorizedKeysPath)...)
+	if cfg.DisablePortForwarding {
+		opts = append(opts, security.SSHPortForwardingOptions()...)
+	}
+	if cfg.DisablePasswordAuth {
+		opts = append(opts, security.SSHDisablePasswordAuth())
+	}
 	opts = append(opts,
 		wish.WithMiddleware(
 			logging.Middleware(),
+			security.SessionRestrictMiddleware(),
 			(&security.SSHRateLimiter{Window: time.Minute, Limit: 30}).Middleware(),
 			wishbubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				fp := security.SessionFingerprint(s)

@@ -73,6 +73,10 @@ Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=
 
 **Production SSH**: set `SSH_REQUIRE_AUTHORIZED_KEYS=1` and mount `authorized_keys` at `SSH_AUTHORIZED_KEYS_PATH` (see `infra/authorized_keys.example`). Each SSH public key maps to a stable `SHA256:…` customer fingerprint (OpenSSH-compatible, same as `ssh-keygen -lf`).
 
+**Host key**: persist `/data` (Compose volume `sshkeys`) so `SSH_HOST_KEY_PATH` survives restarts — see [`docs/ops/ssh-production.md`](docs/ops/ssh-production.md).
+
+Catalog TUI shortcuts: `/` search, `f` filters (style, brewery, ABV), `n`/`p` pages.
+
 ### Start the “order reaper” (expires pending orders)
 
 This background worker cancels expired `PENDING_PAYMENT` orders and releases inventory reservations.
@@ -151,6 +155,8 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SSH_REQUIRE_AUTHORIZED_KEYS`**: set to `1` in production to require `authorized_keys`
 - **`SSH_AUTHORIZED_KEYS_PATH`**: path inside ssh-gateway container (default `/data/authorized_keys`)
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
+- **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
+- **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
 
 Database config is currently provided by Compose:
 
@@ -163,7 +169,7 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 **Public**
 
 - `GET /healthz`, `GET /readyz` (DB readiness; 503 until DB is reachable), `GET /metrics`
-- `GET /catalog?currency=COP` — list active products with price and `available_qty`
+- `GET /catalog?currency=COP` — list active products with price and `available_qty` (`limit`, `offset`, `q`, `style`, `brewery`, `abv_min`, `abv_max`)
 - `GET /catalog/{sku}?currency=COP` — product detail with `available_qty`
 - `GET /openapi.yaml` — OpenAPI 3 spec
 
