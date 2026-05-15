@@ -81,6 +81,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/openapi.yaml", s.handleOpenAPISpec)
+	mux.HandleFunc("/docs", s.handleOpenAPIDocs)
 	// Feature flag: catalog_cache
 	if _, ok := s.FeatureFlags["catalog_cache"]; ok {
 		mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {
