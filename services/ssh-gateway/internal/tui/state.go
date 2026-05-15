@@ -14,6 +14,7 @@ const (
 	screenConfirm
 	screenPayment
 	screenOrderStatus
+	screenOrderHistory
 	screenError
 )
 
@@ -85,6 +86,9 @@ type AppState struct {
 	lastOrderID string
 	stripeURL   string
 	orderStatus string
+
+	orderHistory       []api.OrderView
+	orderHistoryCursor int
 
 	idempotencyKey string
 }

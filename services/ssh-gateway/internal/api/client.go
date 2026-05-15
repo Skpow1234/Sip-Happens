@@ -75,6 +75,7 @@ type CatalogItem struct {
 		Currency         string `json:"Currency"`
 		AmountMinorUnits int64  `json:"AmountMinorUnits"`
 	} `json:"Price"`
+	AvailableQty int `json:"available_qty"`
 }
 
 type CatalogDetail struct {
@@ -92,12 +93,14 @@ type CatalogDetail struct {
 		Currency         string `json:"Currency"`
 		AmountMinorUnits int64  `json:"AmountMinorUnits"`
 	} `json:"price"`
+	AvailableQty int `json:"available_qty"`
 }
 
 func (d CatalogDetail) AsCatalogItem() CatalogItem {
 	var it CatalogItem
 	it.Product = d.Product
 	it.Price = d.Price
+	it.AvailableQty = d.AvailableQty
 	return it
 }
 
@@ -125,6 +128,7 @@ type OrderView struct {
 	TotalMinorUnits int64      `json:"TotalMinorUnits"`
 	Currency        string     `json:"Currency"`
 	ExpiresAt       *time.Time `json:"ExpiresAt"`
+	CreatedAt       time.Time  `json:"CreatedAt"`
 }
 
 type StripeCheckoutView struct {
@@ -236,6 +240,65 @@ func (c *Client) Checkout(ctx context.Context, idempotencyKey string, in Checkou
 		return nil, err
 	}
 	return &CheckoutResult{Order: out.Order, Stripe: out.Stripe}, nil
+}
+
+type CustomerView struct {
+	ID           string `json:"ID"`
+	City         string `json:"City"`
+	Neighborhood string `json:"Neighborhood"`
+	AddressLine1 string `json:"AddressLine1"`
+	Phone        string `json:"Phone"`
+	LegalID      string `json:"LegalID"`
+	FullName     string `json:"FullName"`
+}
+
+func (c *Client) GetCustomerMe(ctx context.Context) (*CustomerView, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/customers/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Customer CustomerView `json:"customer"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Customer, nil
+}
+
+func (c *Client) ListOrders(ctx context.Context, limit int) ([]OrderView, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/orders?limit=%d", c.baseURL, limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Orders []OrderView `json:"orders"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.Orders, nil
 }
 
 func (c *Client) GetOrder(ctx context.Context, orderID string) (*OrderResult, error) {

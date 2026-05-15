@@ -17,6 +17,8 @@ type Repository interface {
 type ProductWithPrice struct {
 	Product domain.Product
 	Price   domain.Price
+	// AvailableQty is sellable units (on_hand - reserved - safety_stock), floored at 0.
+	AvailableQty int `json:"available_qty"`
 }
 
 type Querier interface {

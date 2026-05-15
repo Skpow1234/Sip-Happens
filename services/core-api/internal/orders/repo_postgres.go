@@ -200,3 +200,47 @@ limit $2
 	return out, rows.Err()
 }
 
+func (r *SQLRepository) ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit int) ([]domain.Order, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	rows, err := q.QueryContext(ctx, `
+select id, status, customer_id,
+       subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
+       city, neighborhood, address_line1, phone, legal_id, full_name,
+       stripe_checkout_session_id, stripe_payment_intent_id,
+       expires_at, created_at, updated_at
+from orders
+where customer_id = $1
+order by created_at desc
+limit $2
+`, string(customerID), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Order
+	for rows.Next() {
+		var o domain.Order
+		var expiresAt sql.NullTime
+		if err := rows.Scan(
+			&o.ID, &o.Status, &o.CustomerID,
+			&o.SubtotalMinorUnits, &o.ShippingMinorUnits, &o.TotalMinorUnits, &o.Currency,
+			&o.City, &o.Neighborhood, &o.AddressLine1, &o.Phone, &o.LegalID, &o.FullName,
+			&o.StripeCheckoutSessionID, &o.StripePaymentIntentID,
+			&expiresAt, &o.CreatedAt, &o.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if expiresAt.Valid {
+			t := expiresAt.Time
+			o.ExpiresAt = &t
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}

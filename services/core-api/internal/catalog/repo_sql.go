@@ -51,8 +51,10 @@ func (r *SQLRepository) ListActiveProducts(ctx context.Context, q Querier, curre
 	}
 	rows, err := q.QueryContext(ctx, `
 select p.id, p.sku, p.name, p.brewery, p.style, p.abv, p.volume_ml, p.invima_reg, p.is_active, p.created_at, p.updated_at,
-       pr.product_id, pr.currency, pr.amount_minor_units, pr.valid_from, pr.valid_through
+       pr.product_id, pr.currency, pr.amount_minor_units, pr.valid_from, pr.valid_through,
+       greatest(0, coalesce(i.on_hand,0) - coalesce(i.reserved,0) - coalesce(i.safety_stock,0)) as available_qty
 from products p
+left join inventory i on i.product_id = p.id
 join lateral (
   select product_id, currency, amount_minor_units, valid_from, valid_through
   from prices
@@ -77,9 +79,11 @@ limit $2
 		var p domain.Product
 		var pr domain.Price
 		var validThrough sql.NullTime
+		var available int
 		if err := rows.Scan(
 			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 			&pr.ProductID, &pr.Currency, &pr.AmountMinorUnits, &pr.ValidFrom, &validThrough,
+			&available,
 		); err != nil {
 			return nil, err
 		}
@@ -87,7 +91,7 @@ limit $2
 			t := validThrough.Time
 			pr.ValidThrough = &t
 		}
-		out = append(out, ProductWithPrice{Product: p, Price: pr})
+		out = append(out, ProductWithPrice{Product: p, Price: pr, AvailableQty: available})
 	}
 	return out, rows.Err()
 }

@@ -1,18 +1,18 @@
 package http
 
 import (
-	"crypto/subtle"
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
-	"sip-happens/services/core-api/internal/admin"
-	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
+	"sip-happens/services/core-api/internal/admin"
+	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 
@@ -20,14 +20,14 @@ import (
 )
 
 type Server struct {
-	Orders        orders.Service
-	Catalog       catalog.Repository
-	Admin         admin.Service
-	AdminToken    string
-	AdminTokens   []string
-	DB            *sql.DB
-	Stripe        stripepayments.Service
-	StripeWebhook *stripepayments.WebhookHandler
+	Orders            orders.Service
+	Catalog           catalog.Repository
+	Admin             admin.Service
+	AdminToken        string
+	AdminTokens       []string
+	DB                *sql.DB
+	Stripe            stripepayments.Service
+	StripeWebhook     *stripepayments.WebhookHandler
 	StripeWebhookPath string
 
 	CoreAPIHMACSecret string
@@ -102,7 +102,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/catalog", s.handleCatalog)
 		mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	}
+	mux.Handle("/orders", s.requireSigned(http.HandlerFunc(s.handleOrders)))
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
+	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
@@ -144,8 +146,8 @@ func (s *Server) requireSigned(next http.Handler) http.Handler {
 	m := &HMACMiddleware{
 		LegacySecret: []byte(s.CoreAPIHMACSecret),
 		Secrets:      keys,
-		Tolerance: 5 * time.Minute,
-		Nonces:    &SQLNonceStore{DB: s.DB},
+		Tolerance:    5 * time.Minute,
+		Nonces:       &SQLNonceStore{DB: s.DB},
 	}
 	return m.Wrap(next)
 }
@@ -533,6 +535,17 @@ func parseIntDefault(s string, def int) int {
 	return n
 }
 
+func parseLimitQuery(r *http.Request, def, max int) int {
+	n := parseIntDefault(r.URL.Query().Get("limit"), def)
+	if n < 1 {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -617,9 +630,91 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"product": p,
-		"price":   price,
+		"product":       p,
+		"price":         price,
+		"available_qty": s.availableQty(r.Context(), p.ID),
 	})
+}
+
+func (s *Server) availableQty(ctx context.Context, productID domain.ProductID) int {
+	if s.DB == nil {
+		return 0
+	}
+	row := s.DB.QueryRowContext(ctx, `
+select greatest(0, coalesce(on_hand,0) - coalesce(reserved,0) - coalesce(safety_stock,0))
+from inventory where product_id=$1
+`, string(productID))
+	var n int
+	if err := row.Scan(&n); err != nil {
+		return 0
+	}
+	return n
+}
+
+func (s *Server) handleCustomerMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.DB == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	fp := r.Header.Get("X-SSH-Fingerprint")
+	if fp == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
+		return
+	}
+	customerID, err := s.getOrCreateCustomerIDByFingerprint(r.Context(), fp)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	c, err := s.loadCustomer(r.Context(), customerID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "customer not found")
+			return
+		}
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"customer": c})
+}
+
+func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Orders == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	fp := r.Header.Get("X-SSH-Fingerprint")
+	if fp == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
+		return
+	}
+	customerID, err := s.lookupCustomerIDByFingerprint(r.Context(), fp)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			w.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"orders": []any{}})
+			return
+		}
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	limit := parseLimitQuery(r, 20, 100)
+	list, err := s.Orders.ListOrdersByCustomer(r.Context(), customerID, limit)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"orders": list})
 }
 
 func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
@@ -699,6 +794,7 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing customer_id (or X-SSH-Fingerprint)")
 		return
 	}
+	s.saveCustomerProfile(r.Context(), customerID, req)
 
 	in := orders.CreatePendingOrderInput{
 		CustomerID: customerID,
@@ -761,21 +857,77 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"order": o,
-		"items": items,
+		"order":  o,
+		"items":  items,
 		"stripe": stripeOut,
 	})
+}
+
+func (s *Server) loadCustomer(ctx context.Context, id domain.CustomerID) (*domain.Customer, error) {
+	row := s.DB.QueryRowContext(ctx, `
+select id, ssh_fingerprint, email, phone, legal_id, full_name, birth_date,
+       address_line1, neighborhood, city, created_at, updated_at
+from customers where id=$1
+`, string(id))
+	var c domain.Customer
+	var email, phone, legalID, fullName, addr, hood, city sql.NullString
+	var birth sql.NullTime
+	if err := row.Scan(
+		&c.ID, &c.SSHFingerprint, &email, &phone, &legalID, &fullName, &birth,
+		&addr, &hood, &city, &c.CreatedAt, &c.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	c.Email = email.String
+	c.Phone = phone.String
+	c.LegalID = legalID.String
+	c.FullName = fullName.String
+	c.AddressLine1 = addr.String
+	c.Neighborhood = hood.String
+	c.City = city.String
+	if birth.Valid {
+		c.BirthDate = birth.Time
+	}
+	return &c, nil
+}
+
+func (s *Server) saveCustomerProfile(ctx context.Context, id domain.CustomerID, req checkoutRequest) {
+	if s.DB == nil {
+		return
+	}
+	_, _ = s.DB.ExecContext(ctx, `
+update customers
+set city=$2, neighborhood=$3, address_line1=$4, phone=$5, legal_id=$6, full_name=$7, updated_at=now()
+where id=$1
+`, string(id), req.City, req.Neighborhood, req.AddressLine1, req.Phone, req.LegalID, req.FullName)
+}
+
+func (s *Server) lookupCustomerIDByFingerprint(ctx context.Context, fp string) (domain.CustomerID, error) {
+	if fp == "" {
+		return "", domain.ErrInvalidInput
+	}
+	row := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
+	var id string
+	if err := row.Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return "", domain.ErrNotFound
+		}
+		return "", err
+	}
+	return domain.CustomerID(id), nil
 }
 
 func (s *Server) getOrCreateCustomerIDByFingerprint(ctx context.Context, fp string) (domain.CustomerID, error) {
 	if fp == "" {
 		return "", domain.ErrInvalidInput
 	}
-	// Lookup by fingerprint first.
-	row := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
-	var id string
-	if err := row.Scan(&id); err == nil {
-		return domain.CustomerID(id), nil
+	if id, err := s.lookupCustomerIDByFingerprint(ctx, fp); err == nil {
+		return id, nil
+	} else if err != domain.ErrNotFound {
+		return "", err
 	}
 
 	// Insert.
@@ -793,10 +945,10 @@ on conflict (ssh_fingerprint) do nothing
 		return "", err
 	}
 	// Re-read to return canonical id.
+	var id string
 	row2 := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
 	if err := row2.Scan(&id); err != nil {
 		return "", err
 	}
 	return domain.CustomerID(id), nil
 }
-

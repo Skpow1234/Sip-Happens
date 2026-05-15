@@ -103,6 +103,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.pollOrderCmd()
 
+	case orderHistoryLoadedMsg:
+		m.busy = false
+		m.state.orderHistory = msg.orders
+		if m.state.orderHistoryCursor >= len(m.state.orderHistory) {
+			m.state.orderHistoryCursor = 0
+		}
+		return m, nil
+
+	case customerLoadedMsg:
+		m.busy = false
+		if msg.customer != nil {
+			m.prefillCheckout(*msg.customer)
+		}
+		return m, nil
+
 	case tickMsg:
 		if m.screen == screenOrderStatus && m.state.lastOrderID != "" {
 			return m, m.fetchOrderCmd()
@@ -148,8 +163,40 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenOrderStatus
 			m.busy = true
 			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
+		case "4", "h":
+			m.screen = screenOrderHistory
+			m.state.orderHistoryCursor = 0
+			m.busy = true
+			return m, m.loadOrderHistoryCmd()
 		case "q":
 			return m, tea.Quit
+		}
+
+	case screenOrderHistory:
+		switch msg.String() {
+		case "esc":
+			m.screen = screenMenu
+		case "up", "k":
+			if m.state.orderHistoryCursor > 0 {
+				m.state.orderHistoryCursor--
+			}
+		case "down", "j":
+			if m.state.orderHistoryCursor < len(m.state.orderHistory)-1 {
+				m.state.orderHistoryCursor++
+			}
+		case "r":
+			m.busy = true
+			return m, m.loadOrderHistoryCmd()
+		case "enter":
+			if len(m.state.orderHistory) == 0 {
+				return m, nil
+			}
+			o := m.state.orderHistory[m.state.orderHistoryCursor]
+			m.state.lastOrderID = o.ID
+			m.state.orderStatus = o.Status
+			m.screen = screenOrderStatus
+			m.busy = true
+			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
 		}
 
 	case screenCatalog:
@@ -179,7 +226,13 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if len(m.state.catalog) == 0 {
 				return m, nil
 			}
-			m.state.addToCart(m.state.catalog[m.state.catalogCursor], 1)
+			it := m.state.catalog[m.state.catalogCursor]
+			if it.AvailableQty <= 0 {
+				m.err = fmt.Errorf("out of stock")
+				m.screen = screenError
+				return m, nil
+			}
+			m.state.addToCart(it, 1)
 		case "b":
 			m.screen = screenCart
 		}
@@ -190,7 +243,13 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenCatalog
 		case "a":
 			if m.state.productDetail != nil {
-				m.state.addToCart(m.state.productDetail.AsCatalogItem(), 1)
+				it := m.state.productDetail.AsCatalogItem()
+				if it.AvailableQty <= 0 {
+					m.err = fmt.Errorf("out of stock")
+					m.screen = screenError
+					return m, nil
+				}
+				m.state.addToCart(it, 1)
 			}
 		case "b":
 			m.screen = screenCart
@@ -220,6 +279,8 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.screen = screenCheckout
 			m.state.checkout.focus = 0
+			m.busy = true
+			return m, m.loadCustomerMeCmd()
 		}
 
 	case screenCheckout:
@@ -372,6 +433,8 @@ func (m Model) View() string {
 		return m.viewPayment()
 	case screenOrderStatus:
 		return m.viewOrderStatus()
+	case screenOrderHistory:
+		return m.viewOrderHistory()
 	case screenError:
 		return m.viewError()
 	default:
@@ -400,6 +463,7 @@ func (m Model) viewMenu() string {
   1 — Browse catalog
   2 — View cart
   3 — Check last order status
+  4 — Order history
   q — Quit
 `
 	return fmt.Sprintf("%s\n%s\n%s", title, cart, help)
@@ -418,9 +482,9 @@ func (m Model) viewCatalog() string {
 		if i == m.state.catalogCursor {
 			cur = "> "
 		}
-		line := fmt.Sprintf("%s%-14s  %-22s  %s\n",
+		line := fmt.Sprintf("%s%-14s  %-22s  %s  avail:%d\n",
 			cur, it.Product.SKU, truncate(it.Product.Name, 22),
-			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits))
+			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits), it.AvailableQty)
 		b.WriteString(line)
 	}
 	b.WriteString("\n" + help)
@@ -438,11 +502,12 @@ func (m Model) viewProduct() string {
 SKU: %s  |  %s  |  %.1f%% ABV  |  %d ml
 INVIMA: %s
 Price: %s
+Available: %d
 
 a — add to cart   b — cart   esc — back
 `,
 		title, p.SKU, p.Brewery, p.ABV, p.VolumeML, p.InvimaReg,
-		formatMoney(d.Price.Currency, d.Price.AmountMinorUnits))
+		formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), d.AvailableQty)
 	return body
 }
 
@@ -503,6 +568,30 @@ o — refresh order status   esc — menu
 	return title + "\n\n" + body
 }
 
+func (m Model) viewOrderHistory() string {
+	header := lipgloss.NewStyle().Bold(true).Render("Order history")
+	help := "↑/↓ move  enter view  r refresh  esc menu\n\n"
+	if len(m.state.orderHistory) == 0 {
+		return header + "\n\n(No orders yet)\n\n" + help
+	}
+	var b strings.Builder
+	b.WriteString(header + "\n\n")
+	for i, o := range m.state.orderHistory {
+		cur := "  "
+		if i == m.state.orderHistoryCursor {
+			cur = "> "
+		}
+		shortID := o.ID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+		b.WriteString(fmt.Sprintf("%s%s  %-18s  %s\n",
+			cur, shortID, o.Status, formatMoney(o.Currency, o.TotalMinorUnits)))
+	}
+	b.WriteString("\n" + help)
+	return b.String()
+}
+
 func (m Model) viewOrderStatus() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Order status")
 	body := fmt.Sprintf("Order: %s\nStatus: %s\n\nr refresh  esc menu\n", m.state.lastOrderID, m.state.orderStatus)
@@ -543,7 +632,31 @@ type orderLoadedMsg struct {
 	order api.OrderView
 	err   error
 }
+type orderHistoryLoadedMsg struct{ orders []api.OrderView }
+type customerLoadedMsg struct{ customer *api.CustomerView }
 type errMsg struct{ err error }
+
+func (m *Model) prefillCheckout(c api.CustomerView) {
+	f := &m.state.checkout
+	if f.city == "" {
+		f.city = c.City
+	}
+	if f.neighborhood == "" {
+		f.neighborhood = c.Neighborhood
+	}
+	if f.address == "" {
+		f.address = c.AddressLine1
+	}
+	if f.phone == "" {
+		f.phone = c.Phone
+	}
+	if f.legalID == "" {
+		f.legalID = c.LegalID
+	}
+	if f.fullName == "" {
+		f.fullName = c.FullName
+	}
+}
 type tickMsg struct{}
 
 func (m Model) loadCatalogCmd() tea.Cmd {
@@ -602,6 +715,27 @@ func (m Model) fetchOrderCmd() tea.Cmd {
 			return orderLoadedMsg{err: err}
 		}
 		return orderLoadedMsg{order: res.Order}
+	}
+}
+
+func (m Model) loadOrderHistoryCmd() tea.Cmd {
+	return func() tea.Msg {
+		orders, err := m.api.ListOrders(context.Background(), 20)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return orderHistoryLoadedMsg{orders: orders}
+	}
+}
+
+func (m Model) loadCustomerMeCmd() tea.Cmd {
+	return func() tea.Msg {
+		c, err := m.api.GetCustomerMe(context.Background())
+		if err != nil {
+			// Non-fatal: checkout still works with manual entry.
+			return customerLoadedMsg{customer: nil}
+		}
+		return customerLoadedMsg{customer: c}
 	}
 }
 

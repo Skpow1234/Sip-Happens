@@ -43,6 +43,13 @@ func (s *service) GetOrder(ctx context.Context, id domain.OrderID) (*domain.Orde
 	return o, items, nil
 }
 
+func (s *service) ListOrdersByCustomer(ctx context.Context, customerID domain.CustomerID, limit int) ([]domain.Order, error) {
+	if customerID == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	return s.orders.ListByCustomer(ctx, s.db.SQL, customerID, limit)
+}
+
 func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderInput) (*domain.Order, []domain.OrderItem, error) {
 	var createdOrder *domain.Order
 	var createdItems []domain.OrderItem

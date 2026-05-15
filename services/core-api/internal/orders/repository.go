@@ -21,6 +21,8 @@ type Repository interface {
 	FindByStripePaymentIntentID(ctx context.Context, q Querier, paymentIntentID string) (domain.OrderID, error)
 
 	ListExpiredPending(ctx context.Context, q Querier, now time.Time, limit int) ([]domain.OrderID, error)
+
+	ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit int) ([]domain.Order, error)
 }
 
 // Querier is implemented by *sql.DB and *sql.Tx.
