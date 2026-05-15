@@ -82,6 +82,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state.lastOrderID = msg.result.Order.ID
+		m.state.rememberOrderID(msg.result.Order.ID)
 		m.state.orderStatus = msg.result.Order.Status
 		if msg.result.Stripe != nil {
 			m.state.stripeURL = msg.result.Stripe.URL
@@ -106,6 +107,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case orderHistoryLoadedMsg:
 		m.busy = false
 		m.state.orderHistory = msg.orders
+		for _, o := range msg.orders {
+			m.state.rememberOrderID(o.ID)
+		}
 		if m.state.orderHistoryCursor >= len(m.state.orderHistory) {
 			m.state.orderHistoryCursor = 0
 		}
@@ -160,6 +164,11 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.screen = screenError
 				return m, nil
 			}
+			if !m.state.orderIDAllowed(m.state.lastOrderID) {
+				m.err = fmt.Errorf("order is not available in this session")
+				m.screen = screenError
+				return m, nil
+			}
 			m.screen = screenOrderStatus
 			m.busy = true
 			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
@@ -193,6 +202,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			o := m.state.orderHistory[m.state.orderHistoryCursor]
 			m.state.lastOrderID = o.ID
+			m.state.rememberOrderID(o.ID)
 			m.state.orderStatus = o.Status
 			m.screen = screenOrderStatus
 			m.busy = true
@@ -709,7 +719,11 @@ func (m Model) submitCheckoutCmd() tea.Cmd {
 
 func (m Model) fetchOrderCmd() tea.Cmd {
 	id := m.state.lastOrderID
+	allowed := m.state.orderIDAllowed(id)
 	return func() tea.Msg {
+		if !allowed {
+			return orderLoadedMsg{err: fmt.Errorf("order is not available in this session")}
+		}
 		res, err := m.api.GetOrder(context.Background(), id)
 		if err != nil {
 			return orderLoadedMsg{err: err}

@@ -89,8 +89,37 @@ type AppState struct {
 
 	orderHistory       []api.OrderView
 	orderHistoryCursor int
+	// allowedOrderIDs tracks orders created this session or selected from history.
+	allowedOrderIDs map[string]struct{}
 
 	idempotencyKey string
+}
+
+func (s *AppState) rememberOrderID(id string) {
+	if id == "" {
+		return
+	}
+	if s.allowedOrderIDs == nil {
+		s.allowedOrderIDs = map[string]struct{}{}
+	}
+	s.allowedOrderIDs[id] = struct{}{}
+}
+
+func (s *AppState) orderIDAllowed(id string) bool {
+	if id == "" {
+		return false
+	}
+	if s.allowedOrderIDs != nil {
+		if _, ok := s.allowedOrderIDs[id]; ok {
+			return true
+		}
+	}
+	for _, o := range s.orderHistory {
+		if o.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *AppState) cartCount() int {

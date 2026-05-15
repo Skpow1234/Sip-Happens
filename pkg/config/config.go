@@ -254,6 +254,12 @@ type SSHGateway struct {
 	CoreAPIURL  string
 	HostKeyPath string
 
+	// RequireAuthorizedKeys enforces SSH_AUTHORIZED_KEYS_PATH (set in production).
+	RequireAuthorizedKeys bool
+	AuthorizedKeysPath    string
+	// DevFingerprint is used when the client has no public key (dev only; empty disables).
+	DevFingerprint string
+
 	// CoreAPIHMACSecret is legacy v1 signing shared secret.
 	CoreAPIHMACSecret string
 	// CoreAPIHMACKeyID and CoreAPIHMACKeys enable v2 signing (key-id + rotation).
@@ -266,12 +272,21 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.SSHAddr = getenvDefault("SSH_ADDR", "0.0.0.0:2222")
 	c.CoreAPIURL = getenvDefault("CORE_API_URL", "http://core-api:8080")
 	c.HostKeyPath = getenvDefault("SSH_HOST_KEY_PATH", "/data/ssh_host_ed25519_key")
+	c.RequireAuthorizedKeys = getenvBoolDefault("SSH_REQUIRE_AUTHORIZED_KEYS", false)
+	c.AuthorizedKeysPath = getenvDefault("SSH_AUTHORIZED_KEYS_PATH", "/data/authorized_keys")
+	c.DevFingerprint = strings.TrimSpace(os.Getenv("SSH_DEV_FINGERPRINT"))
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 	c.CoreAPIHMACKeyID = strings.TrimSpace(os.Getenv("CORE_API_HMAC_KEY_ID"))
 	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))
 
 	if _, err := url.ParseRequestURI(c.CoreAPIURL); err != nil {
 		return c, fmt.Errorf("CORE_API_URL invalid: %w", err)
+	}
+	if c.RequireAuthorizedKeys && c.AuthorizedKeysPath == "" {
+		return c, fmt.Errorf("SSH_AUTHORIZED_KEYS_PATH is required when SSH_REQUIRE_AUTHORIZED_KEYS=1")
+	}
+	if c.RequireAuthorizedKeys && c.DevFingerprint != "" {
+		return c, fmt.Errorf("SSH_DEV_FINGERPRINT cannot be used with SSH_REQUIRE_AUTHORIZED_KEYS")
 	}
 	return c, nil
 }

@@ -1,0 +1,9 @@
+# Production: copy to the ssh-gateway volume as authorized_keys and set
+# SSH_REQUIRE_AUTHORIZED_KEYS=1 on ssh-gateway.
+#
+# Generate a key: ssh-keygen -t ed25519 -f sip-happens-dev
+# Add the public key line:
+#   cat sip-happens-dev.pub >> authorized_keys
+#
+# The gateway maps each key to customers.ssh_fingerprint using OpenSSH SHA256 format
+# (same as `ssh-keygen -lf sip-happens-dev.pub`).

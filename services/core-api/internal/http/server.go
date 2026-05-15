@@ -729,6 +729,24 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
 		return
 	}
+	if s.Orders == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	fp := r.Header.Get("X-SSH-Fingerprint")
+	if fp == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
+		return
+	}
+	customerID, err := s.lookupCustomerIDByFingerprint(r.Context(), fp)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "order not found")
+			return
+		}
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
 	o, items, err := s.Orders.GetOrder(r.Context(), domain.OrderID(id))
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -740,6 +758,10 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 			code = "not_found"
 		}
 		writeAPIError(w, r, status, code, "error")
+		return
+	}
+	if o.CustomerID != customerID {
+		writeAPIError(w, r, http.StatusNotFound, "not_found", "order not found")
 		return
 	}
 

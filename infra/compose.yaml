@@ -80,6 +80,10 @@ services:
       CORE_API_URL: "http://core-api:8080"
       SSH_ADDR: "0.0.0.0:2222"
       SSH_HOST_KEY_PATH: "/data/ssh_host_ed25519_key"
+      # Dev: any SSH public key is accepted; demo seed customer uses this fingerprint when no key is offered.
+      SSH_REQUIRE_AUTHORIZED_KEYS: ${SSH_REQUIRE_AUTHORIZED_KEYS:-0}
+      SSH_AUTHORIZED_KEYS_PATH: ${SSH_AUTHORIZED_KEYS_PATH:-/data/authorized_keys}
+      SSH_DEV_FINGERPRINT: ${SSH_DEV_FINGERPRINT:-demo:ssh-fingerprint}
       CORE_API_HMAC_KEY_ID: ${CORE_API_HMAC_KEY_ID:-dev}
       CORE_API_HMAC_KEYS: ${CORE_API_HMAC_KEYS:-dev:dev-hmac-secret}
     depends_on:

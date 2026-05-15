@@ -71,6 +71,8 @@ Flow: confirm age → menu → browse catalog → cart → delivery form → Str
 
 Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`).
 
+**Production SSH**: set `SSH_REQUIRE_AUTHORIZED_KEYS=1` and mount `authorized_keys` at `SSH_AUTHORIZED_KEYS_PATH` (see `infra/authorized_keys.example`). Each SSH public key maps to a stable `SHA256:…` customer fingerprint (OpenSSH-compatible, same as `ssh-keygen -lf`).
+
 ### Start the “order reaper” (expires pending orders)
 
 This background worker cancels expired `PENDING_PAYMENT` orders and releases inventory reservations.
@@ -81,7 +83,7 @@ docker compose -f infra/compose.yaml up -d order-reaper
 
 ### Start the outbox dispatcher (optional)
 
-This background worker claims rows from `outbox_events` and publishes them (currently to logs, until we wire a real queue).
+This background worker claims rows from `outbox_events` and publishes them to **NATS JetStream** when `OUTBOX_PUBLISHER=nats` (default in Compose).
 
 ```bash
 docker compose -f infra/compose.yaml up -d outbox-dispatch
@@ -89,6 +91,8 @@ docker compose -f infra/compose.yaml up -d outbox-dispatch
 
 Environment knobs:
 
+- `OUTBOX_PUBLISHER` (`nats` or `log` for local debugging without NATS)
+- `NATS_URL`, `NATS_STREAM`
 - `OUTBOX_MAX_ATTEMPTS` (default `10`)
 - `OUTBOX_BASE_BACKOFF_SECONDS` (default `30`)
 - `OUTBOX_LOCKED_BY` (default `outbox-dispatcher`)
@@ -142,7 +146,11 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`STRIPE_MOCK=1`**: enables a local mock Stripe checkout URL when `STRIPE_SECRET_KEY` is not set (prototype only)
 - **`ADMIN_TOKENS`**: comma-separated bearer tokens to access admin endpoints (supports rotation)
 - **`ADMIN_TOKEN`**: legacy single admin token (prefer `ADMIN_TOKENS`)
-- **`CORE_API_HMAC_SECRET`**: shared secret used to sign requests from `ssh-gateway` to `core-api` (enables auth + replay protection for `/checkout` and `/orders/*`)
+- **`CORE_API_HMAC_SECRET`**: legacy v1 shared secret for gateway → API signing
+- **`CORE_API_HMAC_KEY_ID`** / **`CORE_API_HMAC_KEYS`**: v2 signing (`kid:secret` pairs; preferred)
+- **`SSH_REQUIRE_AUTHORIZED_KEYS`**: set to `1` in production to require `authorized_keys`
+- **`SSH_AUTHORIZED_KEYS_PATH`**: path inside ssh-gateway container (default `/data/authorized_keys`)
+- **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
 
 Database config is currently provided by Compose:
 
@@ -150,23 +158,34 @@ Database config is currently provided by Compose:
 
 ## Current endpoints
 
-- `GET /healthz`
-- `GET /readyz` (DB readiness; returns 503 until DB is reachable)
-- `GET /metrics` (Prometheus metrics)
-- `POST /checkout` (creates a pending order + reserves inventory + creates Stripe Checkout Session when `STRIPE_SECRET_KEY` is set)
-- `GET /orders/{id}`
-- `POST /webhooks/stripe` (enabled when `STRIPE_WEBHOOK_SECRET` is set)
-- `GET /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `q`, `active`, `currency`)
-- `POST /admin/products` (requires `Authorization: Bearer $ADMIN_TOKEN`)
-- `PUT /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; full replace)
-- `PATCH /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; partial update)
-- `DELETE /admin/products/{id}` (requires `Authorization: Bearer $ADMIN_TOKEN`; deactivates product)
-- `POST /admin/prices` (requires `Authorization: Bearer $ADMIN_TOKEN`)
-- `PUT /admin/prices` (requires `Authorization: Bearer $ADMIN_TOKEN`; idempotent-ish alias of POST for tooling)
-- `DELETE /admin/prices?product_id=...&currency=COP` (requires `Authorization: Bearer $ADMIN_TOKEN`; ends current price)
-- `POST /admin/inventory` (requires `Authorization: Bearer $ADMIN_TOKEN`)
-- `PUT /admin/inventory` (requires `Authorization: Bearer $ADMIN_TOKEN`; idempotent upsert)
-- `GET /admin/audit-events` (requires `Authorization: Bearer $ADMIN_TOKEN`; supports `limit`, `offset`, `aggregate_type`, `aggregate_id`)
+Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /openapi.yaml`; Redoc at `GET /docs` with admin Bearer token).
+
+**Public**
+
+- `GET /healthz`, `GET /readyz` (DB readiness; 503 until DB is reachable), `GET /metrics`
+- `GET /catalog?currency=COP` — list active products with price and `available_qty`
+- `GET /catalog/{sku}?currency=COP` — product detail with `available_qty`
+- `GET /openapi.yaml` — OpenAPI 3 spec
+
+**Signed** (HMAC v2 + `X-SSH-Fingerprint`; used by `ssh-gateway`)
+
+- `POST /checkout` — pending order, inventory reservation, Stripe Checkout Session (`Idempotency-Key` required)
+- `GET /orders` — list caller’s orders (`limit`, default 20, max 100)
+- `GET /orders/{id}` — order detail (scoped to caller’s fingerprint)
+- `GET /customers/me` — profile for prefill
+
+**Webhooks**
+
+- `POST /webhooks/stripe` (when `STRIPE_WEBHOOK_SECRET` is set; path overridable via `STRIPE_WEBHOOK_PATH`)
+
+**Admin** (`Authorization: Bearer` token)
+
+- `GET /admin/products` (`limit`, `offset`, `q`, `active`, `currency`)
+- `POST /admin/products`, `PUT /admin/products/{id}`, `PATCH /admin/products/{id}`, `DELETE /admin/products/{id}`
+- `POST /admin/prices`, `PUT /admin/prices`, `DELETE /admin/prices?product_id=...&currency=COP`
+- `POST /admin/inventory`, `PUT /admin/inventory`
+- `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`)
+- `GET /docs` — API browser (Redoc)
 
 ## Observability
 

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"log"
 	"time"
 
@@ -30,17 +28,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s, err := wish.NewServer(
+	opts := []ssh.Option{
 		wish.WithAddress(cfg.SSHAddr),
 		wish.WithHostKeyPath(cfg.HostKeyPath),
+	}
+	opts = append(opts, security.SSHOptions(cfg.RequireAuthorizedKeys, cfg.AuthorizedKeysPath)...)
+	opts = append(opts,
 		wish.WithMiddleware(
 			logging.Middleware(),
 			(&security.SSHRateLimiter{Window: time.Minute, Limit: 30}).Middleware(),
 			wishbubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-				fp := ""
-				if pk := s.PublicKey(); pk != nil {
-					sum := sha256.Sum256(pk.Marshal())
-					fp = "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
+				fp := security.SessionFingerprint(s)
+				if fp == "" && cfg.DevFingerprint != "" {
+					fp = cfg.DevFingerprint
 				}
 				var client *api.Client
 				if cfg.CoreAPIHMACKeyID != "" && len(cfg.CoreAPIHMACKeys) > 0 {
@@ -60,11 +60,12 @@ func main() {
 			}),
 		),
 	)
+
+	s, err := wish.NewServer(opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("ssh-gateway listening on %s", cfg.SSHAddr)
+	log.Printf("ssh-gateway listening on %s (authorized_keys=%v)", cfg.SSHAddr, cfg.RequireAuthorizedKeys)
 	log.Fatal(s.ListenAndServe())
 }
-
