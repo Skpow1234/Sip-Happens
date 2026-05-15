@@ -811,11 +811,42 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("content-type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	payload := map[string]any{
 		"order": o,
 		"items": items,
-	})
+	}
+	if sh, err := s.loadShipmentForOrder(r.Context(), o.ID); err == nil && sh != nil {
+		payload["shipment"] = sh
+	}
+
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func (s *Server) loadShipmentForOrder(ctx context.Context, orderID domain.OrderID) (map[string]any, error) {
+	if s.DB == nil || orderID == "" {
+		return nil, nil
+	}
+	var carrier, tracking, status sql.NullString
+	err := s.DB.QueryRowContext(ctx, `
+select carrier, tracking_code, status
+from shipments
+where order_id = $1
+`, string(orderID)).Scan(&carrier, &tracking, &status)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"Status": status.String}
+	if carrier.Valid && carrier.String != "" {
+		out["Carrier"] = carrier.String
+	}
+	if tracking.Valid && tracking.String != "" {
+		out["TrackingCode"] = tracking.String
+	}
+	return out, nil
 }
 
 type checkoutRequest struct {

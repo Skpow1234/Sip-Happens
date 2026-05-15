@@ -84,13 +84,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.state.lastOrderID = msg.result.Order.ID
 		m.state.rememberOrderID(msg.result.Order.ID)
-		m.state.orderStatus = msg.result.Order.Status
+		m.state.setOrderSnapshot(msg.result.Order, nil)
 		if msg.result.Stripe != nil {
 			m.state.stripeURL = msg.result.Stripe.URL
 		}
 		m.state.cart = nil
+		m.state.clock = time.Now()
 		m.screen = screenPayment
-		return m, nil
+		return m, tea.Batch(paymentTickCmd(), paymentPollCmd())
 
 	case orderLoadedMsg:
 		m.busy = false
@@ -99,11 +100,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenError
 			return m, nil
 		}
-		m.state.orderStatus = msg.order.Status
+		prev := m.state.orderStatus
+		m.state.setOrderSnapshot(msg.order, msg.shipment)
+		if msg.order.Status == "PAID" && prev != "PAID" {
+			m.screen = screenOrderComplete
+			return m, nil
+		}
 		if msg.order.Status == "PAID" || msg.order.Status == "CANCELLED" {
 			return m, nil
 		}
+		if m.screen == screenPayment {
+			return m, paymentPollCmd()
+		}
 		return m, m.pollOrderCmd()
+
+	case paymentTickMsg:
+		m.state.clock = msg.now
+		if m.screen == screenPayment {
+			return m, paymentTickCmd()
+		}
+		return m, nil
 
 	case orderHistoryLoadedMsg:
 		m.busy = false
@@ -125,6 +141,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.screen == screenOrderStatus && m.state.lastOrderID != "" {
+			return m, m.fetchOrderCmd()
+		}
+		if m.screen == screenPayment && m.state.lastOrderID != "" {
 			return m, m.fetchOrderCmd()
 		}
 		return m, nil
@@ -174,13 +193,26 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenOrderStatus
 			m.busy = true
 			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
-		case "4", "h":
+		case "4":
 			m.screen = screenOrderHistory
 			m.state.orderHistoryCursor = 0
 			m.busy = true
 			return m, m.loadOrderHistoryCmd()
+		case "?", "h":
+			m.screen = screenHelp
 		case "q":
 			return m, tea.Quit
+		}
+
+	case screenHelp:
+		if msg.String() == "esc" || msg.String() == "?" {
+			m.screen = screenMenu
+		}
+
+	case screenOrderComplete:
+		switch msg.String() {
+		case "esc", "enter", " ":
+			m.screen = screenMenu
 		}
 
 	case screenOrderHistory:
@@ -320,6 +352,11 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if len(m.state.cart) == 0 {
 				return m, nil
 			}
+			if err := m.state.validateCartStock(); err != nil {
+				m.err = err
+				m.screen = screenError
+				return m, nil
+			}
 			m.screen = screenCheckout
 			m.state.checkout.focus = 0
 			m.busy = true
@@ -334,6 +371,11 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc", "n":
 			m.screen = screenCheckout
 		case "y":
+			if err := m.state.validateCartStock(); err != nil {
+				m.err = err
+				m.screen = screenError
+				return m, nil
+			}
 			m.busy = true
 			return m, m.submitCheckoutCmd()
 		}
@@ -384,10 +426,18 @@ func (m *Model) bumpCartQty(delta int) {
 	if i < 0 || i >= len(m.state.cart) {
 		i = 0
 	}
-	m.state.cart[i].Qty += delta
-	if m.state.cart[i].Qty <= 0 {
+	newQty := m.state.cart[i].Qty + delta
+	if newQty <= 0 {
 		m.removeCartLine()
+		return
 	}
+	max := m.state.cart[i].AvailableQty
+	if max > 0 && newQty > max {
+		m.err = fmt.Errorf("%s: only %d available", m.state.cart[i].SKU, max)
+		m.screen = screenError
+		return
+	}
+	m.state.cart[i].Qty = newQty
 }
 
 func (m *Model) removeCartLine() {
@@ -455,33 +505,37 @@ func (m Model) checkoutValid() bool {
 
 func (m Model) View() string {
 	if m.busy {
-		return m.viewBusy()
+		return m.withFooter(m.viewBusy())
 	}
 	switch m.screen {
 	case screenWelcome:
 		return m.viewWelcome()
 	case screenMenu:
-		return m.viewMenu()
+		return m.withFooter(m.viewMenu())
 	case screenCatalog:
-		return m.viewCatalog()
+		return m.withFooter(m.viewCatalog())
 	case screenCatalogFilters:
-		return m.viewCatalogFilters()
+		return m.withFooter(m.viewCatalogFilters())
 	case screenProduct:
-		return m.viewProduct()
+		return m.withFooter(m.viewProduct())
 	case screenCart:
-		return m.viewCart()
+		return m.withFooter(m.viewCart())
 	case screenCheckout:
-		return m.viewCheckout()
+		return m.withFooter(m.viewCheckout())
 	case screenConfirm:
-		return m.viewConfirm()
+		return m.withFooter(m.viewConfirm())
 	case screenPayment:
-		return m.viewPayment()
+		return m.withFooter(m.viewPayment())
 	case screenOrderStatus:
-		return m.viewOrderStatus()
+		return m.withFooter(m.viewOrderStatus())
 	case screenOrderHistory:
-		return m.viewOrderHistory()
+		return m.withFooter(m.viewOrderHistory())
+	case screenHelp:
+		return m.withFooter(m.viewHelp())
+	case screenOrderComplete:
+		return m.withFooter(m.viewOrderComplete())
 	case screenError:
-		return m.viewError()
+		return m.withFooter(m.viewError())
 	default:
 		return ""
 	}
@@ -509,6 +563,7 @@ func (m Model) viewMenu() string {
   2 — View cart
   3 — Check last order status
   4 — Order history
+  ? — Help
   q — Quit
 `
 	return fmt.Sprintf("%s\n%s\n%s", title, cart, help)
@@ -576,8 +631,12 @@ func (m Model) viewCart() string {
 		if i == m.cartCursor() {
 			cur = "> "
 		}
-		b.WriteString(fmt.Sprintf("%s%-14s x%d  %s\n",
-			cur, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal())))
+		avail := ""
+		if l.AvailableQty >= 0 {
+			avail = fmt.Sprintf("  max %d", l.AvailableQty)
+		}
+		b.WriteString(fmt.Sprintf("%s%-14s x%d  %s%s\n",
+			cur, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal()), avail))
 	}
 	b.WriteString(fmt.Sprintf("\nSubtotal: %s\n\n", formatMoney("COP", m.state.cartSubtotal())))
 	b.WriteString("+/- qty  d remove  c checkout  esc menu\n")
@@ -610,17 +669,52 @@ func (m Model) viewConfirm() string {
 func (m Model) viewPayment() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Pay off-terminal")
 	qr := asciiQR(m.state.stripeURL, m.width)
+	now := m.state.clock
+	if now.IsZero() {
+		now = time.Now()
+	}
+	expiry := ""
+	if m.state.orderExpiresAt != nil {
+		cd := formatExpiryCountdown(m.state.orderExpiresAt, now)
+		if cd != "" {
+			expiry = fmt.Sprintf("Pay within: %s\n\n", cd)
+		}
+	}
 	body := fmt.Sprintf(`Order: %s
 Status: %s
-
-Scan the QR code or open this URL in your browser (cards are not entered in SSH):
+%sScan the QR code or open this URL in your browser (cards are not entered in SSH):
 
 %s
 %s
 
 o — refresh order status   esc — menu
-`, m.state.lastOrderID, m.state.orderStatus, qr, m.state.stripeURL)
+`, m.state.lastOrderID, m.state.orderStatus, expiry, qr, m.state.stripeURL)
 	return title + "\n\n" + body
+}
+
+func (m Model) viewOrderComplete() string {
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10")).Render("Payment received")
+	cur := m.state.lastOrderCurrency
+	if cur == "" {
+		cur = "COP"
+	}
+	body := fmt.Sprintf(`Thank you! Your order is confirmed.
+
+Order: %s
+Total: %s
+Status: %s
+
+We will prepare your shipment and update status when it ships.
+Check order status anytime from the main menu (3 or 4).
+
+enter / esc — back to menu
+`, m.state.lastOrderID, formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus)
+	return title + "\n\n" + body
+}
+
+func (m Model) viewHelp() string {
+	title := lipgloss.NewStyle().Bold(true).Render("Help")
+	return title + "\n\n" + helpText + "\nesc — back to menu\n"
 }
 
 func (m Model) viewCatalogFilters() string {
@@ -665,10 +759,21 @@ func (m Model) viewOrderHistory() string {
 
 func (m Model) viewOrderStatus() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Order status")
-	body := fmt.Sprintf("Order: %s\nStatus: %s\n\nr refresh  esc menu\n", m.state.lastOrderID, m.state.orderStatus)
-	if m.state.orderStatus == "PAID" {
-		body += "\nPayment received. Thank you!\n"
+	body := fmt.Sprintf("Order: %s\nStatus: %s\n\n", m.state.lastOrderID, m.state.orderStatus)
+	if ship := formatShipmentSummary(m.state.orderStatus, m.state.lastShipment); ship != "" {
+		body += ship
 	}
+	if m.state.orderStatus == "PENDING_PAYMENT" && m.state.orderExpiresAt != nil {
+		cd := formatExpiryCountdown(m.state.orderExpiresAt, m.state.clock)
+		if cd == "" {
+			m.state.clock = time.Now()
+			cd = formatExpiryCountdown(m.state.orderExpiresAt, m.state.clock)
+		}
+		if cd != "" {
+			body += fmt.Sprintf("Payment expires in: %s\n\n", cd)
+		}
+	}
+	body += "r refresh  esc menu\n"
 	if m.state.orderStatus == "CANCELLED" {
 		body += "\nOrder was cancelled or expired.\n"
 	}
@@ -700,9 +805,11 @@ type checkoutDoneMsg struct {
 	err    error
 }
 type orderLoadedMsg struct {
-	order api.OrderView
-	err   error
+	order    api.OrderView
+	shipment *api.ShipmentView
+	err      error
 }
+type paymentTickMsg struct{ now time.Time }
 type orderHistoryLoadedMsg struct{ orders []api.OrderView }
 type customerLoadedMsg struct{ customer *api.CustomerView }
 type errMsg struct{ err error }
@@ -861,8 +968,18 @@ func (m Model) fetchOrderCmd() tea.Cmd {
 		if err != nil {
 			return orderLoadedMsg{err: err}
 		}
-		return orderLoadedMsg{order: res.Order}
+		return orderLoadedMsg{order: res.Order, shipment: res.Shipment}
 	}
+}
+
+func paymentTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return paymentTickMsg{now: t}
+	})
+}
+
+func paymentPollCmd() tea.Cmd {
+	return tea.Tick(5*time.Second, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 func (m Model) loadOrderHistoryCmd() tea.Cmd {

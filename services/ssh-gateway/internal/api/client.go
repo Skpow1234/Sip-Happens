@@ -144,8 +144,15 @@ type CheckoutResult struct {
 	Stripe *StripeCheckoutView `json:"stripe"`
 }
 
+type ShipmentView struct {
+	Status       string `json:"Status"`
+	Carrier      string `json:"Carrier"`
+	TrackingCode string `json:"TrackingCode"`
+}
+
 type OrderResult struct {
-	Order OrderView `json:"order"`
+	Order    OrderView     `json:"order"`
+	Shipment *ShipmentView `json:"shipment"`
 }
 
 // CatalogQuery lists catalog products with optional filters and pagination.
@@ -377,9 +384,12 @@ func (c *Client) GetOrder(ctx context.Context, orderID string) (*OrderResult, er
 		return nil, parseAPIError(resp.StatusCode, body)
 	}
 
-	var out OrderResult
+	var out struct {
+		Order    OrderView     `json:"order"`
+		Shipment *ShipmentView `json:"shipment"`
+	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, err
 	}
-	return &out, nil
+	return &OrderResult{Order: out.Order, Shipment: out.Shipment}, nil
 }

@@ -6,6 +6,19 @@ import (
 	"sip-happens/services/ssh-gateway/internal/api"
 )
 
+func TestAppState_validateCartStock(t *testing.T) {
+	s := &AppState{
+		cart: []CartLine{{SKU: "A", Qty: 2, AvailableQty: 1}},
+	}
+	if err := s.validateCartStock(); err == nil {
+		t.Fatal("expected stock error")
+	}
+	s.cart[0].Qty = 1
+	if err := s.validateCartStock(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAppState_orderIDAllowed(t *testing.T) {
 	s := &AppState{}
 	if s.orderIDAllowed("any") {

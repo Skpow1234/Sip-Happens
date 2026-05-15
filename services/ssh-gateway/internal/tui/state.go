@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"sip-happens/services/ssh-gateway/internal/api"
 )
@@ -21,6 +22,8 @@ const (
 	screenOrderStatus
 	screenOrderHistory
 	screenCatalogFilters
+	screenHelp
+	screenOrderComplete
 	screenError
 )
 
@@ -33,6 +36,7 @@ type CartLine struct {
 	Currency  string
 	UnitPrice int64
 	Qty       int
+	AvailableQty int
 }
 
 func (c CartLine) LineTotal() int64 {
@@ -99,6 +103,11 @@ type AppState struct {
 	lastOrderID string
 	stripeURL   string
 	orderStatus string
+	orderExpiresAt *time.Time
+	lastOrderTotal int64
+	lastOrderCurrency string
+	lastShipment   *api.ShipmentView
+	clock          time.Time
 
 	orderHistory       []api.OrderView
 	orderHistoryCursor int
@@ -159,17 +168,44 @@ func (s *AppState) addToCart(item api.CatalogItem, qty int) {
 	for i := range s.cart {
 		if s.cart[i].ProductID == pid {
 			s.cart[i].Qty += qty
+			s.cart[i].AvailableQty = item.AvailableQty
 			return
 		}
 	}
 	s.cart = append(s.cart, CartLine{
-		ProductID: pid,
-		SKU:       item.Product.SKU,
-		Name:      item.Product.Name,
-		Currency:  item.Price.Currency,
-		UnitPrice: item.Price.AmountMinorUnits,
-		Qty:       qty,
+		ProductID:    pid,
+		SKU:          item.Product.SKU,
+		Name:         item.Product.Name,
+		Currency:     item.Price.Currency,
+		UnitPrice:    item.Price.AmountMinorUnits,
+		Qty:          qty,
+		AvailableQty: item.AvailableQty,
 	})
+}
+
+func (s *AppState) validateCartStock() error {
+	if len(s.cart) == 0 {
+		return fmt.Errorf("cart is empty")
+	}
+	for _, l := range s.cart {
+		if l.Qty <= 0 {
+			return fmt.Errorf("%s: invalid quantity", l.SKU)
+		}
+		if l.AvailableQty >= 0 && l.Qty > l.AvailableQty {
+			return fmt.Errorf("%s: only %d available (cart has %d)", l.SKU, l.AvailableQty, l.Qty)
+		}
+	}
+	return nil
+}
+
+func (s *AppState) setOrderSnapshot(order api.OrderView, shipment *api.ShipmentView) {
+	s.orderStatus = order.Status
+	s.lastOrderTotal = order.TotalMinorUnits
+	if order.Currency != "" {
+		s.lastOrderCurrency = order.Currency
+	}
+	s.orderExpiresAt = order.ExpiresAt
+	s.lastShipment = shipment
 }
 
 type catalogFilterFields struct {
