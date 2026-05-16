@@ -182,6 +182,11 @@ func runSeedDemo(ctx context.Context) error {
 
 	log.Printf("seeded demo data:")
 	log.Printf("  customer_id=%s", out.CustomerID)
+	log.Printf("  ssh_fingerprint=%s", out.SSHFingerprint)
+	if out.DemoSSHPubKey != "" {
+		log.Printf("  demo_ssh_pubkey=%s", out.DemoSSHPubKey)
+		log.Printf("  tui: ssh -i infra/demo/sip-happens-demo -p 2222 localhost")
+	}
 	for i, pid := range out.ProductIDs {
 		log.Printf("  product_id[%d]=%s", i, pid)
 	}

@@ -8,7 +8,7 @@ import (
 	"sip-happens/pkg/age"
 )
 
-const privacyPolicyURL = "https://sip-happens.local/privacy"
+const DefaultPrivacyPolicyURL = "https://sip-happens.local/privacy"
 
 func parseBirthDateInput(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)

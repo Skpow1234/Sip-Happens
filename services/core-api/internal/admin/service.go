@@ -205,8 +205,11 @@ func (s *SQLService) UpsertProduct(ctx context.Context, actor string, in UpsertP
 	if s.DB == nil {
 		return "", fmt.Errorf("missing db")
 	}
-	if in.SKU == "" || in.Name == "" || in.Brewery == "" || in.Style == "" || in.VolumeML <= 0 || in.InvimaReg == "" {
+	if in.SKU == "" || in.Name == "" || in.Brewery == "" || in.Style == "" || in.VolumeML <= 0 {
 		return "", domain.ErrInvalidInput
+	}
+	if err := validateProductPublish(in.InvimaReg, in.IsActive); err != nil {
+		return "", err
 	}
 
 	now := time.Now()
@@ -255,8 +258,11 @@ func (s *SQLService) PutProductByID(ctx context.Context, actor string, productID
 	if productID == "" {
 		return domain.ErrInvalidInput
 	}
-	if in.SKU == "" || in.Name == "" || in.Brewery == "" || in.Style == "" || in.VolumeML <= 0 || in.InvimaReg == "" {
+	if in.SKU == "" || in.Name == "" || in.Brewery == "" || in.Style == "" || in.VolumeML <= 0 {
 		return domain.ErrInvalidInput
+	}
+	if err := validateProductPublish(in.InvimaReg, in.IsActive); err != nil {
+		return err
 	}
 	now := time.Now()
 	res, err := s.DB.ExecContext(ctx, `
@@ -321,8 +327,11 @@ from products where id=$1
 	}
 
 	// Validate required invariants after patch.
-	if cur.SKU == "" || cur.Name == "" || cur.Brewery == "" || cur.Style == "" || cur.VolumeML <= 0 || cur.InvimaReg == "" {
+	if cur.SKU == "" || cur.Name == "" || cur.Brewery == "" || cur.Style == "" || cur.VolumeML <= 0 {
 		return domain.ErrInvalidInput
+	}
+	if err := validateProductPublish(cur.InvimaReg, cur.IsActive); err != nil {
+		return err
 	}
 
 	now := time.Now()

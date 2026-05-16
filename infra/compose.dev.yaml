@@ -25,3 +25,11 @@ services:
   core-api:
     ports:
       - "8080:8080"
+
+  ssh-gateway:
+    environment:
+      SSH_DEV_FINGERPRINT: ${SSH_DEV_FINGERPRINT:-SHA256:bO2LRb2AvETPxiykJemvR1cPIDiRfLlTadBTHeqMLzM}
+      PRIVACY_POLICY_URL: ${PRIVACY_POLICY_URL:-https://sip-happens.local/privacy}
+    volumes:
+      - sshkeys:/data
+      - ./demo/authorized_keys:/data/authorized_keys:ro

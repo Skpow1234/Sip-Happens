@@ -18,6 +18,8 @@ import (
 type Model struct {
 	api *api.Client
 
+	privacyPolicyURL string
+
 	screen screen
 	state  AppState
 
@@ -27,10 +29,14 @@ type Model struct {
 	height int
 }
 
-func NewRootModel(client *api.Client) Model {
+func NewRootModel(client *api.Client, privacyPolicyURL string) Model {
+	if strings.TrimSpace(privacyPolicyURL) == "" {
+		privacyPolicyURL = DefaultPrivacyPolicyURL
+	}
 	return Model{
-		api:    client,
-		screen: screenWelcome,
+		api:              client,
+		privacyPolicyURL: privacyPolicyURL,
+		screen:           screenWelcome,
 	}
 }
 
@@ -629,8 +635,8 @@ func (m Model) viewWelcome() string {
 
 enter — continue   n — exit
 
-Privacy: %s
-`, m.state.birthDateInput, privacyPolicyURL)
+Privacy policy: %s
+`, m.state.birthDateInput, m.privacyPolicyURL)
 	return fmt.Sprintf("%s\n%s\n\n%s", title, warn, body)
 }
 
@@ -640,14 +646,16 @@ func (m Model) viewMenu() string {
 	if label := m.state.orderLabel(); label != "" {
 		cart += fmt.Sprintf("  |  Last order: %s", label)
 	}
-	help := `
+	help := fmt.Sprintf(`
   1 — Browse catalog
   2 — View cart
   3 — Check last order status
   4 — Order history
   ? — Help
   q — Quit
-`
+
+  Privacy: %s
+`, m.privacyPolicyURL)
 	return fmt.Sprintf("%s\n%s\n%s", title, cart, help)
 }
 
@@ -790,8 +798,8 @@ Items: %d
 
 %s I accept the privacy policy (%s)
 
-p — toggle accept   y — place order   n — back
-`, formatMoney("COP", sub), formatMoney(cur, ship), formatMoney("COP", total), m.state.cartCount(), priv, privacyPolicyURL)
+p — toggle privacy policy   y — place order   n — back
+`, formatMoney("COP", sub), formatMoney(cur, ship), formatMoney("COP", total), m.state.cartCount(), priv, m.privacyPolicyURL)
 	return title + "\n\n" + body
 }
 

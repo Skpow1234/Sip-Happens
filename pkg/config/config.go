@@ -327,6 +327,8 @@ type SSHGateway struct {
 	AuthorizedKeysPath    string
 	// DevFingerprint is used when the client has no public key (dev only; empty disables).
 	DevFingerprint string
+	// PrivacyPolicyURL is shown in the TUI welcome and checkout consent screens.
+	PrivacyPolicyURL string
 	// DisablePasswordAuth rejects SSH password logins (recommended in production).
 	DisablePasswordAuth bool
 	// DisablePortForwarding denies SSH local/reverse port forwarding.
@@ -347,6 +349,7 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.RequireAuthorizedKeys = getenvBoolDefault("SSH_REQUIRE_AUTHORIZED_KEYS", false)
 	c.AuthorizedKeysPath = getenvDefault("SSH_AUTHORIZED_KEYS_PATH", "/data/authorized_keys")
 	c.DevFingerprint = strings.TrimSpace(os.Getenv("SSH_DEV_FINGERPRINT"))
+	c.PrivacyPolicyURL = getenvDefault("PRIVACY_POLICY_URL", "https://sip-happens.local/privacy")
 	c.DisablePasswordAuth = getenvBoolDefault("SSH_DISABLE_PASSWORD_AUTH", false)
 	c.DisablePortForwarding = getenvBoolDefault("SSH_DISABLE_PORT_FORWARDING", true)
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")

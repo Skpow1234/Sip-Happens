@@ -4,14 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	"sip-happens/pkg/ids"
 )
 
 type DemoSeedOutput struct {
-	CustomerID string
-	ProductIDs []string
+	CustomerID      string
+	SSHFingerprint  string
+	ProductIDs      []string
+	DemoSSHPubKey   string // path used when present
 }
 
 // Demo inserts a minimal dataset required to run a prototype checkout:
@@ -27,8 +30,19 @@ func Demo(ctx context.Context, db *sql.DB) (*DemoSeedOutput, error) {
 		return nil, err
 	}
 
-	// A fake-but-stable fingerprint for prototype use.
-	fingerprint := "demo:ssh-fingerprint"
+	fingerprint, err := DemoSSHFingerprint()
+	if err != nil {
+		return nil, err
+	}
+	pubPath := ""
+	if _, err := loadDemoPublicKeyBytes(); err == nil {
+		for _, p := range demoPublicKeyPaths() {
+			if _, statErr := os.Stat(p); statErr == nil {
+				pubPath = p
+				break
+			}
+		}
+	}
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -38,9 +52,10 @@ func Demo(ctx context.Context, db *sql.DB) (*DemoSeedOutput, error) {
 
 	// Customer (upsert-ish for repeatable seeds)
 	_, err = tx.ExecContext(ctx, `
-insert into customers (id, ssh_fingerprint, email, phone, legal_id, full_name, birth_date, address_line1, neighborhood, city, created_at, updated_at)
+	insert into customers (id, ssh_fingerprint, email, phone, legal_id, full_name, birth_date, address_line1, neighborhood, city, created_at, updated_at)
 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-on conflict (ssh_fingerprint) do nothing
+on conflict (ssh_fingerprint) do update
+set email=excluded.email, full_name=excluded.full_name, updated_at=excluded.updated_at
 `, customerID, fingerprint, "demo@example.com", "+57 300 000 0000", "CC-0000000", "Demo Customer", "1995-01-01", "Calle 1 # 2-3", "Chapinero", "Bogotá", now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert customer: %w", err)
@@ -127,8 +142,10 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, updated_at=now(
 	}
 
 	return &DemoSeedOutput{
-		CustomerID: customerID,
-		ProductIDs: idsOut,
+		CustomerID:     customerID,
+		SSHFingerprint: fingerprint,
+		ProductIDs:     idsOut,
+		DemoSSHPubKey:  pubPath,
 	}, nil
 }
 

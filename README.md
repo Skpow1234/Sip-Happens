@@ -225,7 +225,8 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 **Secret handling**: Stripe keys, webhook secrets, and bearer/HMAC material are redacted in structured logs (`pkg/redact`) and in `audit_events` / payment / Stripe event storage. Rotation runbooks: [`docs/runbooks/rotate-admin-tokens.md`](docs/runbooks/rotate-admin-tokens.md), [`docs/runbooks/rotate-core-api-hmac-keys.md`](docs/runbooks/rotate-core-api-hmac-keys.md).
 - **`SSH_REQUIRE_AUTHORIZED_KEYS`**: set to `1` in production to require `authorized_keys`
 - **`SSH_AUTHORIZED_KEYS_PATH`**: path inside ssh-gateway container (default `/data/authorized_keys`)
-- **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
+- **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches `infra/demo/sip-happens-demo.pub` and `seed demo`)
+- **`PRIVACY_POLICY_URL`**: shown on ssh-gateway TUI welcome and checkout consent (default `https://sip-happens.local/privacy`)
 - **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
 - **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
 - **`FEATURE_FLAGS`**: comma-separated toggles — see [Feature flags](#feature-flags) below
