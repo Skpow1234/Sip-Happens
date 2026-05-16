@@ -18,7 +18,7 @@ type Event struct {
 	AggregateID   string
 	Version       int
 
-	RequestID string
+	RequestID   string
 	PayloadJSON string
 
 	Attempts int
@@ -53,4 +53,3 @@ type Store interface {
 	// ReplayDeadLetters re-queues up to limit dead letters back into outbox_events.
 	ReplayDeadLetters(ctx context.Context, db *sql.DB, limit int) (int, error)
 }
-

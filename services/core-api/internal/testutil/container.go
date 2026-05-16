@@ -86,6 +86,9 @@ func openMigratedDSN(ctx context.Context, dsn, schema string) (*TestDB, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	// Pin pool size so search_path set on the sole connection is used for all queries.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	if _, err := db.ExecContext(ctx, `set search_path to `+schema); err != nil {
 		_ = db.Close()
 		return nil, err

@@ -296,3 +296,16 @@ bash scripts/e2e-smoke.sh
 ```
 
 CI runs the same checks after migrations (`go run ./services/core-api/cmd/e2e-smoke`).
+
+**Load / concurrency** (requires Postgres):
+
+```bash
+go test ./services/core-api/internal/orders/... -run TestConcurrentCreatePendingOrder -count=1
+go test ./services/core-api/internal/orders/... -bench=BenchmarkCreatePendingOrder_Concurrent -benchtime=2s -run=^$
+```
+
+**Outbox multi-node claim** (two `outbox-dispatch` workers, shared DB):
+
+```bash
+bash scripts/outbox-multi-node-ci.sh
+```

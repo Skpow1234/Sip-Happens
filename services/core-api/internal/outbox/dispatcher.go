@@ -116,4 +116,3 @@ func randFloat() float64 {
 	u := uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 | uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
 	return float64(u>>11) / (1 << 53)
 }
-

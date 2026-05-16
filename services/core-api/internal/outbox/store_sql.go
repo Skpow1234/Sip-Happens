@@ -287,4 +287,3 @@ func nullable(s string) any {
 // pqStringArray formats a slice for Postgres ANY($1) usage without adding new dependencies.
 // It relies on lib/pq's array support via []string.
 func pqStringArray(v []string) any { return v }
-

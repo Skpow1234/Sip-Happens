@@ -2,12 +2,10 @@ package outbox
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 	"testing"
 	"time"
 
-	"sip-happens/pkg/ids"
 	"sip-happens/services/core-api/internal/testutil"
 )
 
@@ -22,7 +20,7 @@ func TestSQLStore_ClaimPending_ConcurrentNoDuplicates(t *testing.T) {
 	store := NewSQLStore()
 
 	const total = 50
-	if err := seedOutboxEvents(ctx, t, tdb.DB, store, total); err != nil {
+	if err := InsertPendingEvents(ctx, tdb.DB, "test.event", total); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,38 +58,3 @@ func TestSQLStore_ClaimPending_ConcurrentNoDuplicates(t *testing.T) {
 		t.Fatalf("expected %d claimed events, got %d", total, len(claimed))
 	}
 }
-
-func seedOutboxEvents(ctx context.Context, t *testing.T, db *sql.DB, store *SQLStore, n int) error {
-	t.Helper()
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	for i := 0; i < n; i++ {
-		id, err := ids.UUIDv4()
-		if err != nil {
-			return err
-		}
-		agg, err := ids.UUIDv4()
-		if err != nil {
-			return err
-		}
-		e := Event{
-			ID:            id,
-			Type:          "test.event",
-			OccurredAt:    time.Now(),
-			AggregateType: "test",
-			AggregateID:   agg,
-			Version:       1,
-			RequestID:     "",
-			PayloadJSON:   `{"ok":true}`,
-		}
-		if err := store.Insert(ctx, tx, e); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-

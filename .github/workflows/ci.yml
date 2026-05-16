@@ -56,6 +56,15 @@ jobs:
         run: |
           go run ./services/core-api/cmd/migrate up
 
+      - name: Checkout concurrency (integration)
+        run: |
+          go test ./services/core-api/internal/orders/... -run TestConcurrentCreatePendingOrder -count=1 -v
+
+      - name: Outbox multi-node claim (two dispatch workers)
+        run: |
+          bash scripts/outbox-multi-node-ci.sh
+          go test ./services/core-api/internal/outbox/... -run TestMultiNodeOutboxDispatch -count=1 -v
+
       - name: E2E smoke (seed demo + core-api + HTTP checks)
         env:
           HTTP_ADDR: ":18080"
