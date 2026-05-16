@@ -91,11 +91,21 @@ docker compose -f infra/compose.yaml up -d core-api
 
 ### TUI (SSH)
 
-`bash scripts/dev-up.sh` already starts `ssh-gateway`. Connect with:
+`bash scripts/dev-up.sh` already starts `ssh-gateway` and seeds a demo customer linked to the dev SSH key.
+
+There is **no password** — auth is public-key only. From the repo root:
 
 ```bash
-ssh -p 2222 localhost
+ssh -i infra/demo/sip-happens-demo -p 2222 localhost
 ```
+
+If `infra/demo/sip-happens-demo` is missing (private key is gitignored), generate it once:
+
+```bash
+ssh-keygen -t ed25519 -f infra/demo/sip-happens-demo -N "" -C sip-happens-demo@local
+```
+
+The matching public key is in `infra/demo/authorized_keys` (mounted into the gateway). See [`infra/demo/README.md`](infra/demo/README.md).
 
 Flow: confirm age → menu → browse catalog → cart → delivery form → Stripe checkout URL (mock when `STRIPE_MOCK=1`).
 
