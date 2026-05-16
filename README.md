@@ -19,6 +19,20 @@ From the repo root:
 bash scripts/dev-up.sh
 ```
 
+### Stripe webhooks (local, signed deliveries)
+
+`STRIPE_MOCK=1` (Compose default when no secret key) skips real Checkout; to exercise **`POST /webhooks/stripe`** end-to-end, use the Stripe CLI forwarder from Compose and set **`STRIPE_WEBHOOK_SECRET`** on `core-api` to the signing secret printed by `listen`.
+
+- Full steps: [`docs/runbooks/stripe-webhook-local.md`](docs/runbooks/stripe-webhook-local.md)
+- After `dev-up`, forward events (requires `STRIPE_API_KEY` for the CLI container):
+
+```bash
+docker compose -f infra/compose.yaml run --rm stripe-cli \
+  listen --forward-to http://core-api:8080/webhooks/stripe
+```
+
+Then set `STRIPE_WEBHOOK_SECRET` from the CLI output and `docker compose -f infra/compose.yaml up -d --force-recreate core-api`.
+
 ### Build
 
 ```bash
