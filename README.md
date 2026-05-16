@@ -113,6 +113,34 @@ docker compose -f infra/compose.yaml up -d outbox-dispatch
 
 Ops: [`docs/ops/nats-consumer-playbook.md`](docs/ops/nats-consumer-playbook.md)
 
+### Inventory reconcile job (optional)
+
+Background worker that **detects** inventory drift (ACTIVE reservations on cancelled/expired orders; `inventory.reserved` not matching the sum of ACTIVE reservation rows). By default it only logs mismatches; set `INV_RECONCILE_FIX=1` to apply fixes.
+
+```bash
+docker compose -f infra/compose.yaml run --rm core-jobs inventory-reconcile
+```
+
+Environment knobs:
+
+- `JOB_INTERVAL_SECONDS` (default `300`)
+- `JOB_BATCH_LIMIT` (default `500`)
+- `JOB_RUN_ONCE` — exit after one pass (`true`/`1`)
+- `INV_RECONCILE_FIX` — apply fixes when `true`/`1` (default off)
+- `INV_EXPIRE_GRACE_SECONDS` — grace after `expires_at` before treating pending orders as expired leaks (default `300`)
+
+### Fulfillment runner job
+
+Polls **PAID** orders and advances the fulfillment saga (creates shipment, moves order to **FULFILLING**). Compose service `fulfillment-runner` runs this continuously in dev.
+
+```bash
+docker compose -f infra/compose.yaml up -d fulfillment-runner
+# one-shot:
+docker compose -f infra/compose.yaml run --rm core-jobs fulfillment-runner
+```
+
+Uses the same `JOB_INTERVAL_SECONDS`, `JOB_BATCH_LIMIT`, and `JOB_RUN_ONCE` knobs as other `core-jobs` workers.
+
 Environment knobs:
 
 - `OUTBOX_PUBLISHER` (`nats` or `log` for local debugging without NATS)
@@ -240,6 +268,8 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `GET /admin/products` (`limit`, `offset`, `q`, `active`, `currency`)
 - `POST /admin/products`, `PUT /admin/products/{id}`, `PATCH /admin/products/{id}`, `DELETE /admin/products/{id}`
 - `POST /admin/prices`, `PUT /admin/prices`, `DELETE /admin/prices?product_id=...&currency=COP`
+- `GET /admin/inventory` — list rows with `on_hand`, `reserved`, `available_qty` (`product_id`, `sku`, `limit`, `offset`)
+- `GET /admin/inventory/reservations` — ACTIVE reservations per SKU (`product_id`, `sku`, `limit`, `offset`)
 - `POST /admin/inventory`, `PUT /admin/inventory`
 - `GET /admin/orders` — list orders (`status`, `created_from`, `created_to`, `limit`, `offset`)
 - `GET /admin/orders/{id}` — order, items, payments, optional shipment

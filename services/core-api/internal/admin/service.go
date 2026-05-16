@@ -20,6 +20,8 @@ type Service interface {
 	SetPrice(ctx context.Context, actor string, in SetPriceInput) error
 	EndCurrentPrice(ctx context.Context, actor string, productID domain.ProductID, currency string, reason string) error
 	UpsertInventory(ctx context.Context, actor string, in UpsertInventoryInput) error
+	ListInventory(ctx context.Context, in ListInventoryInput) ([]InventoryRow, error)
+	ListActiveReservations(ctx context.Context, in ListActiveReservationsInput) ([]ActiveReservationRow, error)
 
 	ListAuditEvents(ctx context.Context, in ListAuditEventsInput) ([]domain.AuditEvent, error)
 

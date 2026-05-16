@@ -153,6 +153,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
 	mux.Handle("POST /admin/products/{id}/image", adminRL.Wrap(http.HandlerFunc(s.handleAdminProductImage)))
 	mux.Handle("/admin/prices", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminPrices))))
+	mux.Handle("/admin/inventory/reservations", adminRL.Wrap(http.HandlerFunc(s.handleAdminInventoryReservations)))
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
 	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))
 	mux.Handle("POST /admin/orders/{id}/reconcile-stripe", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderReconcileStripe))))
@@ -483,14 +484,39 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdminRole(w, r, AdminRoleOps) {
-		return
-	}
 	if s.Admin == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+	switch r.Method {
+	case http.MethodGet:
+		if !s.requireAdminRole(w, r, AdminRoleFinance) {
+			return
+		}
+		limit := parseIntDefault(r.URL.Query().Get("limit"), 100)
+		offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+		var productID domain.ProductID
+		if v := strings.TrimSpace(r.URL.Query().Get("product_id")); v != "" {
+			productID = domain.ProductID(v)
+		}
+		list, err := s.Admin.ListInventory(r.Context(), admin.ListInventoryInput{
+			ProductID: productID,
+			SKU:       strings.TrimSpace(r.URL.Query().Get("sku")),
+			Limit:     limit,
+			Offset:    offset,
+		})
+		if err != nil {
+			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": list, "limit": limit, "offset": offset})
+		return
+	case http.MethodPost, http.MethodPut:
+		if !s.requireAdminRole(w, r, AdminRoleOps) {
+			return
+		}
+	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -512,6 +538,38 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminInventoryReservations(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdminRole(w, r, AdminRoleFinance) {
+		return
+	}
+	if s.Admin == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 100)
+	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	var productID domain.ProductID
+	if v := strings.TrimSpace(r.URL.Query().Get("product_id")); v != "" {
+		productID = domain.ProductID(v)
+	}
+	list, err := s.Admin.ListActiveReservations(r.Context(), admin.ListActiveReservationsInput{
+		ProductID: productID,
+		SKU:       strings.TrimSpace(r.URL.Query().Get("sku")),
+		Limit:     limit,
+		Offset:    offset,
+	})
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"reservations": list, "limit": limit, "offset": offset})
 }
 
 func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) {
