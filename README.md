@@ -96,8 +96,10 @@ docker compose -f infra/compose.yaml up -d core-api
 There is **no password** — auth is public-key only. From the repo root:
 
 ```bash
-ssh -i infra/demo/sip-happens-demo -p 2222 localhost
+ssh -F infra/demo/ssh_config sip-happens
 ```
+
+Uses a **fixed dev host key** and project `infra/demo/known_hosts`, so container recreates do not trip `REMOTE HOST IDENTIFICATION HAS CHANGED`. See [`infra/demo/README.md`](infra/demo/README.md).
 
 If `infra/demo/sip-happens-demo` is missing (private key is gitignored), generate it once:
 
@@ -115,7 +117,7 @@ Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=
 
 **Production SSH**: set `SSH_REQUIRE_AUTHORIZED_KEYS=1` and mount `authorized_keys` at `SSH_AUTHORIZED_KEYS_PATH` (see `infra/authorized_keys.example`). Each SSH public key maps to a stable `SHA256:…` customer fingerprint (OpenSSH-compatible, same as `ssh-keygen -lf`).
 
-**Host key**: persist `/data` (Compose volume `sshkeys`) so `SSH_HOST_KEY_PATH` survives restarts — see [`docs/ops/ssh-production.md`](docs/ops/ssh-production.md).
+**Host key**: local dev mounts a committed key at `infra/demo/ssh_host_ed25519_key` (see `compose.dev.yaml`); production uses volume `sshkeys` — [`docs/ops/ssh-production.md`](docs/ops/ssh-production.md).
 
 Catalog TUI shortcuts: `/` search, `f` filters (style, brewery, ABV), `n`/`p` pages.
 

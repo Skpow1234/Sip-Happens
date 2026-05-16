@@ -35,5 +35,6 @@ services:
       CONSUMER_RIGHTS_URL: ${CONSUMER_RIGHTS_URL:-https://www.sic.gov.co/proteccion-del-consumidor}
       DATA_PROCESSING_POLICY_URL: ${DATA_PROCESSING_POLICY_URL:-https://sip-happens.local/legal/data-processing}
     volumes:
-      - sshkeys:/data
+      # Fixed dev host key (committed) — avoids REMOTE HOST IDENTIFICATION HAS CHANGED on recreate.
+      - ./demo/ssh_host_ed25519_key:/data/ssh_host_ed25519_key:ro
       - ./demo/authorized_keys:/data/authorized_keys:ro
