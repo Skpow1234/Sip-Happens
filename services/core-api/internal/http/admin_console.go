@@ -1,13 +1,13 @@
 package http
 
 import (
-	"fmt"
 	"html"
 	"net/http"
+	"strings"
 )
 
 // Minimal read-only ops console (products, inventory, orders) using admin JSON APIs.
-const adminConsoleHTMLFmt = `<!DOCTYPE html>
+const adminConsoleHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -188,18 +188,18 @@ const adminConsoleHTMLFmt = `<!DOCTYPE html>
     if (tokenEl.value) reloadAll();
   </script>
   <footer style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--muted);">
-    Legal: <a href="%s">Privacy</a> · <a href="%s">Data processing (Ley 1581)</a> · <a href="%s">Consumer rights (SIC)</a>
+    Legal: <a href="__PRIVACY_URL__">Privacy</a> · <a href="__DATA_PROCESSING_URL__">Data processing (Ley 1581)</a> · <a href="__CONSUMER_RIGHTS_URL__">Consumer rights (SIC)</a>
   </footer>
 </body>
 </html>
 `
 
 func renderAdminConsoleHTML(privacyURL, consumerRightsURL, dataProcessingURL string) string {
-	return fmt.Sprintf(adminConsoleHTMLFmt,
-		html.EscapeString(privacyURL),
-		html.EscapeString(dataProcessingURL),
-		html.EscapeString(consumerRightsURL),
-	)
+	out := adminConsoleHTML
+	out = strings.Replace(out, "__PRIVACY_URL__", html.EscapeString(privacyURL), 1)
+	out = strings.Replace(out, "__DATA_PROCESSING_URL__", html.EscapeString(dataProcessingURL), 1)
+	out = strings.Replace(out, "__CONSUMER_RIGHTS_URL__", html.EscapeString(consumerRightsURL), 1)
+	return out
 }
 
 func (s *Server) handleAdminConsole(w http.ResponseWriter, r *http.Request) {
