@@ -1,5 +1,8 @@
 # Local developer overlay: publish infra and API ports on the host.
 # Usage: docker compose -f infra/compose.yaml -f infra/compose.dev.yaml up -d
+#
+# Optional: debug outbox without NATS (events only in outbox-dispatch logs; nats-consume idle):
+#   OUTBOX_PUBLISHER=log docker compose -f infra/compose.yaml -f infra/compose.dev.yaml up -d outbox-dispatch
 services:
   postgres:
     ports:

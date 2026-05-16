@@ -222,7 +222,11 @@ func runOutboxDispatchJob(ctx context.Context) error {
 	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
 	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
 
-	publisher, cleanup, err := outboxPublisherFromEnv()
+	pubCfg, err := config.LoadOutboxPublisher()
+	if err != nil {
+		return err
+	}
+	publisher, cleanup, err := outbox.PublisherFromEnv()
 	if err != nil {
 		return err
 	}
@@ -237,7 +241,8 @@ func runOutboxDispatchJob(ctx context.Context) error {
 		BaseBackoff: jobCfg.BaseBackoff,
 	}
 
-	log.Printf("job outbox-dispatch starting (interval=%s, limit=%d, once=%v, locked_by=%s)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, jobCfg.LockedBy)
+	log.Printf("job outbox-dispatch starting (publisher=%s, interval=%s, limit=%d, once=%v, locked_by=%s)",
+		pubCfg.Kind, jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, jobCfg.LockedBy)
 
 	idle := 0
 	for {
@@ -410,50 +415,6 @@ func runNATSConsumeJob(ctx context.Context) error {
 		return nil
 	}
 	return err
-}
-
-func outboxPublisherFromEnv() (outbox.Publisher, func(), error) {
-	kind := os.Getenv("OUTBOX_PUBLISHER")
-	if kind == "" || kind == "log" {
-		return outbox.LogPublisher{}, func() {}, nil
-	}
-	if kind != "nats" {
-		return nil, nil, fmt.Errorf("unknown OUTBOX_PUBLISHER=%q (expected 'log' or 'nats')", kind)
-	}
-
-	natsURL := os.Getenv("NATS_URL")
-	if natsURL == "" {
-		return nil, nil, fmt.Errorf("NATS_URL is required when OUTBOX_PUBLISHER=nats")
-	}
-	stream := os.Getenv("NATS_STREAM")
-	if stream == "" {
-		return nil, nil, fmt.Errorf("NATS_STREAM is required when OUTBOX_PUBLISHER=nats")
-	}
-	namespace := os.Getenv("NAMESPACE")
-	if namespace == "" {
-		namespace = "dev"
-	}
-	subjectPrefix := os.Getenv("NATS_SUBJECT_PREFIX")
-	if subjectPrefix == "" {
-		subjectPrefix = events.EventsSubjectPrefix(namespace)
-	}
-
-	nc, err := nats.Connect(natsURL, nats.Name("sip-happens outbox-dispatch"))
-	if err != nil {
-		return nil, nil, err
-	}
-	js, err := nc.JetStream()
-	if err != nil {
-		nc.Close()
-		return nil, nil, err
-	}
-
-	pub := &outbox.JetStreamPublisher{
-		JS:            js,
-		Stream:        stream,
-		SubjectPrefix: subjectPrefix,
-	}
-	return pub, func() { nc.Close() }, nil
 }
 
 func runInventoryReconcileJob(ctx context.Context) error {

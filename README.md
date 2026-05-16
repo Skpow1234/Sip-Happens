@@ -115,11 +115,24 @@ docker compose -f infra/compose.yaml up -d order-reaper
 
 ### Start the outbox dispatcher (optional)
 
-This background worker claims rows from `outbox_events` and publishes them to **NATS JetStream** when `OUTBOX_PUBLISHER=nats` (default in Compose).
+This background worker claims rows from `outbox_events` and publishes them using **`OUTBOX_PUBLISHER`**:
+
+| Value | Behavior |
+|-------|----------|
+| `nats` (Compose default) | Publish to NATS JetStream (`NATS_URL`, `NATS_STREAM` required). `nats-consume` can process `order.paid`. |
+| `log` (or unset) | Structured log lines only (`outbox_publish`); no NATS connection. Use for local debugging without a message bus. |
 
 ```bash
-docker compose -f infra/compose.yaml up -d outbox-dispatch
+docker compose -f infra/compose.yaml -f infra/compose.dev.yaml up -d outbox-dispatch
 ```
+
+Log-only example:
+
+```bash
+OUTBOX_PUBLISHER=log docker compose -f infra/compose.yaml -f infra/compose.dev.yaml up -d outbox-dispatch
+```
+
+Outbox env knobs: `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_BASE_BACKOFF_SECONDS`, `OUTBOX_LOCKED_BY`, `NAMESPACE`, `NATS_SUBJECT_PREFIX`.
 
 ### NATS consumers (fulfillment handoff)
 
@@ -154,14 +167,6 @@ docker compose -f infra/compose.yaml run --rm core-jobs fulfillment-runner
 ```
 
 Uses the same `JOB_INTERVAL_SECONDS`, `JOB_BATCH_LIMIT`, and `JOB_RUN_ONCE` knobs as other `core-jobs` workers.
-
-Environment knobs:
-
-- `OUTBOX_PUBLISHER` (`nats` or `log` for local debugging without NATS)
-- `NATS_URL`, `NATS_STREAM`
-- `OUTBOX_MAX_ATTEMPTS` (default `10`)
-- `OUTBOX_BASE_BACKOFF_SECONDS` (default `30`)
-- `OUTBOX_LOCKED_BY` (default `outbox-dispatcher`)
 
 ### Replay outbox dead letters (optional)
 
@@ -223,7 +228,8 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
 - **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
 - **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
-- **`FEATURE_FLAGS`**: comma-separated toggles (e.g. `catalog_cache`, `catalog_cache_redis`, `redis_rate_limit`, `email_payment_link`, `email_receipt`)
+- **`FEATURE_FLAGS`**: comma-separated toggles — see [Feature flags](#feature-flags) below
+- **`OUTBOX_PUBLISHER`**: `nats` or `log` — selects outbox-dispatch publisher (see [outbox dispatcher](#start-the-outbox-dispatcher-optional))
 - **`REDIS_URL`**: optional Redis URL (Compose sets `redis://redis:6379/0` for `core-api`)
 - **`REDIS_REQUIRED`**: set to `1` to fail `/readyz` when Redis is required but unavailable
 - **`EMAIL_PROVIDER`**: `log` (default; prints to stdout) or `smtp`
@@ -231,6 +237,24 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SMTP_HOST`**, **`SMTP_PORT`** (default `587`), **`SMTP_USER`**, **`SMTP_PASSWORD`**: required when `EMAIL_PROVIDER=smtp`
 
 Transactional email (Spanish templates) is sent only when the matching flag is set and the customer has an email on file: payment link after `POST /checkout` (`email_payment_link`), receipt when `order.paid` is consumed (`email_receipt` on `nats-consume`).
+
+### Feature flags
+
+Set on **core-api** and **nats-consume** (email receipt) via `FEATURE_FLAGS` (comma-separated, case-insensitive). Canonical list: `pkg/featureflags/known.go`.
+
+| Flag | Service | Effect |
+|------|---------|--------|
+| `catalog_cache` | core-api | In-memory SWR cache for catalog GET routes (per replica). |
+| `catalog_cache_redis` | core-api | Shared catalog cache in Redis; requires `REDIS_URL`. |
+| `redis_rate_limit` | core-api | Shared checkout/admin rate limits in Redis; requires `REDIS_URL`. See [`docs/ops/rate-limit-scaling.md`](docs/ops/rate-limit-scaling.md). |
+| `email_payment_link` | core-api | Email Stripe checkout URL after `POST /checkout`. |
+| `email_receipt` | nats-consume | Email receipt when `order.paid` is handled; needs `OUTBOX_PUBLISHER=nats`. |
+
+Example (typical Compose dev):
+
+```bash
+FEATURE_FLAGS=catalog_cache_redis,redis_rate_limit
+```
 
 Object storage (MinIO, optional in Compose):
 
