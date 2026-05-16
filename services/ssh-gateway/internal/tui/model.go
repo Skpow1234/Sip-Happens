@@ -18,8 +18,9 @@ import (
 type Model struct {
 	api *api.Client
 
-	privacyPolicyURL    string
-	consumerRightsURL   string
+	privacyPolicyURL          string
+	consumerRightsURL         string
+	dataProcessingPolicyURL   string
 
 	screen screen
 	state  AppState
@@ -30,18 +31,22 @@ type Model struct {
 	height int
 }
 
-func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL string) Model {
+func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataProcessingPolicyURL string) Model {
 	if strings.TrimSpace(privacyPolicyURL) == "" {
 		privacyPolicyURL = DefaultPrivacyPolicyURL
 	}
 	if strings.TrimSpace(consumerRightsURL) == "" {
 		consumerRightsURL = DefaultConsumerRightsURL
 	}
+	if strings.TrimSpace(dataProcessingPolicyURL) == "" {
+		dataProcessingPolicyURL = DefaultDataProcessingPolicyURL
+	}
 	return Model{
-		api:                client,
-		privacyPolicyURL:   privacyPolicyURL,
-		consumerRightsURL:  consumerRightsURL,
-		screen:             screenWelcome,
+		api:                     client,
+		privacyPolicyURL:        privacyPolicyURL,
+		consumerRightsURL:       consumerRightsURL,
+		dataProcessingPolicyURL: dataProcessingPolicyURL,
+		screen:                  screenWelcome,
 	}
 }
 
@@ -801,9 +806,12 @@ func (m Model) viewConfirm() string {
 %s
 
 %s
+
+%s
 `, L.ConfirmSubtotal, formatMoney("COP", sub), L.ConfirmShipping, formatMoney(cur, ship), L.ConfirmTotal, formatMoney("COP", total), L.ConfirmItems, m.state.cartCount(),
 		L.ConfirmPrivacyLine(m.state.privacyAccepted, m.privacyPolicyURL),
-		L.ConfirmConsumerRightsLine(m.consumerRightsURL), L.ConfirmHelp)
+		L.ConfirmConsumerRightsLine(m.consumerRightsURL),
+		L.ConfirmDataProcessingLine(m.dataProcessingPolicyURL), L.ConfirmHelp)
 	return title + "\n\n" + body
 }
 

@@ -42,6 +42,11 @@ type CoreAPI struct {
 	RedisRequired bool
 
 	MinIO MinIO
+
+	// Legal URLs for emails and admin console (DESIGN §5.3–§5.4).
+	PrivacyPolicyURL         string
+	ConsumerRightsURL        string
+	DataProcessingPolicyURL  string
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -80,6 +85,9 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.RedisURL = strings.TrimSpace(os.Getenv("REDIS_URL"))
 	c.RedisRequired = RedisRequiredForReadyz()
 	c.MinIO = LoadMinIO()
+	c.PrivacyPolicyURL = getenvDefault("PRIVACY_POLICY_URL", "https://sip-happens.local/privacy")
+	c.ConsumerRightsURL = getenvDefault("CONSUMER_RIGHTS_URL", "https://www.sic.gov.co/proteccion-del-consumidor")
+	c.DataProcessingPolicyURL = getenvDefault("DATA_PROCESSING_POLICY_URL", "https://sip-happens.local/legal/data-processing")
 
 	return c, nil
 }
@@ -331,6 +339,8 @@ type SSHGateway struct {
 	PrivacyPolicyURL string
 	// ConsumerRightsURL is the SIC consumer-protection link shown in the TUI (DESIGN §5.3).
 	ConsumerRightsURL string
+	// DataProcessingPolicyURL is linked from TUI checkout consent (Ley 1581).
+	DataProcessingPolicyURL string
 	// DisablePasswordAuth rejects SSH password logins (recommended in production).
 	DisablePasswordAuth bool
 	// DisablePortForwarding denies SSH local/reverse port forwarding.
@@ -353,6 +363,7 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.DevFingerprint = strings.TrimSpace(os.Getenv("SSH_DEV_FINGERPRINT"))
 	c.PrivacyPolicyURL = getenvDefault("PRIVACY_POLICY_URL", "https://sip-happens.local/privacy")
 	c.ConsumerRightsURL = getenvDefault("CONSUMER_RIGHTS_URL", "https://www.sic.gov.co/proteccion-del-consumidor")
+	c.DataProcessingPolicyURL = getenvDefault("DATA_PROCESSING_POLICY_URL", "https://sip-happens.local/legal/data-processing")
 	c.DisablePasswordAuth = getenvBoolDefault("SSH_DISABLE_PASSWORD_AUTH", false)
 	c.DisablePortForwarding = getenvBoolDefault("SSH_DISABLE_PORT_FORWARDING", true)
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")

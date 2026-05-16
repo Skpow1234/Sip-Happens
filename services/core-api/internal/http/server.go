@@ -67,6 +67,10 @@ type Server struct {
 	NATSURL         string
 
 	ProductImages objectstore.ProductImages
+
+	PrivacyPolicyURL        string
+	ConsumerRightsURL       string
+	DataProcessingPolicyURL string
 }
 
 func (s *Server) Handler() http.Handler {
@@ -729,6 +733,10 @@ func (s *Server) handleAdminOrderDetail(w http.ResponseWriter, r *http.Request) 
 	if sh, err := s.loadShipmentForOrder(r.Context(), o.ID); err == nil && sh != nil {
 		payload["shipment"] = sh
 	}
+
+	s.recordAdminPIIAccess(r, "admin_order_detail", "order", string(orderID), map[string]string{
+		"customer_id": string(o.CustomerID),
+	})
 
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)

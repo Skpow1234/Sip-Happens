@@ -7,5 +7,12 @@
   {{if .ExpiresAt}}<p>Vence: {{.ExpiresAt}}</p>{{end}}
   <p><a href="{{.PaymentURL}}">Completar pago en Stripe</a></p>
   <p>— Sip-Happens</p>
+  <hr/>
+  <p style="font-size:0.85em;color:#555;">{{.MinorAlcoholWarning}}</p>
+  <p style="font-size:0.85em;color:#555;">
+    <a href="{{.PrivacyPolicyURL}}">Política de privacidad</a> ·
+    <a href="{{.DataProcessingPolicyURL}}">Tratamiento de datos</a> ·
+    <a href="{{.ConsumerRightsURL}}">Derechos del consumidor (SIC)</a>
+  </p>
 </body>
 </html>

@@ -115,6 +115,11 @@ func runServer() error {
 	if err != nil {
 		return err
 	}
+	emailSvc.SetCompliance(email.ComplianceData{
+		PrivacyPolicyURL:        cfg.PrivacyPolicyURL,
+		ConsumerRightsURL:       cfg.ConsumerRightsURL,
+		DataProcessingPolicyURL: cfg.DataProcessingPolicyURL,
+	})
 
 	productImages, err := objectstore.NewProductImagesFromEnv()
 	if err != nil {
@@ -148,7 +153,10 @@ func runServer() error {
 		Email:             emailSvc,
 		Redis:             redisClient,
 		RedisRequired:     cfg.RedisRequired,
-		ProductImages:     productImages,
+		ProductImages:           productImages,
+		PrivacyPolicyURL:        cfg.PrivacyPolicyURL,
+		ConsumerRightsURL:       cfg.ConsumerRightsURL,
+		DataProcessingPolicyURL: cfg.DataProcessingPolicyURL,
 	}
 
 	httpSrv := &http.Server{

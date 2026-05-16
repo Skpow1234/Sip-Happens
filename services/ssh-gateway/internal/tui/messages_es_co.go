@@ -90,6 +90,9 @@ func SpanishCO() Messages {
 		ConfirmConsumerRightsLine: func(url string) string {
 			return fmt.Sprintf("Información sobre derechos del consumidor (SIC): %s", url)
 		},
+		ConfirmDataProcessingLine: func(url string) string {
+			return fmt.Sprintf("Tratamiento de datos personales (Ley 1581): %s", url)
+		},
 		ConfirmHelp: "p — política de privacidad   y — confirmar pedido   n — volver",
 		PaymentTitle:  "Pago fuera de la terminal",
 		PaymentOrder:  "Pedido:",

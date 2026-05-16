@@ -13,6 +13,9 @@ const DefaultPrivacyPolicyURL = "https://sip-happens.local/privacy"
 // DefaultConsumerRightsURL is the SIC consumer-protection reference (DESIGN §5.3).
 const DefaultConsumerRightsURL = "https://www.sic.gov.co/proteccion-del-consumidor"
 
+// DefaultDataProcessingPolicyURL is linked at checkout consent (Ley 1581).
+const DefaultDataProcessingPolicyURL = "https://sip-happens.local/legal/data-processing"
+
 func parseBirthDateInput(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

@@ -51,8 +51,9 @@ type Messages struct {
 	ConfirmTotal         string
 	ConfirmItems         string
 	ConfirmPrivacyLine         func(checked bool, url string) string
-	ConfirmConsumerRightsLine  func(url string) string
-	ConfirmHelp                string
+	ConfirmConsumerRightsLine    func(url string) string
+	ConfirmDataProcessingLine    func(url string) string
+	ConfirmHelp                  string
 	PaymentTitle         string
 	PaymentOrder         string
 	PaymentStatus        string

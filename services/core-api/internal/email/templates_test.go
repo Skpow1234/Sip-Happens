@@ -11,6 +11,10 @@ func TestRenderPaymentLink(t *testing.T) {
 		OrderID:      "ord-1",
 		PaymentURL:   "https://checkout.stripe.com/pay/cs_test",
 		TotalDisplay: "COP 25000",
+		ComplianceData: ComplianceData{
+			PrivacyPolicyURL:  "https://privacy.example",
+			ConsumerRightsURL: "https://sic.example",
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -20,6 +24,9 @@ func TestRenderPaymentLink(t *testing.T) {
 	}
 	if !strings.Contains(html, "ord-1") {
 		t.Fatalf("unexpected html: %q", html)
+	}
+	if !strings.Contains(text, "sic.example") || !strings.Contains(text, "menores") {
+		t.Fatalf("expected compliance footer in text: %q", text)
 	}
 }
 

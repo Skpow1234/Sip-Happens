@@ -9,7 +9,7 @@ import (
 )
 
 func TestModel_WelcomeEnter_GoesMenu(t *testing.T) {
-	m := NewRootModel(nil, "", "")
+	m := NewRootModel(nil, "", "", "")
 	m.screen = screenWelcome
 	m.state.birthDateInput = "1995-01-01"
 
@@ -24,7 +24,7 @@ func TestModel_WelcomeEnter_GoesMenu(t *testing.T) {
 }
 
 func TestModel_MenuKey1_OpensCatalog(t *testing.T) {
-	m := NewRootModel(nil, "", "")
+	m := NewRootModel(nil, "", "", "")
 	m.screen = screenMenu
 	m.busy = false
 
@@ -42,7 +42,7 @@ func TestModel_MenuKey1_OpensCatalog(t *testing.T) {
 }
 
 func TestModel_CatalogEsc_ReturnsMenu(t *testing.T) {
-	m := NewRootModel(nil, "", "")
+	m := NewRootModel(nil, "", "", "")
 	m.screen = screenCatalog
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -53,7 +53,7 @@ func TestModel_CatalogEsc_ReturnsMenu(t *testing.T) {
 }
 
 func TestModel_MenuHelpToggle(t *testing.T) {
-	m := NewRootModel(nil, "", "")
+	m := NewRootModel(nil, "", "", "")
 	m.screen = screenMenu
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -68,7 +68,7 @@ func TestModel_MenuHelpToggle(t *testing.T) {
 }
 
 func TestModel_CatalogCursorMoves(t *testing.T) {
-	m := NewRootModel(nil, "", "")
+	m := NewRootModel(nil, "", "", "")
 	m.screen = screenCatalog
 	m.state.catalog = []api.CatalogItem{
 		makeCatalogItem("A"),
@@ -91,7 +91,7 @@ func makeCatalogItem(sku string) api.CatalogItem {
 }
 
 func TestModel_CatalogAddOutOfStock_ShowsError(t *testing.T) {
-	m := NewRootModel(nil, "", "")
+	m := NewRootModel(nil, "", "", "")
 	m.screen = screenCatalog
 	m.state.catalog = []api.CatalogItem{makeCatalogItem("X")}
 	m.state.catalog[0].AvailableQty = 0

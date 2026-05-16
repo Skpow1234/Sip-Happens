@@ -8,6 +8,13 @@ import (
 	"sip-happens/services/core-api/internal/admin"
 )
 
+func formatTimePtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
 func (s *Server) handleAdminOrdersExport(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdminRole(w, r, AdminRoleFinance) {
 		return
@@ -51,6 +58,15 @@ func (s *Server) handleAdminOrdersExport(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
+
+	s.recordAdminPIIAccess(r, "admin_orders_export", "export", "orders", map[string]string{
+		"status":       string(status),
+		"row_count":    fmt.Sprintf("%d", len(orders)),
+		"limit":        fmt.Sprintf("%d", limit),
+		"offset":       fmt.Sprintf("%d", offset),
+		"created_from": formatTimePtr(createdFrom),
+		"created_to":   formatTimePtr(createdTo),
+	})
 
 	filename := fmt.Sprintf("sip-happens-orders-%s.csv", time.Now().UTC().Format("20060102-150405"))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

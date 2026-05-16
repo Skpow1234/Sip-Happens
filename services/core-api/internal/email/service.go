@@ -17,6 +17,7 @@ type Service struct {
 	DB     *sql.DB
 	From   string
 	Flags  featureflags.Flags
+	Compliance ComplianceData
 }
 
 func NewService(mailer Mailer, db *sql.DB, flags featureflags.Flags) (*Service, error) {
@@ -28,11 +29,20 @@ func NewService(mailer Mailer, db *sql.DB, flags featureflags.Flags) (*Service, 
 		return nil, err
 	}
 	return &Service{
-		Mailer: mailer,
-		DB:     db,
-		From:   cfg.From,
-		Flags:  flags,
+		Mailer:     mailer,
+		DB:         db,
+		From:       cfg.From,
+		Flags:      flags,
+		Compliance: defaultCompliance(),
 	}, nil
+}
+
+// SetCompliance configures legal footer URLs for outbound templates.
+func (s *Service) SetCompliance(c ComplianceData) {
+	if s == nil {
+		return
+	}
+	s.Compliance = c.withDefaults()
 }
 
 func (s *Service) SendPaymentLink(ctx context.Context, order *domain.Order, customerEmail, customerName, paymentURL string) error {
@@ -59,12 +69,13 @@ func (s *Service) SendPaymentLink(ctx context.Context, order *domain.Order, cust
 		orderID = string(order.ID)
 	}
 	text, html, err := renderPaymentLink(PaymentLinkData{
-		CustomerName: customerName,
-		OrderID:      orderID,
-		PaymentURL:   paymentURL,
-		Currency:     currency,
-		TotalDisplay: formatTotal(currency, total),
-		ExpiresAt:    expires,
+		CustomerName:   customerName,
+		OrderID:        orderID,
+		PaymentURL:     paymentURL,
+		Currency:       currency,
+		TotalDisplay:   formatTotal(currency, total),
+		ExpiresAt:      expires,
+		ComplianceData: s.Compliance,
 	})
 	if err != nil {
 		return err
@@ -136,12 +147,13 @@ select name, qty, line_total_minor_units from order_items where order_id=$1 orde
 	}
 
 	text, html, err := renderReceipt(ReceiptData{
-		CustomerName: fullName.String,
-		OrderID:      string(orderID),
-		Currency:     currency,
-		TotalDisplay: formatTotal(currency, total),
-		PaidAt:       updatedAt.UTC().Format(time.RFC3339),
-		ItemsSummary: itemsSummary,
+		CustomerName:   fullName.String,
+		OrderID:        string(orderID),
+		Currency:       currency,
+		TotalDisplay:   formatTotal(currency, total),
+		PaidAt:         updatedAt.UTC().Format(time.RFC3339),
+		ItemsSummary:   itemsSummary,
+		ComplianceData: s.Compliance,
 	})
 	if err != nil {
 		return err

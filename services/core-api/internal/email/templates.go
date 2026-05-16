@@ -19,6 +19,7 @@ type PaymentLinkData struct {
 	Currency     string
 	TotalDisplay string
 	ExpiresAt    string
+	ComplianceData
 }
 
 type ReceiptData struct {
@@ -28,9 +29,11 @@ type ReceiptData struct {
 	TotalDisplay string
 	PaidAt       string
 	ItemsSummary string
+	ComplianceData
 }
 
 func renderPaymentLink(data PaymentLinkData) (text, html string, err error) {
+	data.ComplianceData = data.ComplianceData.withDefaults()
 	text, err = renderTemplate("templates/payment_link.txt", data)
 	if err != nil {
 		return "", "", err
@@ -40,6 +43,7 @@ func renderPaymentLink(data PaymentLinkData) (text, html string, err error) {
 }
 
 func renderReceipt(data ReceiptData) (text, html string, err error) {
+	data.ComplianceData = data.ComplianceData.withDefaults()
 	text, err = renderTemplate("templates/receipt.txt", data)
 	if err != nil {
 		return "", "", err

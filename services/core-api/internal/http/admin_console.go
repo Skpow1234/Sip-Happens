@@ -1,11 +1,13 @@
 package http
 
 import (
+	"fmt"
+	"html"
 	"net/http"
 )
 
 // Minimal read-only ops console (products, inventory, orders) using admin JSON APIs.
-const adminConsoleHTML = `<!DOCTYPE html>
+const adminConsoleHTMLFmt = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -185,9 +187,20 @@ const adminConsoleHTML = `<!DOCTYPE html>
     $('resSku').onchange = loadReservations;
     if (tokenEl.value) reloadAll();
   </script>
+  <footer style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--muted);">
+    Legal: <a href="%s">Privacy</a> · <a href="%s">Data processing (Ley 1581)</a> · <a href="%s">Consumer rights (SIC)</a>
+  </footer>
 </body>
 </html>
 `
+
+func renderAdminConsoleHTML(privacyURL, consumerRightsURL, dataProcessingURL string) string {
+	return fmt.Sprintf(adminConsoleHTMLFmt,
+		html.EscapeString(privacyURL),
+		html.EscapeString(dataProcessingURL),
+		html.EscapeString(consumerRightsURL),
+	)
+}
 
 func (s *Server) handleAdminConsole(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -199,5 +212,5 @@ func (s *Server) handleAdminConsole(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(adminConsoleHTML))
+	_, _ = w.Write([]byte(renderAdminConsoleHTML(s.PrivacyPolicyURL, s.ConsumerRightsURL, s.DataProcessingPolicyURL)))
 }

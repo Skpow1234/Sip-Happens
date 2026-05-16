@@ -238,8 +238,9 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SSH_REQUIRE_AUTHORIZED_KEYS`**: set to `1` in production to require `authorized_keys`
 - **`SSH_AUTHORIZED_KEYS_PATH`**: path inside ssh-gateway container (default `/data/authorized_keys`)
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches `infra/demo/sip-happens-demo.pub` and `seed demo`)
-- **`PRIVACY_POLICY_URL`**: shown on ssh-gateway TUI welcome and checkout consent (default `https://sip-happens.local/privacy`)
-- **`CONSUMER_RIGHTS_URL`**: SIC consumer-protection link on TUI welcome, menu, checkout, confirm, and order complete (default `https://www.sic.gov.co/proteccion-del-consumidor`)
+- **`PRIVACY_POLICY_URL`**: shown on ssh-gateway TUI, emails, and admin console (default `https://sip-happens.local/privacy`)
+- **`CONSUMER_RIGHTS_URL`**: SIC consumer-protection link on TUI, emails, and admin console (default `https://www.sic.gov.co/proteccion-del-consumidor`)
+- **`DATA_PROCESSING_POLICY_URL`**: Ley 1581 data-processing notice linked at TUI checkout confirm and in email footers (default `https://sip-happens.local/legal/data-processing`; source copy in [`docs/legal/data-processing.md`](docs/legal/data-processing.md))
 - **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
 - **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
 - **`FEATURE_FLAGS`**: comma-separated toggles — see [Feature flags](#feature-flags) below
@@ -368,6 +369,12 @@ All API errors return JSON in a stable envelope:
   }
 }
 ```
+
+## Legal and data retention
+
+- Policy draft (Ley 1581): [`docs/legal/data-processing.md`](docs/legal/data-processing.md) — publish at `DATA_PROCESSING_POLICY_URL` in production.
+- Default retention guidance: orders and compliance evidence **7 years**; customer profile **2 years** after last order; request logs **90 days** (adjust with counsel).
+- Admin access to customer PII (`GET /admin/orders/{id}`, `GET /admin/orders/export`) writes `customer.pii_viewed` audit events.
 
 ## Tests
 

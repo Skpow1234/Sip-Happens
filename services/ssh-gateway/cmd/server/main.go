@@ -73,7 +73,7 @@ func main() {
 				if client == nil {
 					client = api.NewClient(cfg.CoreAPIURL)
 				}
-				model := tui.NewRootModel(client, cfg.PrivacyPolicyURL, cfg.ConsumerRightsURL)
+				model := tui.NewRootModel(client, cfg.PrivacyPolicyURL, cfg.ConsumerRightsURL, cfg.DataProcessingPolicyURL)
 				opts := []tea.ProgramOption{tea.WithAltScreen()}
 				return model, opts
 			}),
