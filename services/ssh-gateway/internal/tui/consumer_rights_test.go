@@ -7,7 +7,7 @@ import (
 
 func TestConsumerRightsURL_WelcomeCheckoutConfirm(t *testing.T) {
 	url := "https://sic.example/consumer"
-	m := NewRootModel(nil, "", url, "")
+	m := NewRootModel(nil, "", url, "", "", "")
 	m.state.birthDateInput = "1990-01-01"
 
 	m.screen = screenWelcome

@@ -6,7 +6,7 @@ import (
 )
 
 func TestSpanishCO_WelcomeUsesSpanishCopy(t *testing.T) {
-	m := NewRootModel(nil, "", "", "")
+	m := NewRootModel(nil, "", "", "", "", "")
 	m.screen = screenWelcome
 	view := m.View()
 	if !strings.Contains(view, "fecha de nacimiento") {
@@ -18,7 +18,7 @@ func TestSpanishCO_WelcomeUsesSpanishCopy(t *testing.T) {
 }
 
 func TestSpanishCO_MenuUsesSpanishCopy(t *testing.T) {
-	m := NewRootModel(nil, "", "", "")
+	m := NewRootModel(nil, "", "", "", "", "")
 	m.screen = screenMenu
 	view := m.View()
 	if !strings.Contains(view, "Menú principal") || !strings.Contains(view, "Ver catálogo") {

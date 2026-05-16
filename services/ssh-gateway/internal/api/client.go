@@ -71,8 +71,10 @@ type CatalogItem struct {
 		Style     string  `json:"Style"`
 		ABV       float64 `json:"ABV"`
 		VolumeML  int     `json:"VolumeML"`
-		InvimaReg string  `json:"InvimaReg"`
-		ImageURL  string  `json:"ImageURL"`
+		InvimaReg   string  `json:"InvimaReg"`
+		Description string  `json:"Description"`
+		IBU         *int    `json:"IBU"`
+		ImageURL    string  `json:"ImageURL"`
 	} `json:"Product"`
 	Price struct {
 		Currency         string `json:"Currency"`
@@ -83,15 +85,17 @@ type CatalogItem struct {
 
 type CatalogDetail struct {
 	Product struct {
-		ID        string  `json:"ID"`
-		SKU       string  `json:"SKU"`
-		Name      string  `json:"Name"`
-		Brewery   string  `json:"Brewery"`
-		Style     string  `json:"Style"`
-		ABV       float64 `json:"ABV"`
-		VolumeML  int     `json:"VolumeML"`
-		InvimaReg string  `json:"InvimaReg"`
-		ImageURL  string  `json:"ImageURL"`
+		ID          string  `json:"ID"`
+		SKU         string  `json:"SKU"`
+		Name        string  `json:"Name"`
+		Brewery     string  `json:"Brewery"`
+		Style       string  `json:"Style"`
+		ABV         float64 `json:"ABV"`
+		VolumeML    int     `json:"VolumeML"`
+		InvimaReg   string  `json:"InvimaReg"`
+		Description string  `json:"Description"`
+		IBU         *int    `json:"IBU"`
+		ImageURL    string  `json:"ImageURL"`
 	} `json:"product"`
 	Price struct {
 		Currency         string `json:"Currency"`

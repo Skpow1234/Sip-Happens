@@ -341,6 +341,12 @@ type SSHGateway struct {
 	ConsumerRightsURL string
 	// DataProcessingPolicyURL is linked from TUI checkout consent (Ley 1581).
 	DataProcessingPolicyURL string
+	// SupportContact is shown on the post-payment confirmation screen.
+	SupportContact string
+	// DispatchETAPolicy describes expected dispatch timing (confirmation screen).
+	DispatchETAPolicy string
+	// MetricsAddr is an optional listen address for Prometheus (e.g. :9101).
+	MetricsAddr string
 	// DisablePasswordAuth rejects SSH password logins (recommended in production).
 	DisablePasswordAuth bool
 	// DisablePortForwarding denies SSH local/reverse port forwarding.
@@ -364,6 +370,9 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.PrivacyPolicyURL = getenvDefault("PRIVACY_POLICY_URL", "https://sip-happens.local/privacy")
 	c.ConsumerRightsURL = getenvDefault("CONSUMER_RIGHTS_URL", "https://www.sic.gov.co/proteccion-del-consumidor")
 	c.DataProcessingPolicyURL = getenvDefault("DATA_PROCESSING_POLICY_URL", "https://sip-happens.local/legal/data-processing")
+	c.SupportContact = getenvDefault("SUPPORT_CONTACT", "soporte@sip-happens.local")
+	c.DispatchETAPolicy = getenvDefault("DISPATCH_ETA_POLICY", "Despacho en 1–3 días hábiles en Bogotá, Medellín y Cali.")
+	c.MetricsAddr = strings.TrimSpace(os.Getenv("SSH_METRICS_ADDR"))
 	c.DisablePasswordAuth = getenvBoolDefault("SSH_DISABLE_PASSWORD_AUTH", false)
 	c.DisablePortForwarding = getenvBoolDefault("SSH_DISABLE_PORT_FORWARDING", true)
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")

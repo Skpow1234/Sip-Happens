@@ -8,7 +8,7 @@ import (
 )
 
 func TestViewCatalog_ShowsInvimaOnEachLine(t *testing.T) {
-	m := NewRootModel(nil, "", "", "")
+	m := NewRootModel(nil, "", "", "", "", "")
 	m.screen = screenCatalog
 	it := makeCatalogItem("DEMO-SKU")
 	it.Product.InvimaReg = "INVIMA-DEMO-001"

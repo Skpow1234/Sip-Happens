@@ -8,6 +8,7 @@ const (
 	RedisRateLimit    = "redis_rate_limit"
 	EmailPaymentLink  = "email_payment_link"
 	EmailReceipt      = "email_receipt"
+	DianInvoice       = "dian_invoice"
 )
 
 // Known describes a single flag for operators and docs.
@@ -43,6 +44,11 @@ func All() []Known {
 			Name:        EmailReceipt,
 			Description: "Send receipt email when order.paid is consumed (nats-consume worker).",
 			Requires:    "EMAIL_PROVIDER; OUTBOX_PUBLISHER=nats and nats-consume running",
+		},
+		{
+			Name:        DianInvoice,
+			Description: "Issue DIAN electronic invoice row on order.paid (stub provider in dev).",
+			Requires:    "OUTBOX_PUBLISHER=nats and nats-consume running; INVOICE_PROVIDER",
 		},
 	}
 }

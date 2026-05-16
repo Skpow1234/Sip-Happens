@@ -26,6 +26,8 @@ type Messages struct {
 	ProductABV           string
 	ProductVolume        string
 	ProductInvima        string
+	ProductDescription   string
+	ProductIBU           string
 	ProductPrice         string
 	ProductAvailable     string
 	ProductHelp          string
@@ -57,12 +59,13 @@ type Messages struct {
 	PaymentTitle         string
 	PaymentOrder         string
 	PaymentStatus        string
-	PaymentPayWithin     func(cd string) string
-	PaymentQRHint        string
+	PaymentPayWithin        func(cd string) string
+	PaymentReservationTTL   func(until string) string
+	PaymentQRHint           string
 	PaymentCopyTip       string
 	PaymentHelp          string
 	OrderCompleteTitle   string
-	OrderCompleteBody              func(order, total, status string) string
+	OrderCompleteBody              func(order, total, status, eta, support string) string
 	OrderCompleteConsumerRightsLine func(url string) string
 	HelpTitle            string
 	HelpBack             string

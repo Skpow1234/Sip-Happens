@@ -18,9 +18,11 @@ import (
 type Model struct {
 	api *api.Client
 
-	privacyPolicyURL          string
-	consumerRightsURL         string
-	dataProcessingPolicyURL   string
+	privacyPolicyURL        string
+	consumerRightsURL       string
+	dataProcessingPolicyURL string
+	supportContact          string
+	dispatchETAPolicy       string
 
 	screen screen
 	state  AppState
@@ -31,7 +33,7 @@ type Model struct {
 	height int
 }
 
-func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataProcessingPolicyURL string) Model {
+func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataProcessingPolicyURL, supportContact, dispatchETAPolicy string) Model {
 	if strings.TrimSpace(privacyPolicyURL) == "" {
 		privacyPolicyURL = DefaultPrivacyPolicyURL
 	}
@@ -46,6 +48,8 @@ func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataP
 		privacyPolicyURL:        privacyPolicyURL,
 		consumerRightsURL:       consumerRightsURL,
 		dataProcessingPolicyURL: dataProcessingPolicyURL,
+		supportContact:          supportContact,
+		dispatchETAPolicy:       dispatchETAPolicy,
 		screen:                  screenWelcome,
 	}
 }
@@ -708,16 +712,26 @@ func (m Model) viewProduct() string {
 	p := d.Product
 	title := lipgloss.NewStyle().Bold(true).Render(p.Name)
 	img := formatProductImageBlock(p.ImageURL)
+	desc := strings.TrimSpace(p.Description)
+	descBlock := ""
+	if desc != "" {
+		descBlock = L.ProductDescription + ": " + desc + "\n"
+	}
+	ibuBlock := ""
+	if p.IBU != nil {
+		ibuBlock = fmt.Sprintf("%s: %d\n", L.ProductIBU, *p.IBU)
+	}
 	body := fmt.Sprintf(`%s
 %s: %s  |  %s  |  %s  |  %s
 %s: %s
 %s: %s
 %s: %d
-%s
+%s%s%s
 %s
 `,
 		title, L.ProductSKU, p.SKU, p.Brewery, fmt.Sprintf(L.ProductABV, p.ABV), fmt.Sprintf(L.ProductVolume, p.VolumeML),
-		L.ProductInvima, p.InvimaReg, L.ProductPrice, formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), L.ProductAvailable, d.AvailableQty, img, L.ProductHelp)
+		L.ProductInvima, p.InvimaReg, L.ProductPrice, formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), L.ProductAvailable, d.AvailableQty,
+		descBlock, ibuBlock, img, L.ProductHelp)
 	return body
 }
 
@@ -823,18 +837,19 @@ func (m Model) viewPayment() string {
 		now = time.Now()
 	}
 	expiry := ""
+	reservation := ""
 	if m.state.orderExpiresAt != nil {
 		cd := formatExpiryCountdown(m.state.orderExpiresAt, now)
 		if cd != "" {
 			expiry = L.PaymentPayWithin(cd)
 		}
+		reservation = L.PaymentReservationTTL(formatExpiryAt(m.state.orderExpiresAt, now))
 	}
 	urlBlock := formatSelectableURL(m.state.stripeURL, m.width)
 	copyHint := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render(L.PaymentCopyTip)
 	body := fmt.Sprintf(`%s %s
 %s %s
 %s%s
-
 %s
 
 %s
@@ -842,7 +857,9 @@ func (m Model) viewPayment() string {
 %s
 
 %s
-`, L.PaymentOrder, m.state.orderLabel(), L.PaymentStatus, m.state.orderStatus, expiry, L.PaymentQRHint, qr, copyHint, urlBlock, L.PaymentHelp)
+
+%s
+`, L.PaymentOrder, m.state.orderLabel(), L.PaymentStatus, m.state.orderStatus, expiry, reservation, L.PaymentQRHint, qr, copyHint, urlBlock, L.PaymentHelp)
 	return title + "\n\n" + body
 }
 
@@ -852,7 +869,7 @@ func (m Model) viewOrderComplete() string {
 	if cur == "" {
 		cur = "COP"
 	}
-	body := L.OrderCompleteBody(m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus) +
+	body := L.OrderCompleteBody(m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus, m.dispatchETAPolicy, m.supportContact) +
 		"\n\n" + L.OrderCompleteConsumerRightsLine(m.consumerRightsURL)
 	return title + "\n\n" + body
 }

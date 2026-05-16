@@ -22,6 +22,7 @@ import (
 	"sip-happens/services/core-api/internal/email"
 	httpserver "sip-happens/services/core-api/internal/http"
 	"sip-happens/services/core-api/internal/inventory"
+	"sip-happens/services/core-api/internal/invoicing"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/observability"
 	"sip-happens/services/core-api/internal/orders"
@@ -86,6 +87,12 @@ func runServer() error {
 	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore(), auditStore)
 	customersSvc := customers.NewService(sqlDB, customers.NewSQLRepository())
 	adminSvc := &admin.SQLService{DB: sqlDB}
+	invoiceSvc := &invoicing.Service{
+		DB:       sqlDB,
+		Provider: invoicing.NewProviderFromEnv(),
+		Orders:   ordersSvc,
+		Audit:    auditStore,
+	}
 
 	stripeSigningSecret := cfg.StripeWebhookSecret
 	var stripeWebhook *stripepayments.WebhookHandler
@@ -139,6 +146,7 @@ func runServer() error {
 		Customers:         customersSvc,
 		Catalog:           catalogRepo,
 		Admin:             adminSvc,
+		Invoices:          invoiceSvc,
 		AdminToken:        cfg.AdminToken,
 		AdminTokens:       cfg.AdminTokens,
 		AdminTokenRoles:   httpserver.AdminTokenRolesFromConfig(cfg),

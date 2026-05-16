@@ -68,23 +68,27 @@ type UpsertProductInput struct {
 	Name      string
 	Brewery   string
 	Style     string
-	ABV       float64
-	VolumeML  int
-	InvimaReg string
-	ImageURL  string
-	IsActive  bool
+	ABV         float64
+	VolumeML    int
+	InvimaReg   string
+	Description string
+	IBU         *int
+	ImageURL    string
+	IsActive    bool
 }
 
 type PatchProductInput struct {
 	// Optional fields; when nil/zero-value + not present, no change.
-	Name      *string  `json:"name"`
-	Brewery   *string  `json:"brewery"`
-	Style     *string  `json:"style"`
-	ABV       *float64 `json:"abv"`
-	VolumeML  *int     `json:"volume_ml"`
-	InvimaReg *string  `json:"invima_reg"`
-	ImageURL  *string  `json:"image_url"`
-	IsActive  *bool    `json:"is_active"`
+	Name        *string  `json:"name"`
+	Brewery     *string  `json:"brewery"`
+	Style       *string  `json:"style"`
+	ABV         *float64 `json:"abv"`
+	VolumeML    *int     `json:"volume_ml"`
+	InvimaReg   *string  `json:"invima_reg"`
+	Description *string  `json:"description"`
+	IBU         *int     `json:"ibu"`
+	ImageURL    *string  `json:"image_url"`
+	IsActive    *bool    `json:"is_active"`
 }
 
 type SetPriceInput struct {
@@ -144,7 +148,7 @@ func (s *SQLService) ListProducts(ctx context.Context, in ListProductsInput) ([]
 	}
 
 	rows, err := s.DB.QueryContext(ctx, `
-select p.id, p.sku, p.name, p.brewery, p.style, p.abv, p.volume_ml, p.invima_reg, p.image_url, p.is_active, p.created_at, p.updated_at,
+select p.id, p.sku, p.name, p.brewery, p.style, p.abv, p.volume_ml, p.invima_reg, p.image_url, p.description, p.ibu, p.is_active, p.created_at, p.updated_at,
        pr.product_id, pr.currency, pr.amount_minor_units, pr.valid_from, pr.valid_through
 from products p
 where ($3::text is null or p.sku ilike $3 or p.name ilike $3 or p.brewery ilike $3)
@@ -172,6 +176,7 @@ offset $5
 	for rows.Next() {
 		var p domain.Product
 		var imageURL sql.NullString
+		var ibu sql.NullInt32
 		var pr domain.Price
 		var prProductID sql.NullString
 		var prCurrency sql.NullString
@@ -180,7 +185,7 @@ offset $5
 		var prValidThrough sql.NullTime
 
 		if err := rows.Scan(
-			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &imageURL, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
+			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &imageURL, &p.Description, &ibu, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 			&prProductID, &prCurrency, &prAmount, &prValidFrom, &prValidThrough,
 		); err != nil {
 			return nil, err
@@ -188,6 +193,10 @@ offset $5
 
 		if imageURL.Valid {
 			p.ImageURL = imageURL.String
+		}
+		if ibu.Valid {
+			v := int(ibu.Int32)
+			p.IBU = &v
 		}
 		var pricePtr *domain.Price
 		if prProductID.Valid {
@@ -235,9 +244,9 @@ func (s *SQLService) UpsertProduct(ctx context.Context, actor string, in UpsertP
 		}
 		id = u
 		_, err = s.DB.ExecContext(ctx, `
-insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, is_active, created_at, updated_at)
-values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-`, id, in.SKU, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, nullString(in.ImageURL), in.IsActive, now, now)
+insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, description, ibu, is_active, created_at, updated_at)
+values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+`, id, in.SKU, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, nullString(in.ImageURL), in.Description, nullInt(in.IBU), in.IsActive, now, now)
 		if err != nil {
 			return "", err
 		}
@@ -247,9 +256,9 @@ values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 
 	_, err = s.DB.ExecContext(ctx, `
 update products
-set name=$1, brewery=$2, style=$3, abv=$4, volume_ml=$5, invima_reg=$6, image_url=$7, is_active=$8, updated_at=$9
-where id=$10
-`, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, nullString(in.ImageURL), in.IsActive, now, id)
+set name=$1, brewery=$2, style=$3, abv=$4, volume_ml=$5, invima_reg=$6, image_url=$7, description=$8, ibu=$9, is_active=$10, updated_at=$11
+where id=$12
+`, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, nullString(in.ImageURL), in.Description, nullInt(in.IBU), in.IsActive, now, id)
 	if err != nil {
 		return "", err
 	}
@@ -273,9 +282,9 @@ func (s *SQLService) PutProductByID(ctx context.Context, actor string, productID
 	now := time.Now()
 	res, err := s.DB.ExecContext(ctx, `
 update products
-set sku=$1, name=$2, brewery=$3, style=$4, abv=$5, volume_ml=$6, invima_reg=$7, image_url=$8, is_active=$9, updated_at=$10
-where id=$11
-`, in.SKU, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, nullString(in.ImageURL), in.IsActive, now, string(productID))
+set sku=$1, name=$2, brewery=$3, style=$4, abv=$5, volume_ml=$6, invima_reg=$7, image_url=$8, description=$9, ibu=$10, is_active=$11, updated_at=$12
+where id=$13
+`, in.SKU, in.Name, in.Brewery, in.Style, in.ABV, in.VolumeML, in.InvimaReg, nullString(in.ImageURL), in.Description, nullInt(in.IBU), in.IsActive, now, string(productID))
 	if err != nil {
 		return err
 	}
@@ -296,15 +305,20 @@ func (s *SQLService) PatchProductByID(ctx context.Context, actor string, product
 	}
 	// Read existing.
 	row := s.DB.QueryRowContext(ctx, `
-select sku, name, brewery, style, abv, volume_ml, invima_reg, coalesce(image_url,''), is_active
+select sku, name, brewery, style, abv, volume_ml, invima_reg, coalesce(image_url,''), description, ibu, is_active
 from products where id=$1
 `, string(productID))
 	var cur UpsertProductInput
-	if err := row.Scan(&cur.SKU, &cur.Name, &cur.Brewery, &cur.Style, &cur.ABV, &cur.VolumeML, &cur.InvimaReg, &cur.ImageURL, &cur.IsActive); err != nil {
+	var ibu sql.NullInt32
+	if err := row.Scan(&cur.SKU, &cur.Name, &cur.Brewery, &cur.Style, &cur.ABV, &cur.VolumeML, &cur.InvimaReg, &cur.ImageURL, &cur.Description, &ibu, &cur.IsActive); err != nil {
 		if err == sql.ErrNoRows {
 			return domain.ErrNotFound
 		}
 		return err
+	}
+	if ibu.Valid {
+		v := int(ibu.Int32)
+		cur.IBU = &v
 	}
 
 	if in.Name != nil {
@@ -331,6 +345,12 @@ from products where id=$1
 	if in.ImageURL != nil {
 		cur.ImageURL = strings.TrimSpace(*in.ImageURL)
 	}
+	if in.Description != nil {
+		cur.Description = strings.TrimSpace(*in.Description)
+	}
+	if in.IBU != nil {
+		cur.IBU = in.IBU
+	}
 
 	// Validate required invariants after patch.
 	if cur.SKU == "" || cur.Name == "" || cur.Brewery == "" || cur.Style == "" || cur.VolumeML <= 0 {
@@ -342,10 +362,10 @@ from products where id=$1
 
 	now := time.Now()
 	_, err := s.DB.ExecContext(ctx, `
-update products
-set name=$1, brewery=$2, style=$3, abv=$4, volume_ml=$5, invima_reg=$6, image_url=$7, is_active=$8, updated_at=$9
-where id=$10
-`, cur.Name, cur.Brewery, cur.Style, cur.ABV, cur.VolumeML, cur.InvimaReg, nullString(cur.ImageURL), cur.IsActive, now, string(productID))
+	update products
+set name=$1, brewery=$2, style=$3, abv=$4, volume_ml=$5, invima_reg=$6, image_url=$7, description=$8, ibu=$9, is_active=$10, updated_at=$11
+where id=$12
+`, cur.Name, cur.Brewery, cur.Style, cur.ABV, cur.VolumeML, cur.InvimaReg, nullString(cur.ImageURL), cur.Description, nullInt(cur.IBU), cur.IsActive, now, string(productID))
 	if err != nil {
 		return err
 	}
@@ -393,6 +413,13 @@ func nullString(s string) any {
 		return nil
 	}
 	return s
+}
+
+func nullInt(v *int) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func (s *SQLService) DeactivateProduct(ctx context.Context, actor string, productID domain.ProductID, reason string) error {

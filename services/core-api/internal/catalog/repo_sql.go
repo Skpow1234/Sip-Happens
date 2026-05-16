@@ -15,7 +15,7 @@ func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
 func (r *SQLRepository) GetProduct(ctx context.Context, q Querier, id domain.ProductID) (*domain.Product, error) {
 	row := q.QueryRowContext(ctx, `
-select id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, is_active, created_at, updated_at
+select id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, description, ibu, is_active, created_at, updated_at
 from products
 where id = $1
 `, string(id))
@@ -32,7 +32,7 @@ where id = $1
 
 func (r *SQLRepository) GetProductBySKU(ctx context.Context, q Querier, sku string) (*domain.Product, error) {
 	row := q.QueryRowContext(ctx, `
-select id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, is_active, created_at, updated_at
+select id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, description, ibu, is_active, created_at, updated_at
 from products
 where sku = $1
 `, sku)
@@ -133,11 +133,12 @@ limit $%d offset $%d
 	for rows.Next() {
 		var p domain.Product
 		var imageURL sql.NullString
+		var ibu sql.NullInt32
 		var pr domain.Price
 		var validThrough sql.NullTime
 		var available int
 		if err := rows.Scan(
-			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &imageURL, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
+			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &imageURL, &p.Description, &ibu, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 			&pr.ProductID, &pr.Currency, &pr.AmountMinorUnits, &pr.ValidFrom, &validThrough,
 			&available,
 		); err != nil {
@@ -145,6 +146,10 @@ limit $%d offset $%d
 		}
 		if imageURL.Valid {
 			p.ImageURL = imageURL.String
+		}
+		if ibu.Valid {
+			v := int(ibu.Int32)
+			p.IBU = &v
 		}
 		if validThrough.Valid {
 			t := validThrough.Time

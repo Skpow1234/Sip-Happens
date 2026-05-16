@@ -31,14 +31,14 @@ func TestModel_WindowSize_AllScreens_ViewDoesNotPanic(t *testing.T) {
 }
 
 func TestModel_Init_ReturnsCommand(t *testing.T) {
-	m := NewRootModel(nil, "", "", "")
+	m := NewRootModel(nil, "", "", "", "", "")
 	if cmd := m.Init(); cmd == nil {
 		t.Fatal("expected init command")
 	}
 }
 
 func seedModelForScreen(sc screen) Model {
-	m := NewRootModel(nil, "", "", "")
+	m := NewRootModel(nil, "", "", "", "", "")
 	m.screen = sc
 	m.width, m.height = 80, 24
 	m.state.birthDateInput = "1995-01-01"

@@ -42,6 +42,8 @@ func SpanishCO() Messages {
 		ProductABV:          "%.1f%% ABV",
 		ProductVolume:       "%d ml",
 		ProductInvima:       "INVIMA",
+		ProductDescription:  "Descripción",
+		ProductIBU:          "IBU",
 		ProductPrice:        "Precio",
 		ProductAvailable:    "Disponible",
 		ProductHelp:         "a — agregar al carrito   b — carrito   esc — volver",
@@ -100,22 +102,28 @@ func SpanishCO() Messages {
 		PaymentPayWithin: func(cd string) string {
 			return fmt.Sprintf("Paga en: %s\n\n", cd)
 		},
+		PaymentReservationTTL: func(until string) string {
+			return fmt.Sprintf("Reserva de inventario hasta: %s (si no pagas a tiempo, el pedido se cancela y el stock se libera).\n\n", until)
+		},
 		PaymentQRHint: "Escanea el código QR o abre esta URL en tu navegador (no ingreses tarjetas por SSH):",
 		PaymentCopyTip: "Consejo: selecciona las líneas de la URL (ratón o copiar del terminal) y pégala en el navegador.",
 		PaymentHelp:    "o — actualizar estado   esc — menú",
 		OrderCompleteTitle: "Pago recibido",
-		OrderCompleteBody: func(order, total, status string) string {
+		OrderCompleteBody: func(order, total, status, eta, support string) string {
 			return fmt.Sprintf(`¡Gracias! Tu pedido está confirmado.
 
 Pedido: %s
 Total: %s
 Estado: %s
 
-Prepararemos tu envío y actualizaremos el estado cuando salga.
+Despacho: %s
+
+Soporte: %s
+
 Revisa el estado desde el menú principal (3 o 4).
 
 enter / esc — volver al menú
-`, order, total, status)
+`, order, total, status, eta, support)
 		},
 		OrderCompleteConsumerRightsLine: func(url string) string {
 			return fmt.Sprintf("Derechos del consumidor (SIC): %s", url)

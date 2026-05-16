@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"sip-happens/pkg/config"
 	"sip-happens/pkg/healthcheck"
 	"sip-happens/services/ssh-gateway/internal/api"
+	"sip-happens/services/ssh-gateway/internal/observability"
 	"sip-happens/services/ssh-gateway/internal/security"
 	"sip-happens/services/ssh-gateway/internal/tui"
 )
@@ -38,6 +40,17 @@ func main() {
 	// Ensure a persistent host key exists on disk.
 	if _, err := keygen.New(cfg.HostKeyPath, keygen.WithWrite()); err != nil {
 		log.Fatal(err)
+	}
+
+	if cfg.MetricsAddr != "" {
+		go func() {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", observability.MetricsHandler())
+			log.Printf("ssh-gateway metrics on %s/metrics", cfg.MetricsAddr)
+			if err := http.ListenAndServe(cfg.MetricsAddr, mux); err != nil {
+				log.Printf("metrics server: %v", err)
+			}
+		}()
 	}
 
 	opts := []ssh.Option{
@@ -73,7 +86,7 @@ func main() {
 				if client == nil {
 					client = api.NewClient(cfg.CoreAPIURL)
 				}
-				model := tui.NewRootModel(client, cfg.PrivacyPolicyURL, cfg.ConsumerRightsURL, cfg.DataProcessingPolicyURL)
+				model := tui.NewRootModel(client, cfg.PrivacyPolicyURL, cfg.ConsumerRightsURL, cfg.DataProcessingPolicyURL, cfg.SupportContact, cfg.DispatchETAPolicy)
 				opts := []tea.ProgramOption{tea.WithAltScreen()}
 				return model, opts
 			}),

@@ -22,3 +22,13 @@ func formatExpiryCountdown(expiresAt *time.Time, now time.Time) string {
 	}
 	return fmt.Sprintf("%02d:%02d", m, s)
 }
+
+func formatExpiryAt(expiresAt *time.Time, now time.Time) string {
+	if expiresAt == nil {
+		return "—"
+	}
+	if expiresAt.Before(now) {
+		return L.Expired
+	}
+	return expiresAt.In(now.Location()).Format("2006-01-02 15:04")
+}

@@ -11,7 +11,9 @@ import (
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/events"
+	"sip-happens/pkg/featureflags"
 	"sip-happens/services/core-api/internal/email"
+	"sip-happens/services/core-api/internal/invoicing"
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/workflows"
 )
@@ -22,6 +24,8 @@ type OrderPaidHandler struct {
 	Name      string // idempotency / metrics consumer name
 	Saga      workflows.Saga
 	Emails    *email.Service
+	Invoices  *invoicing.Service
+	Flags     featureflags.Flags
 }
 
 func (h OrderPaidHandler) ConsumerName() string {
@@ -68,6 +72,11 @@ func (h OrderPaidHandler) Handle(ctx context.Context, m *nats.Msg) error {
 	if h.Emails != nil {
 		if err := h.Emails.SendReceiptForOrder(ctx, orderID); err != nil {
 			obslog.Warn(logCtx, "receipt_email_failed", map[string]any{"err": err.Error()})
+		}
+	}
+	if h.Invoices != nil && h.Flags.Has(featureflags.DianInvoice) {
+		if _, err := h.Invoices.IssueForOrder(ctx, orderID, "system:order.paid"); err != nil {
+			obslog.Warn(logCtx, "dian_invoice_failed", map[string]any{"err": err.Error()})
 		}
 	}
 	obslog.Info(logCtx, "order_paid_consumed", map[string]any{

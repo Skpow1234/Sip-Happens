@@ -20,6 +20,7 @@ import (
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/email"
+	"sip-happens/services/core-api/internal/invoicing"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/payments"
@@ -35,6 +36,7 @@ type Server struct {
 	Customers   customers.Service
 	Catalog     catalog.Repository
 	Admin       admin.Service
+	Invoices    *invoicing.Service
 	AdminToken  string
 	AdminTokens []string
 	// AdminTokenRoles maps bearer token string to RBAC tier when using ADMIN_* role envs (optional).
@@ -171,6 +173,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
 	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))
 	mux.Handle("POST /admin/orders/{id}/reconcile-stripe", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderReconcileStripe))))
+	mux.Handle("POST /admin/orders/{id}/invoice", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderIssueInvoice))))
 	mux.Handle("PATCH /admin/orders/{id}/shipment", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderShipment))))
 	mux.HandleFunc("GET /admin/orders/export", s.handleAdminOrdersExport)
 	mux.HandleFunc("/admin/orders", s.handleAdminOrders)
@@ -732,6 +735,14 @@ func (s *Server) handleAdminOrderDetail(w http.ResponseWriter, r *http.Request) 
 	}
 	if sh, err := s.loadShipmentForOrder(r.Context(), o.ID); err == nil && sh != nil {
 		payload["shipment"] = sh
+	}
+	if s.Invoices != nil {
+		if inv, err := s.Invoices.GetByOrderID(r.Context(), orderID); err == nil && inv != nil {
+			payload["invoice"] = inv
+		} else if err != nil && err != domain.ErrNotFound {
+			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+			return
+		}
 	}
 
 	s.recordAdminPIIAccess(r, "admin_order_detail", "order", string(orderID), map[string]string{

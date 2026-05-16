@@ -26,6 +26,7 @@ import (
 	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/fulfillment"
 	"sip-happens/services/core-api/internal/inventory"
+	"sip-happens/services/core-api/internal/invoicing"
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
@@ -383,15 +384,28 @@ func runNATSConsumeJob(ctx context.Context) error {
 	}
 
 	fulfillmentSvc := &fulfillment.SQLService{DB: sqlDB}
+	flags := featureflags.Parse(os.Getenv("FEATURE_FLAGS"))
 	var emailSvc *email.Service
 	if mailer, err := email.NewMailerFromEnv(); err != nil {
 		return err
 	} else {
-		flags := featureflags.Parse(os.Getenv("FEATURE_FLAGS"))
 		emailSvc, err = email.NewService(mailer, sqlDB, flags)
 		if err != nil {
 			return err
 		}
+	}
+	d := db.New(sqlDB)
+	ordersRepo := orders.NewSQLRepository()
+	invRepo := inventory.NewSQLRepository()
+	catalogRepo := catalog.NewSQLRepository()
+	paymentsRepo := payments.NewSQLRepository()
+	auditStore := audit.NewSQLStore()
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore(), auditStore)
+	invoiceSvc := &invoicing.Service{
+		DB:       sqlDB,
+		Provider: invoicing.NewProviderFromEnv(),
+		Orders:   ordersSvc,
+		Audit:    auditStore,
 	}
 	handler := consumers.OrderPaidHandler{
 		Namespace: namespace,
@@ -399,7 +413,9 @@ func runNATSConsumeJob(ctx context.Context) error {
 		Saga: workflows.Saga{
 			Fulfillment: fulfillmentSvc,
 		},
-		Emails: emailSvc,
+		Emails:   emailSvc,
+		Invoices: invoiceSvc,
+		Flags:    flags,
 	}
 
 	r := &consumers.JetStreamRuntime{

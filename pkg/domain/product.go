@@ -12,9 +12,11 @@ type Product struct {
 	Style     string
 	ABV       float64
 	VolumeML  int
-	InvimaReg string
+	InvimaReg   string
+	Description string
+	IBU         *int
 	// ImageURL is a public HTTPS URL for catalog/TUI display (object storage or CDN).
-	ImageURL  string
+	ImageURL string
 	IsActive  bool
 
 	CreatedAt time.Time
