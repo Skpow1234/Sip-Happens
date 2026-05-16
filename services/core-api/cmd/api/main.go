@@ -121,6 +121,11 @@ func runServer() error {
 		return err
 	}
 
+	outboxPub, err := config.LoadOutboxPublisher()
+	if err != nil {
+		return err
+	}
+
 	srv := &httpserver.Server{
 		Orders:            ordersSvc,
 		Payments:          paymentsRepo,
@@ -132,6 +137,8 @@ func runServer() error {
 		AdminTokenRoles:   httpserver.AdminTokenRolesFromConfig(cfg),
 		DB:                sqlDB,
 		Namespace:         cfg.Namespace,
+		OutboxPublisher:   outboxPub.Kind,
+		NATSURL:           outboxPub.NATSURL,
 		FeatureFlags:      cfg.Flags.Enabled,
 		CoreAPIHMACSecret: cfg.CoreAPIHMACSecret,
 		CoreAPIHMACKeys:   cfg.CoreAPIHMACKeys,

@@ -24,9 +24,11 @@ services:
 
   core-api:
     ports:
-      - "8080:8080"
+      - "${SIP_HAPPENS_HTTP_PORT:-8080}:8080"
 
   ssh-gateway:
+    ports:
+      - "${SIP_HAPPENS_SSH_PORT:-2222}:2222"
     environment:
       SSH_DEV_FINGERPRINT: ${SSH_DEV_FINGERPRINT:-SHA256:bO2LRb2AvETPxiykJemvR1cPIDiRfLlTadBTHeqMLzM}
       PRIVACY_POLICY_URL: ${PRIVACY_POLICY_URL:-https://sip-happens.local/privacy}

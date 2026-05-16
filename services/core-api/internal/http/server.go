@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"sip-happens/pkg/config"
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/natshealth"
 	"sip-happens/pkg/redact"
 	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/shipping"
@@ -59,6 +61,10 @@ type Server struct {
 	Redis *redis.Client
 	// RedisRequired makes /readyz fail when Redis is configured but unreachable.
 	RedisRequired bool
+
+	// OutboxPublisher / NATSURL gate /readyz NATS connectivity (OUTBOX_PUBLISHER=nats).
+	OutboxPublisher config.OutboxPublisherKind
+	NATSURL         string
 
 	ProductImages objectstore.ProductImages
 }
@@ -166,6 +172,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/orders", s.handleAdminOrders)
 	mux.HandleFunc("/admin/orders/", s.handleAdminOrderDetail)
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
+	mux.HandleFunc("/admin/stripe/dead-letters", s.handleAdminStripeDeadLetters)
+	mux.HandleFunc("POST /admin/stripe/dead-letters/replay", s.handleAdminStripeDeadLetterReplay)
 
 	if s.StripeWebhook != nil {
 		path := s.StripeWebhookPath
@@ -236,6 +244,16 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	} else if s.RedisRequired {
 		writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "redis not configured")
 		return
+	}
+	if s.OutboxPublisher == config.OutboxPublisherNATS {
+		if strings.TrimSpace(s.NATSURL) == "" {
+			writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "nats not configured")
+			return
+		}
+		if err := natshealth.Ping(ctx, s.NATSURL); err != nil {
+			writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "nats not ready")
+			return
+		}
 	}
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})

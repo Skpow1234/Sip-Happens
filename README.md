@@ -21,7 +21,7 @@ From the repo root:
 bash scripts/dev-up.sh
 ```
 
-Uses `infra/compose.yaml` plus `infra/compose.dev.yaml` (publishes Postgres, Redis, NATS, MinIO, and API ports on localhost).
+Uses `infra/compose.yaml` plus `infra/compose.dev.yaml` (publishes Postgres, Redis, NATS, MinIO, and API ports on localhost). For a isolated **staging** stack (`NAMESPACE=staging`), see [`docs/ops/compose-environments.md`](docs/ops/compose-environments.md) and `./scripts/stack-up.sh staging`.
 
 ### Production Compose profile
 
@@ -350,7 +350,8 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 
 - **Request IDs**: `ssh-gateway` sends `X-Request-Id` to `core-api` and `core-api` echoes it back on responses.
 - **Metrics**: scrape `GET /metrics`
-- **Readiness**: `GET /readyz` checks DB connectivity
+- **Readiness**: `GET /readyz` checks DB connectivity; when `OUTBOX_PUBLISHER=nats`, also pings NATS
+- **Stripe DLQ**: `GET /admin/stripe/dead-letters`, `POST /admin/stripe/dead-letters/replay?id=` or `?limit=` (ops)
 - **Compose healthchecks**: `core-api` probes `GET /healthz`; `ssh-gateway` TCP-checks the SSH listener (`/app/ssh-gateway healthcheck`)
 
 ## Error responses

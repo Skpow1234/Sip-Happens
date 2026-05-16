@@ -1,0 +1,20 @@
+# Staging overlay: isolate JetStream subjects via NAMESPACE=staging.
+# Use a separate Compose project name so volumes/networks do not collide with dev.
+#
+#   COMPOSE_PROJECT_NAME=sip-happens-staging \
+#     docker compose -f infra/compose.yaml -f infra/compose.staging.yaml --env-file .env.staging up -d
+#
+# Optional host ports (run beside dev): also add -f infra/compose.dev.yaml and set
+# SIP_HAPPENS_HTTP_PORT / SIP_HAPPENS_SSH_PORT in .env.staging.
+services:
+  core-api:
+    environment:
+      NAMESPACE: staging
+
+  outbox-dispatch:
+    environment:
+      NAMESPACE: staging
+
+  nats-consume:
+    environment:
+      NAMESPACE: staging

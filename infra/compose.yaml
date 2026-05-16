@@ -40,6 +40,8 @@ services:
       MIGRATIONS_PATH: "/app/infra/migrations"
       NATS_URL: ${NATS_URL:-nats://nats:4222}
       NATS_STREAM: ${NATS_STREAM:-sip_happens}
+      NAMESPACE: ${NAMESPACE:-dev}
+      OUTBOX_PUBLISHER: ${OUTBOX_PUBLISHER:-nats}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_MOCK: ${STRIPE_MOCK:-1}
@@ -113,8 +115,6 @@ services:
     depends_on:
       core-api:
         condition: service_healthy
-    ports:
-      - "2222:2222"
     volumes:
       - sshkeys:/data
     healthcheck:
