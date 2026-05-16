@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"sip-happens/pkg/age"
-	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
+	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
@@ -27,13 +27,13 @@ import (
 )
 
 type Server struct {
-	Orders            orders.Service
-	Catalog           catalog.Repository
-	Admin             admin.Service
-	AdminToken        string
-	AdminTokens       []string
+	Orders      orders.Service
+	Catalog     catalog.Repository
+	Admin       admin.Service
+	AdminToken  string
+	AdminTokens []string
 	// AdminTokenRoles maps bearer token string to RBAC tier when using ADMIN_* role envs (optional).
-	AdminTokenRoles map[string]AdminRole
+	AdminTokenRoles   map[string]AdminRole
 	DB                *sql.DB
 	Stripe            stripepayments.Service
 	StripeWebhook     *stripepayments.WebhookHandler

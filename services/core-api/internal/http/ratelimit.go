@@ -27,9 +27,9 @@ type TokenBucketLimiter struct {
 }
 
 type tokenBucket struct {
-	tokens   float64
-	last     time.Time
-	expires  time.Time
+	tokens  float64
+	last    time.Time
+	expires time.Time
 }
 
 func (l *TokenBucketLimiter) Allow(key string, now time.Time) bool {
@@ -144,4 +144,3 @@ func minF(a, b float64) float64 {
 	}
 	return b
 }
-

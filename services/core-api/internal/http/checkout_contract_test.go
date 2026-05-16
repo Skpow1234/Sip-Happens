@@ -7,11 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
-	"testing"
-	"time"
-
-	"sip-happens/pkg/auth"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/inventory"
@@ -19,6 +14,8 @@ import (
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/testutil"
+	"testing"
+	"time"
 )
 
 // Contract test: POST /checkout returns order + stripe.url shape expected by ssh-gateway.
@@ -91,7 +88,9 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "contract-test-key-1")
 	req.Header.Set("X-SSH-Fingerprint", "SHA256:contracttest")
-	signTestRequest(t, req, []byte("test-secret"), "dev", "SHA256:contracttest")
+	if err := SignRequest(req, []byte("test-secret"), "dev", "SHA256:contracttest"); err != nil {
+		t.Fatal(err)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -124,29 +123,4 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 	if out.Stripe.URL == "" {
 		t.Fatal("expected stripe.URL")
 	}
-}
-
-func signTestRequest(t *testing.T, req *http.Request, secret []byte, keyID, fp string) {
-	t.Helper()
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = req.Body.Close()
-	req.Body = io.NopCloser(bytes.NewReader(body))
-
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	nonce := "testnonce12345678"
-	reqID := "req-contract-1"
-	bodySHA := auth.BodySHA256Hex(body)
-	path := req.URL.RequestURI()
-	canonical := auth.CanonicalV2(req.Method, path, ts, nonce, reqID, bodySHA)
-	sig := auth.Sign(secret, canonical)
-
-	req.Header.Set(auth.HeaderTimestamp, ts)
-	req.Header.Set(auth.HeaderNonce, nonce)
-	req.Header.Set(auth.HeaderSignature, sig)
-	req.Header.Set(auth.HeaderKeyID, keyID)
-	req.Header.Set(auth.HeaderRequestID, reqID)
-	req.Header.Set(auth.HeaderFingerprint, fp)
 }

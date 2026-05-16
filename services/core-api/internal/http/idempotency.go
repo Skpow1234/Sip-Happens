@@ -66,8 +66,8 @@ on conflict (scope, idem_key, method, path) do nothing
 }
 
 type IdempotencyMiddleware struct {
-	Store IdempotencyStore
-	TTL   time.Duration
+	Store  IdempotencyStore
+	TTL    time.Duration
 	Prefix string
 }
 
@@ -186,4 +186,3 @@ func (w *recordingResponseWriter) Write(p []byte) (int, error) {
 	_, _ = w.body.Write(p)
 	return w.ResponseWriter.Write(p)
 }
-

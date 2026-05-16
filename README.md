@@ -286,3 +286,13 @@ go test ./...
 ```bash
 POSTGRES_DSN="postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" go test ./...
 ```
+
+**E2E smoke** (against a running API with demo seed):
+
+```bash
+go run ./services/core-api/cmd/api seed demo
+# start core-api (Compose or HTTP_ADDR=:8080 go run ./services/core-api/cmd/api)
+bash scripts/e2e-smoke.sh
+```
+
+CI runs the same checks after migrations (`go run ./services/core-api/cmd/e2e-smoke`).

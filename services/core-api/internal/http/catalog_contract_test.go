@@ -63,13 +63,13 @@ values ($1,'COP',10000,now())
 		Currency string `json:"currency"`
 		Items    []struct {
 			Product struct {
-				ID       string
-				SKU      string
-				Name     string
-				Brewery  string
-				Style    string
-				ABV      float64
-				VolumeML int
+				ID        string
+				SKU       string
+				Name      string
+				Brewery   string
+				Style     string
+				ABV       float64
+				VolumeML  int
 				InvimaReg string
 			} `json:"Product"`
 			Price struct {
@@ -94,4 +94,3 @@ values ($1,'COP',10000,now())
 		t.Fatalf("unexpected price: %#v", out.Items[0].Price)
 	}
 }
-

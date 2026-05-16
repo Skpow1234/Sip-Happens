@@ -56,6 +56,22 @@ jobs:
         run: |
           go run ./services/core-api/cmd/migrate up
 
+      - name: E2E smoke (seed demo + core-api + HTTP checks)
+        env:
+          HTTP_ADDR: ":18080"
+          CORE_API_HMAC_KEYS: dev:dev-hmac-secret
+          CORE_API_HMAC_KEY_ID: dev
+          EMAIL_PROVIDER: log
+        run: |
+          go run ./services/core-api/cmd/api seed demo
+          go run ./services/core-api/cmd/api &
+          API_PID=$!
+          trap 'kill $API_PID 2>/dev/null || true' EXIT
+          export BASE_URL=http://localhost:18080
+          export SSH_FINGERPRINT=demo:ssh-fingerprint
+          export CORE_API_HMAC_KEYS=dev:dev-hmac-secret
+          go run ./services/core-api/cmd/e2e-smoke
+
       - name: Docker build (compose)
         run: |
           docker compose -f infra/compose.yaml build

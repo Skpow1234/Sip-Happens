@@ -49,7 +49,7 @@ type HMACMiddleware struct {
 	// Secrets is a v2 key ring, looked up by X-SipHappens-Key-Id.
 	Secrets   map[string][]byte
 	Tolerance time.Duration
-	Nonces   NonceStore
+	Nonces    NonceStore
 }
 
 func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
@@ -140,4 +140,3 @@ func (m *HMACMiddleware) Wrap(next http.Handler) http.Handler {
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
-

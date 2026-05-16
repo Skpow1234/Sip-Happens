@@ -68,7 +68,9 @@ values ('order-a', 'PENDING_PAYMENT', 'cust-a', 1000, 0, 1000, 'COP', now(), now
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/orders/order-a", nil)
 	req.Header.Set(auth.HeaderFingerprint, fpB)
 	req.Header.Set(auth.HeaderKeyID, "dev")
-	signTestRequest(t, req, []byte("test-secret"), "dev", fpB)
+	if err := SignRequest(req, []byte("test-secret"), "dev", fpB); err != nil {
+		t.Fatal(err)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -91,7 +93,9 @@ values ('order-a', 'PENDING_PAYMENT', 'cust-a', 1000, 0, 1000, 'COP', now(), now
 	req2, _ := http.NewRequest(http.MethodGet, ts.URL+"/orders/order-a", nil)
 	req2.Header.Set(auth.HeaderFingerprint, fpA)
 	req2.Header.Set(auth.HeaderKeyID, "dev")
-	signTestRequest(t, req2, []byte("test-secret"), "dev", fpA)
+	if err := SignRequest(req2, []byte("test-secret"), "dev", fpA); err != nil {
+		t.Fatal(err)
+	}
 
 	resp2, err := http.DefaultClient.Do(req2)
 	if err != nil {

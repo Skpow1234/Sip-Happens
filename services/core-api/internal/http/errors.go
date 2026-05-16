@@ -42,4 +42,3 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, mes
 		},
 	})
 }
-

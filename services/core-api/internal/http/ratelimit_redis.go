@@ -15,7 +15,7 @@ type RedisTokenBucketLimiter struct {
 	KeyPrefix  string
 	Capacity   float64
 	RefillRate float64 // tokens per second
-	TTL time.Duration
+	TTL        time.Duration
 }
 
 var tokenBucketLua = redis.NewScript(`
