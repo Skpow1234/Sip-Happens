@@ -9,7 +9,9 @@ import (
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/events"
 	"sip-happens/services/core-api/internal/inventory"
+	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
 )
 
@@ -19,15 +21,21 @@ type service struct {
 	inventory inventory.Repository
 	catalog   catalog.Repository
 	payments  payments.Repository
+	outbox    outbox.Store
 }
 
 func NewService(d *db.DB, ordersRepo Repository, inventoryRepo inventory.Repository, catalogRepo catalog.Repository, paymentsRepo payments.Repository) Service {
+	return NewServiceWithOutbox(d, ordersRepo, inventoryRepo, catalogRepo, paymentsRepo, nil)
+}
+
+func NewServiceWithOutbox(d *db.DB, ordersRepo Repository, inventoryRepo inventory.Repository, catalogRepo catalog.Repository, paymentsRepo payments.Repository, outboxStore outbox.Store) Service {
 	return &service{
 		db:        d,
 		orders:    ordersRepo,
 		inventory: inventoryRepo,
 		catalog:   catalogRepo,
 		payments:  paymentsRepo,
+		outbox:    outboxStore,
 	}
 }
 
@@ -317,27 +325,46 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 			_ = s.inventory.MarkReservationConsumed(ctx, tx, id, rr.ProductID)
 		}
 
+		paidAt := time.Now()
+		var paymentID string
 		if s.payments != nil {
 			paymentUUID, err := ids.UUIDv4()
 			if err != nil {
 				return err
 			}
+			paymentID = paymentUUID
 			payment.ID = domain.PaymentID(paymentUUID)
 			payment.OrderID = id
 			if payment.Provider == "" {
 				payment.Provider = domain.PaymentProviderStripe
 			}
-			now := time.Now()
 			if payment.CreatedAt.IsZero() {
-				payment.CreatedAt = now
+				payment.CreatedAt = paidAt
 			}
-			payment.UpdatedAt = now
+			payment.UpdatedAt = paidAt
 			if err := s.payments.Insert(ctx, tx, payment); err != nil {
 				return err
 			}
 		}
 
-		return s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusPaid)
+		if err := s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusPaid); err != nil {
+			return err
+		}
+
+		if s.outbox != nil {
+			env, err := events.NewOrderPaidEnvelope(string(id), paymentID, "", paidAt)
+			if err != nil {
+				return err
+			}
+			ev, err := outbox.FromEnvelope(env)
+			if err != nil {
+				return err
+			}
+			if err := s.outbox.Insert(ctx, tx, ev); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

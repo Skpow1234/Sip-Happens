@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"sip-happens/services/core-api/internal/admin"
+	_ "sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/pkg/config"
 	"sip-happens/services/core-api/internal/db"
@@ -126,7 +127,7 @@ func runServer() error {
 	catalogRepo := catalog.NewSQLRepository()
 	paymentsRepo := payments.NewSQLRepository()
 
-	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore())
 	adminSvc := &admin.SQLService{DB: sqlDB}
 
 	// Stripe webhook wiring (Stripe verifier + SQL idempotency store).

@@ -17,6 +17,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"sip-happens/pkg/config"
+	"sip-happens/pkg/events"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/db"
@@ -26,6 +27,7 @@ import (
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+	"sip-happens/services/core-api/internal/workflows"
 )
 
 func main() {
@@ -105,7 +107,7 @@ func runCancelExpiredJob(ctx context.Context) error {
 	invRepo := inventory.NewSQLRepository()
 	catalogRepo := catalog.NewSQLRepository()
 	paymentsRepo := payments.NewSQLRepository()
-	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore())
 
 	log.Printf("job cancel-expired starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
 
@@ -152,7 +154,7 @@ func runStripeReconcileJob(ctx context.Context) error {
 	invRepo := inventory.NewSQLRepository()
 	catalogRepo := catalog.NewSQLRepository()
 	paymentsRepo := payments.NewSQLRepository()
-	ordersSvc := orders.NewService(d, ordersRepo, invRepo, catalogRepo, paymentsRepo)
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore())
 
 	var stripeClient stripepayments.Service
 	if jobCfg.StripeSecretKey != "" {
@@ -283,18 +285,6 @@ func runOutboxReplayJob(ctx context.Context) error {
 	return nil
 }
 
-type logConsumer struct {
-	name string
-}
-
-func (c logConsumer) ConsumerName() string { return c.name }
-
-func (c logConsumer) Handle(ctx context.Context, m *nats.Msg) error {
-	_ = ctx
-	log.Printf("consume subject=%s event_id=%s event_type=%s request_id=%s", m.Subject, m.Header.Get(outbox.NatsHeaderEventID), m.Header.Get(outbox.NatsHeaderEventType), m.Header.Get(outbox.NatsHeaderRequestID))
-	return nil
-}
-
 func runNATSConsumeJob(ctx context.Context) error {
 	jobCfg, err := config.LoadOutboxDispatchJob()
 	if err != nil {
@@ -327,19 +317,19 @@ func runNATSConsumeJob(ctx context.Context) error {
 
 	filter := os.Getenv("NATS_CONSUME_SUBJECT")
 	if filter == "" {
-		filter = fmt.Sprintf("sip_happens.%s.events.>", namespace)
+		filter = events.EventsFilter(namespace)
 	}
 	durable := os.Getenv("NATS_DURABLE")
 	if durable == "" {
-		durable = "core-api"
+		durable = "order-paid-fulfillment"
 	}
 	consumerName := os.Getenv("NATS_CONSUMER_NAME")
 	if consumerName == "" {
-		consumerName = "core-api"
+		consumerName = "order-paid-fulfillment"
 	}
 	dlq := os.Getenv("NATS_DLQ_SUBJECT")
 	if dlq == "" {
-		dlq = fmt.Sprintf("sip_happens.%s.dlq", namespace)
+		dlq = events.DLQSubject(namespace)
 	}
 
 	nc, err := nats.Connect(natsURL, nats.Name("sip-happens consumer"))
@@ -365,8 +355,8 @@ func runNATSConsumeJob(ctx context.Context) error {
 			cfg := &nats.StreamConfig{
 				Name: stream,
 				Subjects: []string{
-					fmt.Sprintf("sip_happens.%s.events.>", namespace),
-					fmt.Sprintf("sip_happens.%s.dlq", namespace),
+					events.EventsFilter(namespace),
+					events.DLQSubject(namespace),
 				},
 				Storage:   nats.FileStorage,
 				Retention: nats.LimitsPolicy,
@@ -375,6 +365,15 @@ func runNATSConsumeJob(ctx context.Context) error {
 				return err
 			}
 		}
+	}
+
+	fulfillmentSvc := &fulfillment.SQLService{DB: sqlDB}
+	handler := consumers.OrderPaidHandler{
+		Namespace: namespace,
+		Name:      consumerName,
+		Saga: workflows.Saga{
+			Fulfillment: fulfillmentSvc,
+		},
 	}
 
 	r := &consumers.JetStreamRuntime{
@@ -388,12 +387,12 @@ func runNATSConsumeJob(ctx context.Context) error {
 
 	runOnce := os.Getenv("JOB_RUN_ONCE") == "true" || os.Getenv("JOB_RUN_ONCE") == "1"
 	if !runOnce {
-		return r.Run(ctx, logConsumer{name: consumerName})
+		return r.Run(ctx, handler)
 	}
 
 	onceCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	err = r.Run(onceCtx, logConsumer{name: consumerName})
+	err = r.Run(onceCtx, handler)
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return nil
 	}
@@ -423,7 +422,7 @@ func outboxPublisherFromEnv() (outbox.Publisher, func(), error) {
 	}
 	subjectPrefix := os.Getenv("NATS_SUBJECT_PREFIX")
 	if subjectPrefix == "" {
-		subjectPrefix = fmt.Sprintf("sip_happens.%s.events", namespace)
+		subjectPrefix = events.EventsSubjectPrefix(namespace)
 	}
 
 	nc, err := nats.Connect(natsURL, nats.Name("sip-happens outbox-dispatch"))

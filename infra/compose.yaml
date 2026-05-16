@@ -141,6 +141,35 @@ services:
       OUTBOX_BASE_BACKOFF_SECONDS: ${OUTBOX_BASE_BACKOFF_SECONDS:-30}
     command: ["outbox-dispatch"]
 
+  nats-consume:
+    image: infra-core-api
+    entrypoint: ["/app/core-jobs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      NATS_STREAM: ${NATS_STREAM:-sip_happens}
+      NAMESPACE: ${NAMESPACE:-dev}
+      NATS_DURABLE: ${NATS_DURABLE:-order-paid-fulfillment}
+      NATS_CONSUMER_NAME: ${NATS_CONSUMER_NAME:-order-paid-fulfillment}
+    command: ["nats-consume"]
+
+  fulfillment-runner:
+    image: infra-core-api
+    entrypoint: ["/app/core-jobs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
+      JOB_INTERVAL_SECONDS: ${JOB_INTERVAL_SECONDS:-30}
+      JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
+    command: ["fulfillment-runner"]
+
   # Optional: run Stripe CLI in a container (so you don't need local installs).
   # Usage examples are documented in docs/runbooks/stripe-webhook-local.md
   stripe-cli:

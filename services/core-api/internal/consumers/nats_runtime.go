@@ -108,7 +108,9 @@ func (r *JetStreamRuntime) processOne(ctx context.Context, h MessageHandler, msg
 	}
 
 	if err := h.Handle(ctx, msg); err != nil {
-		if dlqErr := r.publishDLQ(ctx, msg, err); dlqErr != nil {
+		eventType := msg.Header.Get("SipHappens-Event-Type")
+		HandlerFailuresTotal.WithLabelValues(r.Stream, h.ConsumerName(), eventType).Inc()
+		if dlqErr := r.publishDLQ(ctx, h, msg, err); dlqErr != nil {
 			return fmt.Errorf("handler failed: %v; dlq publish failed: %w", err, dlqErr)
 		}
 		_ = msg.Ack()
@@ -120,7 +122,7 @@ func (r *JetStreamRuntime) processOne(ctx context.Context, h MessageHandler, msg
 	return r.Idempotency.MarkProcessed(ctx, h.ConsumerName(), messageID, time.Now())
 }
 
-func (r *JetStreamRuntime) publishDLQ(ctx context.Context, msg *nats.Msg, cause error) error {
+func (r *JetStreamRuntime) publishDLQ(ctx context.Context, h MessageHandler, msg *nats.Msg, cause error) error {
 	if strings.TrimSpace(r.DLQSubject) == "" {
 		return nil
 	}
@@ -137,6 +139,13 @@ func (r *JetStreamRuntime) publishDLQ(ctx context.Context, msg *nats.Msg, cause 
 	out.Header.Set("SipHappens-DLQ-Error", cause.Error())
 
 	_, err := r.JS.PublishMsg(out, nats.Context(ctx))
+	if err == nil {
+		consumer := ""
+		if h != nil {
+			consumer = h.ConsumerName()
+		}
+		DLQPublishedTotal.WithLabelValues(r.Stream, consumer).Inc()
+	}
 	return err
 }
 

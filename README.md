@@ -107,6 +107,12 @@ This background worker claims rows from `outbox_events` and publishes them to **
 docker compose -f infra/compose.yaml up -d outbox-dispatch
 ```
 
+### NATS consumers (fulfillment handoff)
+
+`bash scripts/dev-up.sh` also starts `nats-consume` (handles `orders.order.paid` → shipment) and `fulfillment-runner`.
+
+Ops: [`docs/ops/nats-consumer-playbook.md`](docs/ops/nats-consumer-playbook.md)
+
 Environment knobs:
 
 - `OUTBOX_PUBLISHER` (`nats` or `log` for local debugging without NATS)
