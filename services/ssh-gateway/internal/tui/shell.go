@@ -54,7 +54,11 @@ func (m Model) composeLayout(body string, opts layoutOpts) string {
 		parts = append(parts, m.renderNoticeBar())
 	}
 	if opts.showPromo {
-		parts = append(parts, stylePromo().Align(lipgloss.Center).Width(m.width).Render(L.ShellPromo))
+		w := m.width
+		if w < 40 {
+			w = 80
+		}
+		parts = append(parts, stylePromo().Width(w).Render(L.ShellPromo))
 	}
 	if opts.footer != "" {
 		parts = append(parts, m.renderFooter(opts.footer))
@@ -68,25 +72,42 @@ func (m Model) renderTopBar(active shellTab) string {
 		w = 80
 	}
 	cell := w / 4
-	mk := func(key, label string, tab shellTab) string {
-		text := key + " " + label
+	if cell < 12 {
+		cell = 12
+	}
+
+	mk := func(key, label string, tab shellTab, first bool) string {
+		activeTab := tab == active
+		var text string
+		if key != "" {
+			text = key + " " + label
+		} else {
+			text = label
+		}
 		if tab == tabCart {
 			text = fmt.Sprintf("%s %s %s [%d]", key, label, formatMoneyShort("COP", m.state.cartSubtotal()), m.state.cartCount())
 		}
-		if tab == active {
-			return styleActiveTab().Width(cell).Align(lipgloss.Center).Render(text)
+		st := styleTopCell(first).Width(cell).Align(lipgloss.Center)
+		if key == "" {
+			return st.Render(styleWordmark().Render(text))
 		}
-		return styleInactiveTab().Width(cell).Align(lipgloss.Center).Render(text)
+		if activeTab {
+			return st.Render(styleTabLabel(true).Render(text))
+		}
+		return st.Render(styleTabLabel(false).Render(text))
 	}
-	brand := styleBrand().Width(cell).Align(lipgloss.Center).Render(L.ShellBrand)
+
 	cells := []string{
-		brand,
-		mk("s", L.ShellShop, tabShop),
-		mk("a", L.ShellAccount, tabAccount),
-		mk("c", L.ShellCart, tabCart),
+		mk("", L.ShellBrand, tabShop, true),
+		mk("s", L.ShellShop, tabShop, false),
+		mk("a", L.ShellAccount, tabAccount, false),
+		mk("c", L.ShellCart, tabCart, false),
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, cells...)
-	return styleTopBorder().Render(row)
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(colorBorder).
+		Render(row)
 }
 
 func formatMoneyShort(currency string, minor int64) string {
@@ -127,32 +148,30 @@ func (m Model) renderNoticeBar() string {
 		msg = msg[:w-9] + "…"
 	}
 	inner := msg + strings.Repeat(" ", max(0, w-len(msg)-4)) + "esc"
-	return lipgloss.NewStyle().Width(w).Background(lipgloss.Color("9")).Foreground(lipgloss.Color("15")).Render(inner)
+	return lipgloss.NewStyle().Width(w).Background(colorDanger).Foreground(colorText).Render(inner)
 }
 
 func (m Model) renderFooter(hints string) string {
-	return styleFooter().Render(hints)
+	return styleFooter().Render(formatFooterHints(hints))
 }
 
 func selectedLine(mark, text string, selected bool) string {
 	if selected {
 		prefix := mark
 		if prefix == "" {
-			prefix = "› "
+			prefix = ""
 		}
-		return styleActiveTab().Render(prefix + text) + "\n"
+		return styleRowSelect().Render(prefix+text) + "\n"
 	}
-	return styleDim().Render("  " + text) + "\n"
+	return styleMuted().Render("  " + text) + "\n"
 }
 
-func catalogLine(sku, name string, selected bool) string {
-	skuPart := lipgloss.NewStyle().Foreground(colorSKU).Width(14).Render(truncate(sku, 14))
-	namePart := lipgloss.NewStyle().Foreground(colorText).Render(truncate(name, 40))
-	line := skuPart + " " + namePart
+func catalogLine(sku, name string, width int, selected bool) string {
+	line := truncate(sku, 14) + "  " + truncate(name, max(8, width-18))
 	if selected {
-		return styleActiveTab().Render("› "+line) + "\n"
+		return styleRowSelect().Width(width).Render(line) + "\n"
 	}
-	return "  " + line + "\n"
+	return styleMuted().Render("  " + line) + "\n"
 }
 
 func box(title, inner string, width int) string {
@@ -169,5 +188,5 @@ func box(title, inner string, width int) string {
 func splitHorizontal(leftWidth int, left, right string) string {
 	l := lipgloss.NewStyle().Width(leftWidth).Render(left)
 	r := lipgloss.NewStyle().Render(right)
-	return lipgloss.JoinHorizontal(lipgloss.Top, l, " ", r)
+	return lipgloss.JoinHorizontal(lipgloss.Top, l, "  ", r)
 }

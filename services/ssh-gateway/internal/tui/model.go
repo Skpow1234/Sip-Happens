@@ -599,10 +599,6 @@ func (m Model) viewBusy() string {
 	return styleBrand().Render(L.Loading) + "\n"
 }
 
-func styleText() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(colorText)
-}
-
 func (m Model) viewMenu() string {
 	title := lipgloss.NewStyle().Bold(true).Render(L.MenuTitle)
 	cart := L.MenuCart(m.state.cartCount())

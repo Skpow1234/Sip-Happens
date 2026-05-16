@@ -30,7 +30,7 @@ func (m Model) viewCatalogSplit() string {
 
 func (m Model) catalogListPane(width int) string {
 	var b strings.Builder
-	b.WriteString(styleSection().Render("~ "+L.CatalogFeatured+" ~") + "\n")
+	b.WriteString(styleSection().Render("~ "+L.CatalogFeatured+" ~") + "\n\n")
 	if m.state.catalogSearchEdit {
 		b.WriteString(L.CatalogSearchPrompt + " " + m.state.catalogSearchBuf + "█\n")
 		return b.String()
@@ -41,9 +41,9 @@ func (m Model) catalogListPane(width int) string {
 	}
 	for i, it := range m.state.catalog {
 		name := truncate(it.Product.Name, width-16)
-		b.WriteString(catalogLine(it.Product.SKU, name, i == m.state.catalogCursor))
+		b.WriteString(catalogLine(it.Product.SKU, name, width, i == m.state.catalogCursor))
 	}
-	b.WriteString("\n" + styleSection().Render("~ "+L.CatalogAll+" ~") + "\n")
+	b.WriteString("\n\n" + styleSection().Render("~ "+L.CatalogAll+" ~") + "\n")
 	page := m.state.catalogQuery.Offset/catalogPageSize + 1
 	var meta strings.Builder
 	meta.WriteString(styleMuted().Render(L.CatalogPageMeta(page, m.state.catalogQuery.Offset)))
@@ -60,27 +60,27 @@ func (m Model) catalogListPane(width int) string {
 func (m Model) catalogDetailPane() string {
 	d := m.state.productDetail
 	if m.busy && d == nil {
-		return L.LoadingProduct + "\n"
+		return styleMuted().Render(L.LoadingProduct) + "\n"
 	}
 	if d == nil {
 		return styleMuted().Render(L.CatalogSelectHint) + "\n"
 	}
 	p := d.Product
 	var b strings.Builder
-	b.WriteString(styleBrand().Render(p.Name) + "\n")
-	b.WriteString(styleSpec().Render(fmt.Sprintf("%s  |  %s  |  %s",
-		fmt.Sprintf(L.ProductVolume, p.VolumeML), fmt.Sprintf(L.ProductABV, p.ABV), p.Brewery)) + "\n")
+	b.WriteString(styleWordmark().Render(p.Name) + "\n\n")
+	b.WriteString(styleMuted().Render(fmt.Sprintf("%s  |  %s  |  %s",
+		fmt.Sprintf(L.ProductVolume, p.VolumeML), fmt.Sprintf(L.ProductABV, p.ABV), p.Brewery)) + "\n\n")
 	b.WriteString(stylePrice().Render(formatMoney(d.Price.Currency, d.Price.AmountMinorUnits)) + "\n\n")
 	if desc := strings.TrimSpace(p.Description); desc != "" {
-		b.WriteString(desc + "\n\n")
+		b.WriteString(styleMuted().Render(desc) + "\n\n")
 	}
 	if p.IBU != nil {
-		b.WriteString(fmt.Sprintf("%s: %d\n", L.ProductIBU, *p.IBU))
+		b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductIBU, *p.IBU)) + "\n")
 	}
-	b.WriteString(fmt.Sprintf("%s: %s\n", L.ProductInvima, p.InvimaReg))
-	b.WriteString(fmt.Sprintf("%s: %d\n\n", L.ProductAvailable, d.AvailableQty))
+	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %s", L.ProductInvima, p.InvimaReg)) + "\n")
+	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductAvailable, d.AvailableQty)) + "\n\n")
 	b.WriteString(formatProductImageBlock(p.ImageURL))
-	b.WriteString("\n\n" + L.ProductDetailFooter + "\n")
+	b.WriteString("\n\n" + renderProductCTA("a", "agregar", "enter", "cantidad") + "\n")
 	return b.String()
 }
 
@@ -143,15 +143,15 @@ func (m Model) viewCartV2() string {
 	} else {
 		var lines []string
 		for i, l := range m.state.cart {
-			cur := "  "
-			if i == m.cartCursor() {
-				cur = "> "
-			}
-			line := fmt.Sprintf("%s%s x%d  %s", cur, l.Name, l.Qty, formatMoney(l.Currency, l.LineTotal()))
+			line := fmt.Sprintf("%s x%d  %s", l.Name, l.Qty, formatMoney(l.Currency, l.LineTotal()))
 			if l.SKU != l.Name {
-				line = fmt.Sprintf("%s (%s)", line, l.SKU)
+				line = fmt.Sprintf("%s (%s) x%d  %s", l.Name, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal()))
 			}
-			lines = append(lines, box("", strings.TrimSpace(line), clampInt(60, max(40, m.width-6))))
+			if i == m.cartCursor() {
+				lines = append(lines, styleRowSelect().Render(line))
+			} else {
+				lines = append(lines, styleMuted().Render("  "+line))
+			}
 		}
 		inner = strings.Join(lines, "\n")
 		sub := m.state.cartSubtotal()
