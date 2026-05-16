@@ -182,6 +182,12 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 			}
 		}
 
+		if err := s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
+			return events.NewOrderCreatedEnvelope(string(order.ID), string(in.CustomerID), order.Currency, "", now)
+		}); err != nil {
+			return err
+		}
+
 		createdOrder = &order
 		createdItems = items
 		return nil
@@ -190,6 +196,21 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 		return nil, nil, err
 	}
 	return createdOrder, createdItems, nil
+}
+
+func (s *service) insertOutbox(ctx context.Context, tx *sql.Tx, build func() (events.Envelope, error)) error {
+	if s.outbox == nil {
+		return nil
+	}
+	env, err := build()
+	if err != nil {
+		return err
+	}
+	ev, err := outbox.FromEnvelope(env)
+	if err != nil {
+		return err
+	}
+	return s.outbox.Insert(ctx, tx, ev)
 }
 
 func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time, limit int) (int, error) {
@@ -211,28 +232,7 @@ func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time,
 			if o.Status != domain.OrderStatusPendingPayment {
 				return nil
 			}
-
-			res, err := s.inventory.ListActiveReservations(ctx, tx, id)
-			if err != nil {
-				return err
-			}
-			for _, rr := range res {
-				inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
-				if err != nil {
-					return err
-				}
-				inv.Reserved -= rr.Qty
-				if inv.Reserved < 0 {
-					inv.Reserved = 0
-				}
-				inv.LastModified = time.Now()
-				if err := s.inventory.Update(ctx, tx, *inv); err != nil {
-					return err
-				}
-				_ = s.inventory.MarkReservationReleased(ctx, tx, id, rr.ProductID)
-			}
-
-			return s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusCancelled)
+			return s.cancelPendingInTx(ctx, tx, id, "expired")
 		})
 		if err != nil {
 			return updated, err
@@ -244,38 +244,48 @@ func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time,
 
 func (s *service) CancelPendingOrder(ctx context.Context, id domain.OrderID) error {
 	return s.db.WithTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(tx *sql.Tx) error {
-		o, err := s.orders.Get(ctx, tx, id)
+		return s.cancelPendingInTx(ctx, tx, id, "cancelled")
+	})
+}
+
+func (s *service) cancelPendingInTx(ctx context.Context, tx *sql.Tx, id domain.OrderID, reason string) error {
+	o, err := s.orders.Get(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if o.Status == domain.OrderStatusCancelled {
+		return nil
+	}
+	if o.Status != domain.OrderStatusPendingPayment {
+		return domain.ErrConflict
+	}
+
+	res, err := s.inventory.ListActiveReservations(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	for _, rr := range res {
+		inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
 		if err != nil {
 			return err
 		}
-		if o.Status == domain.OrderStatusCancelled {
-			return nil
+		inv.Reserved -= rr.Qty
+		if inv.Reserved < 0 {
+			inv.Reserved = 0
 		}
-		if o.Status != domain.OrderStatusPendingPayment {
-			return domain.ErrConflict
-		}
-
-		res, err := s.inventory.ListActiveReservations(ctx, tx, id)
-		if err != nil {
+		inv.LastModified = now
+		if err := s.inventory.Update(ctx, tx, *inv); err != nil {
 			return err
 		}
-		for _, rr := range res {
-			inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
-			if err != nil {
-				return err
-			}
-			inv.Reserved -= rr.Qty
-			if inv.Reserved < 0 {
-				inv.Reserved = 0
-			}
-			inv.LastModified = time.Now()
-			if err := s.inventory.Update(ctx, tx, *inv); err != nil {
-				return err
-			}
-			_ = s.inventory.MarkReservationReleased(ctx, tx, id, rr.ProductID)
-		}
+		_ = s.inventory.MarkReservationReleased(ctx, tx, id, rr.ProductID)
+	}
 
-		return s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusCancelled)
+	if err := s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusCancelled); err != nil {
+		return err
+	}
+	return s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
+		return events.NewOrderCancelledEnvelope(string(id), reason, "", now)
 	})
 }
 
@@ -351,20 +361,9 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 			return err
 		}
 
-		if s.outbox != nil {
-			env, err := events.NewOrderPaidEnvelope(string(id), paymentID, "", paidAt)
-			if err != nil {
-				return err
-			}
-			ev, err := outbox.FromEnvelope(env)
-			if err != nil {
-				return err
-			}
-			if err := s.outbox.Insert(ctx, tx, ev); err != nil {
-				return err
-			}
-		}
-		return nil
+		return s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
+			return events.NewOrderPaidEnvelope(string(id), paymentID, "", paidAt)
+		})
 	})
 }
 

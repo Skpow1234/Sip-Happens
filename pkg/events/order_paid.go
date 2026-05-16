@@ -7,6 +7,8 @@ import (
 )
 
 // OrderPaidV1 is the v1 payload for orders.order.paid.
+const VersionOrdersOrderPaidV1 = 1
+
 type OrderPaidV1 struct {
 	OrderID   string `json:"order_id"`
 	PaymentID string `json:"payment_id,omitempty"`

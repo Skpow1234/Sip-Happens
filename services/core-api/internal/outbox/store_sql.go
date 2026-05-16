@@ -69,12 +69,12 @@ select id, type, occurred_at, aggregate_type, aggregate_id, version,
        coalesce(request_id,''), payload_json, attempts
 from outbox_events
 where status='PENDING'
-  and next_attempt_at <= $1
-  and (locked_at is null or locked_at < $1 - interval '5 minutes')
+  and next_attempt_at <= now()
+  and (locked_at is null or locked_at < now() - interval '5 minutes')
 order by next_attempt_at asc, occurred_at asc
 for update skip locked
-limit $2
-`, now, limit)
+limit $1
+`, limit)
 	if err != nil {
 		return nil, err
 	}

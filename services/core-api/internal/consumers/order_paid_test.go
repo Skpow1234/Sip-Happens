@@ -18,10 +18,10 @@ type fulfillmentStub struct {
 	called domain.OrderID
 }
 
-func (f *fulfillmentStub) CreateShipment(ctx context.Context, _ time.Time, orderID domain.OrderID) (domain.Shipment, error) {
+func (f *fulfillmentStub) StartFulfillment(ctx context.Context, _ time.Time, orderID domain.OrderID) (domain.Shipment, error) {
 	_ = ctx
 	f.called = orderID
-	return domain.Shipment{OrderID: orderID}, nil
+	return domain.Shipment{OrderID: orderID, Status: domain.ShipmentStatusNew}, nil
 }
 
 func TestOrderPaidHandler_Handle(t *testing.T) {

@@ -9,6 +9,4 @@ const (
 
 const (
 	AggregateOrders = "orders"
-
-	VersionOrdersOrderPaidV1 = 1
 )

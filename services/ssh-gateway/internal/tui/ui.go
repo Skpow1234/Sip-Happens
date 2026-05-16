@@ -40,13 +40,17 @@ func (m Model) withFooter(body string) string {
 
 func formatShipmentSummary(orderStatus string, sh *api.ShipmentView) string {
 	if sh != nil && strings.TrimSpace(sh.Status) != "" {
+		st := strings.TrimSpace(sh.Status)
 		var lines []string
-		lines = append(lines, "Shipment: "+strings.TrimSpace(sh.Status))
+		lines = append(lines, "Shipment: "+st)
 		if sh.Carrier != "" {
 			lines = append(lines, "Carrier: "+sh.Carrier)
 		}
 		if sh.TrackingCode != "" {
 			lines = append(lines, "Tracking: "+sh.TrackingCode)
+		}
+		if sh.TrackingCode != "" && (orderStatus == "SHIPPED" || st == "IN_TRANSIT" || st == "HANDED_OVER" || st == "DELIVERED") {
+			lines = append(lines, "Track your package with the code above.")
 		}
 		return strings.Join(lines, "\n") + "\n"
 	}
@@ -56,7 +60,7 @@ func formatShipmentSummary(orderStatus string, sh *api.ShipmentView) string {
 	case "FULFILLING":
 		return "Your order is being prepared for shipment.\n"
 	case "SHIPPED":
-		return "Your order has shipped.\n"
+		return "Your order has shipped. Tracking will appear when the carrier scan is available.\n"
 	default:
 		return ""
 	}
