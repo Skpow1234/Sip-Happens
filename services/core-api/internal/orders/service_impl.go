@@ -69,9 +69,14 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 		}
 		orderID := domain.OrderID(orderUUID)
 
-		// Price snapshot + product snapshot + reservation.
+		// Price snapshot + product snapshot; reserve inventory after order row exists (FK).
 		var subtotal int64
 		items := make([]domain.OrderItem, 0, len(in.Items))
+		type lineReserve struct {
+			productID domain.ProductID
+			qty       int
+		}
+		toReserve := make([]lineReserve, 0, len(in.Items))
 
 		for _, it := range in.Items {
 			if it.Qty <= 0 {
@@ -99,15 +104,6 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 				return domain.ErrConflict
 			}
 
-			inv.Reserved += it.Qty
-			inv.LastModified = now
-			if err := s.inventory.Update(ctx, tx, *inv); err != nil {
-				return err
-			}
-			if err := s.inventory.CreateReservation(ctx, tx, orderID, it.ProductID, it.Qty); err != nil {
-				return err
-			}
-
 			unit := price.AmountMinorUnits
 			line := unit * int64(it.Qty)
 			subtotal += line
@@ -121,6 +117,7 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 				Currency:            in.Currency,
 				LineTotalMinorUnits: line,
 			})
+			toReserve = append(toReserve, lineReserve{productID: it.ProductID, qty: it.Qty})
 		}
 
 		exp := now.Add(15 * time.Minute)
@@ -157,6 +154,24 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 
 		if err := s.orders.Insert(ctx, tx, order, items); err != nil {
 			return err
+		}
+
+		for _, line := range toReserve {
+			inv, err := s.inventory.LockForUpdate(ctx, tx, line.productID)
+			if err != nil {
+				return err
+			}
+			if inv.Available() < line.qty {
+				return domain.ErrConflict
+			}
+			inv.Reserved += line.qty
+			inv.LastModified = now
+			if err := s.inventory.Update(ctx, tx, *inv); err != nil {
+				return err
+			}
+			if err := s.inventory.CreateReservation(ctx, tx, orderID, line.productID, line.qty); err != nil {
+				return err
+			}
 		}
 
 		createdOrder = &order

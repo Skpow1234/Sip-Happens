@@ -92,8 +92,7 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 		}
 	}
 
-	// Use a deterministic idempotency key per order.
-	params.SetIdempotencyKey(fmt.Sprintf("checkout:%s", in.OrderID))
+	params.SetIdempotencyKey(CheckoutSessionIdempotencyKey(in.OrderID))
 
 	s, err := checkoutsession.New(params)
 	if err != nil {

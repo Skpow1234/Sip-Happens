@@ -20,10 +20,8 @@ func (v StripeGoVerifier) Verify(payload []byte, stripeSignatureHeader string) e
 		return errors.New("missing stripe signature header")
 	}
 	if v.ToleranceSec > 0 {
-		_, err := stripewebhook.ConstructEventWithTolerance(payload, stripeSignatureHeader, v.SigningSecret, time.Duration(v.ToleranceSec)*time.Second)
-		return err
+		return stripewebhook.ValidatePayloadWithTolerance(payload, stripeSignatureHeader, v.SigningSecret, time.Duration(v.ToleranceSec)*time.Second)
 	}
-	_, err := stripewebhook.ConstructEvent(payload, stripeSignatureHeader, v.SigningSecret)
-	return err
+	return stripewebhook.ValidatePayload(payload, stripeSignatureHeader, v.SigningSecret)
 }
 

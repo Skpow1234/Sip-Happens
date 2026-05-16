@@ -101,6 +101,22 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (h *WebhookHandler) resolveOrderIDFromCheckoutSession(ctx context.Context, evt stripeEvent, obj stripeCheckoutSession) (domain.OrderID, error) {
+	orderID := domain.OrderID(obj.Metadata.OrderID)
+	if orderID == "" && h.OrderRepo != nil && obj.ID != "" {
+		if found, err := h.OrderRepo.FindByStripeCheckoutSessionID(ctx, h.OrderQuery, obj.ID); err == nil {
+			orderID = found
+		}
+	}
+	if orderID == "" {
+		if h.EventLog != nil {
+			_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "missing_order_id", evt.RawObject)
+		}
+		return "", domain.ErrInvalidInput
+	}
+	return orderID, nil
+}
+
 func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error {
 	switch evt.Type {
 	case "checkout.session.completed":
@@ -112,21 +128,9 @@ func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error 
 			return domain.ErrInvalidInput
 		}
 
-		orderID := domain.OrderID(obj.Metadata.OrderID)
-		if orderID == "" {
-			// Fallback to DB lookup by Stripe checkout session id.
-			if h.OrderRepo != nil && obj.ID != "" {
-				found, err := h.OrderRepo.FindByStripeCheckoutSessionID(ctx, h.OrderQuery, obj.ID)
-				if err == nil {
-					orderID = found
-				}
-			}
-		}
-		if orderID == "" {
-			if h.EventLog != nil {
-				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "missing_order_id", evt.RawObject)
-			}
-			return domain.ErrInvalidInput
+		orderID, err := h.resolveOrderIDFromCheckoutSession(ctx, evt, obj)
+		if err != nil {
+			return err
 		}
 		payment := domain.Payment{
 			Provider:    domain.PaymentProviderStripe,
@@ -135,6 +139,25 @@ func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error 
 			RawPayload:  evt.RawObject,
 		}
 		return h.Orders.MarkPaid(ctx, orderID, payment)
+	case "checkout.session.expired":
+		obj, err := evt.AsCheckoutSession()
+		if err != nil {
+			if h.EventLog != nil {
+				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "invalid_checkout_session_payload", evt.RawObject)
+			}
+			return domain.ErrInvalidInput
+		}
+
+		orderID, err := h.resolveOrderIDFromCheckoutSession(ctx, evt, obj)
+		if err != nil {
+			return err
+		}
+		err = h.Orders.CancelPendingOrder(ctx, orderID)
+		if errors.Is(err, domain.ErrConflict) {
+			// Order already paid or otherwise not cancellable; treat as handled.
+			return nil
+		}
+		return err
 	case "payment_intent.succeeded":
 		obj, err := evt.AsPaymentIntent()
 		if err != nil {
@@ -205,7 +228,7 @@ func (e *stripeEvent) UnmarshalJSON(b []byte) error {
 func (e stripeEvent) ExtractOrderID() string {
 	// Best-effort extraction for logging/indexing purposes.
 	switch e.Type {
-	case "checkout.session.completed":
+	case "checkout.session.completed", "checkout.session.expired":
 		if cs, err := e.AsCheckoutSession(); err == nil {
 			return cs.Metadata.OrderID
 		}
