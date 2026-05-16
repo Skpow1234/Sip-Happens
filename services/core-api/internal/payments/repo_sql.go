@@ -8,6 +8,7 @@ import (
 	"github.com/lib/pq"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/redact"
 )
 
 type SQLRepository struct{}
@@ -15,10 +16,14 @@ type SQLRepository struct{}
 func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
 func (r *SQLRepository) Insert(ctx context.Context, tx *sql.Tx, p domain.Payment) error {
+	raw := p.RawPayload
+	if raw != "" {
+		raw = redact.JSON(raw)
+	}
 	_, err := tx.ExecContext(ctx, `
 insert into payments (id, order_id, provider, provider_ref, status, raw_payload, created_at, updated_at)
 values ($1,$2,$3,$4,$5,$6,$7,$8)
-`, string(p.ID), string(p.OrderID), string(p.Provider), p.ProviderRef, p.Status, p.RawPayload, p.CreatedAt, p.UpdatedAt)
+`, string(p.ID), string(p.OrderID), string(p.Provider), p.ProviderRef, p.Status, raw, p.CreatedAt, p.UpdatedAt)
 	if err == nil {
 		return nil
 	}

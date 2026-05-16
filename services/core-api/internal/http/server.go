@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/redact"
 	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/admin"
@@ -792,7 +793,7 @@ func (s *Server) handleAdminOrderReconcileStripe(w http.ResponseWriter, r *http.
 			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "missing stripe_payment_intent_id")
 			return
 		}
-		writeAPIError(w, r, http.StatusBadGateway, "bad_gateway", err.Error())
+		writeAPIError(w, r, http.StatusBadGateway, "bad_gateway", redact.String(err.Error()))
 		return
 	}
 	w.Header().Set("content-type", "application/json")

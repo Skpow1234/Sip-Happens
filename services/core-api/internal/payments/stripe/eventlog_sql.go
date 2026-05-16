@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"sip-happens/pkg/redact"
 )
 
 type EventLogStore interface {
@@ -19,6 +21,7 @@ type SQLEventLogStore struct {
 }
 
 func (s *SQLEventLogStore) UpsertReceived(ctx context.Context, eventID, eventType, orderID, raw string, receivedAt time.Time) error {
+	raw = redact.JSON(raw)
 	_, err := s.DB.ExecContext(ctx, `
 insert into stripe_event_log (event_id, event_type, order_id, received_at, status, raw_payload)
 values ($1,$2,$3,$4,'RECEIVED',$5)
@@ -49,6 +52,7 @@ where event_id=$1
 }
 
 func (s *SQLEventLogStore) MarkFailed(ctx context.Context, eventID string, processedAt time.Time, errMsg string) error {
+	errMsg = redact.String(errMsg)
 	_, err := s.DB.ExecContext(ctx, `
 update stripe_event_log
 set status='FAILED', processed_at=$2, last_error=$3
@@ -58,6 +62,7 @@ where event_id=$1
 }
 
 func (s *SQLEventLogStore) InsertDeadLetter(ctx context.Context, eventID, reason, raw string) error {
+	raw = redact.JSON(raw)
 	_, err := s.DB.ExecContext(ctx, `
 insert into stripe_dead_letters (event_id, reason, raw_payload)
 values ($1,$2,$3)

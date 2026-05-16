@@ -9,6 +9,7 @@ import (
 
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
+	"sip-happens/pkg/redact"
 )
 
 type Service interface {
@@ -501,6 +502,7 @@ limit $3 offset $4
 		if err := rows.Scan(&e.AggregateType, &e.AggregateID, &e.Actor, &e.EventType, &e.PayloadJSON, &e.CreatedAt); err != nil {
 			return nil, err
 		}
+		e.PayloadJSON = redact.JSON(e.PayloadJSON)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -602,7 +604,7 @@ order by created_at asc
 			return nil, err
 		}
 		if raw.Valid {
-			p.RawPayload = raw.String
+			p.RawPayload = redact.JSON(raw.String)
 		}
 		out = append(out, p)
 	}
@@ -613,6 +615,7 @@ func (s *SQLService) insertAudit(ctx context.Context, aggType, aggID, actor, eve
 	if actor == "" {
 		actor = "admin"
 	}
+	payload = redact.JSON(payload)
 	_, err := s.DB.ExecContext(ctx, `
 insert into audit_events (aggregate_type, aggregate_id, actor, event_type, payload_json, created_at)
 values ($1,$2,$3,$4,$5,now())

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"time"
+
+	"sip-happens/pkg/redact"
 )
 
 // Info writes a JSON log line with optional correlation fields from ctx.
@@ -31,7 +33,7 @@ func write(ctx context.Context, level, msg string, fields map[string]any) {
 	for k, v := range FieldsFromContext(ctx) {
 		entry[k] = v
 	}
-	for k, v := range fields {
+	for k, v := range redact.Fields(fields) {
 		entry[k] = v
 	}
 	b, err := json.Marshal(entry)

@@ -216,6 +216,8 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`ADMIN_FINANCE_TOKENS`**: comma-separated tokens with **finance** role (read-only admin)
 - **`CORE_API_HMAC_SECRET`**: legacy v1 shared secret for gateway → API signing
 - **`CORE_API_HMAC_KEY_ID`** / **`CORE_API_HMAC_KEYS`**: v2 signing (`kid:secret` pairs; preferred)
+
+**Secret handling**: Stripe keys, webhook secrets, and bearer/HMAC material are redacted in structured logs (`pkg/redact`) and in `audit_events` / payment / Stripe event storage. Rotation runbooks: [`docs/runbooks/rotate-admin-tokens.md`](docs/runbooks/rotate-admin-tokens.md), [`docs/runbooks/rotate-core-api-hmac-keys.md`](docs/runbooks/rotate-core-api-hmac-keys.md).
 - **`SSH_REQUIRE_AUTHORIZED_KEYS`**: set to `1` in production to require `authorized_keys`
 - **`SSH_AUTHORIZED_KEYS_PATH`**: path inside ssh-gateway container (default `/data/authorized_keys`)
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
