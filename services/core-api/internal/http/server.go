@@ -123,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/openapi.yaml", s.handleOpenAPISpec)
 	mux.HandleFunc("/docs", s.handleOpenAPIDocs)
+	mux.HandleFunc("/admin/console", s.handleAdminConsole)
 	// Feature flag: catalog_cache (in-memory) or catalog_cache_redis (shared SWR; requires REDIS_URL).
 	if s.featureEnabled("catalog_cache") || s.featureEnabled("catalog_cache_redis") {
 		mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {

@@ -318,6 +318,12 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `PATCH /admin/orders/{id}/shipment` — set carrier + tracking (ops); advances shipment when packed
 - `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`)
 - `GET /docs` — API browser (Redoc)
+- `GET /admin/console` — minimal read-only ops UI (orders, products, inventory, reservations); finance+ role
+
+**Incident runbooks**
+
+- [`docs/runbooks/incident-stripe-webhook-outage.md`](docs/runbooks/incident-stripe-webhook-outage.md)
+- [`docs/runbooks/incident-postgres-failover.md`](docs/runbooks/incident-postgres-failover.md)
 
 ## Observability
 
