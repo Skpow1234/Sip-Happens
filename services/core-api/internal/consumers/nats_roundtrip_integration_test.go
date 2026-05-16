@@ -60,6 +60,7 @@ func TestOutboxPublishConsume_OrderPaid_Roundtrip(t *testing.T) {
 		catalog.NewSQLRepository(),
 		payments.NewSQLRepository(),
 		outbox.NewSQLStore(),
+		nil,
 	)
 
 	o, _, err := ordersSvc.CreatePendingOrder(ctx, orders.CreatePendingOrderInput{

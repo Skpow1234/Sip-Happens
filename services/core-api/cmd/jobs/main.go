@@ -19,6 +19,7 @@ import (
 	"sip-happens/pkg/config"
 	"sip-happens/pkg/events"
 	"sip-happens/pkg/featureflags"
+	"sip-happens/services/core-api/internal/audit"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/db"
@@ -109,7 +110,8 @@ func runCancelExpiredJob(ctx context.Context) error {
 	invRepo := inventory.NewSQLRepository()
 	catalogRepo := catalog.NewSQLRepository()
 	paymentsRepo := payments.NewSQLRepository()
-	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore())
+	auditStore := audit.NewSQLStore()
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore(), auditStore)
 
 	log.Printf("job cancel-expired starting (interval=%s, limit=%d, once=%v)", jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce)
 
@@ -156,7 +158,8 @@ func runStripeReconcileJob(ctx context.Context) error {
 	invRepo := inventory.NewSQLRepository()
 	catalogRepo := catalog.NewSQLRepository()
 	paymentsRepo := payments.NewSQLRepository()
-	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore())
+	auditStore := audit.NewSQLStore()
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore(), auditStore)
 
 	var stripeClient stripepayments.Service
 	if jobCfg.StripeSecretKey != "" {

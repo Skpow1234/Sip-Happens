@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"sip-happens/pkg/domain"
-	"sip-happens/services/core-api/internal/audit"
 )
 
 func skuMapFromItems(items []domain.OrderItem) map[domain.ProductID]string {

@@ -1375,6 +1375,17 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_ = s.Orders.SetStripeRefs(r.Context(), o.ID, stripeOut.CheckoutSessionID, stripeOut.PaymentIntentID)
+		if s.Admin != nil {
+			actor := strings.TrimSpace(r.Header.Get("X-SSH-Fingerprint"))
+			if actor == "" {
+				actor = "customer:" + string(customerID)
+			}
+			linkPayload, _ := json.Marshal(map[string]string{
+				"checkout_session_id": stripeOut.CheckoutSessionID,
+				"payment_intent_id":   stripeOut.PaymentIntentID,
+			})
+			_ = s.Admin.RecordAudit(r.Context(), actor, "order", string(o.ID), "payment.link_created", string(linkPayload))
+		}
 		if s.Payments != nil {
 			_ = s.Payments.RecordStatus(r.Context(), s.DB, domain.PaymentStatusHistoryEntry{
 				OrderID:     o.ID,

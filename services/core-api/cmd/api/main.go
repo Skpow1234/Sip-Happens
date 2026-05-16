@@ -14,6 +14,7 @@ import (
 	"sip-happens/pkg/healthcheck"
 	"sip-happens/pkg/redisutil"
 	"sip-happens/services/core-api/internal/admin"
+	"sip-happens/services/core-api/internal/audit"
 	"sip-happens/services/core-api/internal/catalog"
 	_ "sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/customers"
@@ -81,7 +82,8 @@ func runServer() error {
 	catalogRepo := catalog.NewSQLRepository()
 	paymentsRepo := payments.NewSQLRepository()
 
-	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore())
+	auditStore := audit.NewSQLStore()
+	ordersSvc := orders.NewServiceWithOutbox(d, ordersRepo, invRepo, catalogRepo, paymentsRepo, outbox.NewSQLStore(), auditStore)
 	customersSvc := customers.NewService(sqlDB, customers.NewSQLRepository())
 	adminSvc := &admin.SQLService{DB: sqlDB}
 

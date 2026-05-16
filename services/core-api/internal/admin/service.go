@@ -10,6 +10,7 @@ import (
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
 	"sip-happens/pkg/redact"
+	"sip-happens/services/core-api/internal/audit"
 	"sip-happens/services/core-api/internal/payments"
 )
 
@@ -646,12 +647,7 @@ func (s *SQLService) insertAudit(ctx context.Context, aggType, aggID, actor, eve
 	if actor == "" {
 		actor = "admin"
 	}
-	payload = redact.JSON(payload)
-	_, err := s.DB.ExecContext(ctx, `
-insert into audit_events (aggregate_type, aggregate_id, actor, event_type, payload_json, created_at)
-values ($1,$2,$3,$4,$5,now())
-`, aggType, aggID, actor, eventType, payload)
-	return err
+	return audit.NewSQLStore().Insert(ctx, s.DB, aggType, aggID, actor, eventType, payload)
 }
 
 func nullableStr(s string) any {

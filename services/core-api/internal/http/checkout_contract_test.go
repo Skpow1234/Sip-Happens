@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sip-happens/services/core-api/internal/admin"
+	"sip-happens/services/core-api/internal/audit"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/db"
@@ -55,12 +56,15 @@ values ($1,20,0,0,now())
 on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 `, productID)
 
-	ordersSvc := orders.NewService(
+	auditStore := audit.NewSQLStore()
+	ordersSvc := orders.NewServiceWithOutbox(
 		db.New(tdb.DB),
 		orders.NewSQLRepository(),
 		inventory.NewSQLRepository(),
 		catalog.NewSQLRepository(),
 		payments.NewSQLRepository(),
+		nil,
+		auditStore,
 	)
 
 	srv := &Server{
@@ -146,5 +150,25 @@ select count(*) from audit_events where aggregate_id=$1 and event_type='age.veri
 	}
 	if auditCount != 1 {
 		t.Fatalf("expected 1 age.verified audit, got %d", auditCount)
+	}
+
+	var reservedCount int
+	if err := tdb.DB.QueryRowContext(ctx, `
+select count(*) from audit_events where aggregate_id=$1 and event_type='inventory.reserved'
+`, out.Order.ID).Scan(&reservedCount); err != nil {
+		t.Fatal(err)
+	}
+	if reservedCount != 1 {
+		t.Fatalf("expected 1 inventory.reserved audit, got %d", reservedCount)
+	}
+
+	var linkCount int
+	if err := tdb.DB.QueryRowContext(ctx, `
+select count(*) from audit_events where aggregate_id=$1 and event_type='payment.link_created'
+`, out.Order.ID).Scan(&linkCount); err != nil {
+		t.Fatal(err)
+	}
+	if linkCount != 1 {
+		t.Fatalf("expected 1 payment.link_created audit, got %d", linkCount)
 	}
 }
