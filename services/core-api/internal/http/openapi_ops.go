@@ -41,6 +41,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "POST", Path: "/admin/inventory"},
 	{Method: "PUT", Path: "/admin/inventory"},
 	{Method: "GET", Path: "/admin/orders"},
+	{Method: "GET", Path: "/admin/orders/{id}"},
 	{Method: "GET", Path: "/admin/audit-events"},
 	{Method: "POST", Path: "/webhooks/stripe"},
 }

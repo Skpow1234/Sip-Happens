@@ -25,6 +25,9 @@ type Service interface {
 
 	// ListOrdersAdmin lists orders across customers (newest first) with optional filters.
 	ListOrdersAdmin(ctx context.Context, in ListOrdersAdminInput) ([]domain.Order, error)
+
+	// ListPaymentsForOrder returns payment rows for an order (oldest first).
+	ListPaymentsForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.Payment, error)
 }
 
 type SQLService struct {
@@ -498,6 +501,42 @@ limit $4 offset $5
 			o.ExpiresAt = &t
 		}
 		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLService) ListPaymentsForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.Payment, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("missing db")
+	}
+	if orderID == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	rows, err := s.DB.QueryContext(ctx, `
+select id, order_id, provider, provider_ref, status, raw_payload, created_at, updated_at
+from payments
+where order_id = $1
+order by created_at asc
+`, string(orderID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Payment
+	for rows.Next() {
+		var p domain.Payment
+		var raw sql.NullString
+		if err := rows.Scan(
+			&p.ID, &p.OrderID, &p.Provider, &p.ProviderRef, &p.Status, &raw,
+			&p.CreatedAt, &p.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if raw.Valid {
+			p.RawPayload = raw.String
+		}
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

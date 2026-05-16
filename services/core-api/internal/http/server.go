@@ -118,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/admin/prices", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminPrices))))
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
 	mux.HandleFunc("/admin/orders", s.handleAdminOrders)
+	mux.HandleFunc("/admin/orders/", s.handleAdminOrderDetail)
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
 
 	if s.StripeWebhook != nil {
@@ -573,6 +574,58 @@ func (s *Server) handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"orders": orders, "limit": limit, "offset": offset})
+}
+
+func (s *Server) handleAdminOrderDetail(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil || s.Orders == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/admin/orders/")
+	id = strings.Trim(id, "/")
+	if id == "" || strings.Contains(id, "/") {
+		writeAPIError(w, r, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	orderID := domain.OrderID(id)
+
+	o, items, err := s.Orders.GetOrder(r.Context(), orderID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "internal"
+		if err == domain.ErrNotFound {
+			status = http.StatusNotFound
+			code = "not_found"
+		}
+		writeAPIError(w, r, status, code, "error")
+		return
+	}
+
+	payments, err := s.Admin.ListPaymentsForOrder(r.Context(), orderID)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+
+	payload := map[string]any{
+		"order":    o,
+		"items":    items,
+		"payments": payments,
+	}
+	if sh, err := s.loadShipmentForOrder(r.Context(), o.ID); err == nil && sh != nil {
+		payload["shipment"] = sh
+	}
+
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) {
