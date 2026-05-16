@@ -9,12 +9,14 @@ import (
 
 	"sip-happens/pkg/domain"
 	"sip-happens/services/core-api/internal/orders"
+	"sip-happens/services/core-api/internal/payments"
 )
 
 type ReconcileJob struct {
 	DB        *sql.DB
 	Orders    orders.Service
 	OrderRepo orders.Repository
+	Payments  payments.Repository
 
 	Stripe Service
 	Log    EventLogStore
@@ -110,7 +112,16 @@ func (j *ReconcileJob) reconcileOne(ctx context.Context, now time.Time, id domai
 		}
 		return j.Orders.MarkPaid(ctx, id, payment)
 	case "processing", "requires_action", "requires_payment_method", "requires_confirmation":
-		// keep queued for later
+		if j.Payments != nil {
+			_ = j.Payments.RecordStatus(ctx, j.DB, domain.PaymentStatusHistoryEntry{
+				OrderID:     id,
+				Provider:    domain.PaymentProviderStripe,
+				ProviderRef: o.StripePaymentIntentID,
+				Status:      NormalizePaymentIntentStatus(st),
+				Source:      "stripe_reconcile",
+				Detail:      fmt.Sprintf(`{"stripe_status":%q}`, st),
+			})
+		}
 		return nil
 	default:
 		// unknown or terminal states: keep in dead-letter for manual review

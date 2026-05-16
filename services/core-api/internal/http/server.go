@@ -20,6 +20,7 @@ import (
 	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
+	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,6 +29,7 @@ import (
 
 type Server struct {
 	Orders      orders.Service
+	Payments    payments.Repository
 	Customers   customers.Service
 	Catalog     catalog.Repository
 	Admin       admin.Service
@@ -591,10 +593,12 @@ func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) 
 	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
 	aggType := r.URL.Query().Get("aggregate_type")
 	aggID := r.URL.Query().Get("aggregate_id")
+	orderID := strings.TrimSpace(r.URL.Query().Get("order_id"))
 
 	evts, err := s.Admin.ListAuditEvents(r.Context(), admin.ListAuditEventsInput{
 		AggregateType: aggType,
 		AggregateID:   aggID,
+		OrderID:       orderID,
 		Limit:         limit,
 		Offset:        offset,
 	})
@@ -686,16 +690,22 @@ func (s *Server) handleAdminOrderDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	payments, err := s.Admin.ListPaymentsForOrder(r.Context(), orderID)
+	paymentRows, err := s.Admin.ListPaymentsForOrder(r.Context(), orderID)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	statusHistory, err := s.Admin.ListPaymentStatusHistoryForOrder(r.Context(), orderID)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
 
 	payload := map[string]any{
-		"order":    o,
-		"items":    items,
-		"payments": payments,
+		"order":                  o,
+		"items":                  items,
+		"payments":               paymentRows,
+		"payment_status_history": statusHistory,
 	}
 	if sh, err := s.loadShipmentForOrder(r.Context(), o.ID); err == nil && sh != nil {
 		payload["shipment"] = sh
@@ -1312,6 +1322,26 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_ = s.Orders.SetStripeRefs(r.Context(), o.ID, stripeOut.CheckoutSessionID, stripeOut.PaymentIntentID)
+		if s.Payments != nil {
+			_ = s.Payments.RecordStatus(r.Context(), s.DB, domain.PaymentStatusHistoryEntry{
+				OrderID:     o.ID,
+				Provider:    domain.PaymentProviderStripe,
+				ProviderRef: stripeOut.CheckoutSessionID,
+				Status:      domain.PaymentStatusCreated,
+				Source:      "checkout",
+				Detail:      `{"event":"stripe_checkout_created"}`,
+			})
+			if stripeOut.PaymentIntentID != "" {
+				_ = s.Payments.RecordStatus(r.Context(), s.DB, domain.PaymentStatusHistoryEntry{
+					OrderID:     o.ID,
+					Provider:    domain.PaymentProviderStripe,
+					ProviderRef: stripeOut.PaymentIntentID,
+					Status:      domain.PaymentStatusPending,
+					Source:      "checkout",
+					Detail:      `{"event":"stripe_payment_intent_linked"}`,
+				})
+			}
+		}
 		if stripeOut.URL != "" {
 			s.maybeSendPaymentLinkEmail(o, req.FullName, stripeOut.URL)
 		}

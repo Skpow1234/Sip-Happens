@@ -680,8 +680,12 @@ func (m Model) viewCatalog() string {
 		if i == m.state.catalogCursor {
 			cur = "> "
 		}
-		line := fmt.Sprintf("%s%-14s  %-22s  %s  avail:%d",
-			cur, it.Product.SKU, truncate(it.Product.Name, 22),
+		invima := strings.TrimSpace(it.Product.InvimaReg)
+		if invima == "" {
+			invima = "—"
+		}
+		line := fmt.Sprintf("%s%-14s  %-18s  INVIMA:%-14s  %s  avail:%d",
+			cur, it.Product.SKU, truncate(it.Product.Name, 18), truncate(invima, 14),
 			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits), it.AvailableQty)
 		if strings.TrimSpace(it.Product.ImageURL) != "" {
 			line += "  [img]"

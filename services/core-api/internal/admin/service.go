@@ -10,6 +10,7 @@ import (
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
 	"sip-happens/pkg/redact"
+	"sip-happens/services/core-api/internal/payments"
 )
 
 type Service interface {
@@ -31,6 +32,9 @@ type Service interface {
 
 	// ListPaymentsForOrder returns payment rows for an order (oldest first).
 	ListPaymentsForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.Payment, error)
+
+	// ListPaymentStatusHistoryForOrder returns normalized status transitions (oldest first).
+	ListPaymentStatusHistoryForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.PaymentStatusHistoryEntry, error)
 
 	// RecordAudit appends an audit_events row (admin/support tooling).
 	RecordAudit(ctx context.Context, actor, aggregateType, aggregateID, eventType, payloadJSON string) error
@@ -97,6 +101,7 @@ type UpsertInventoryInput struct {
 type ListAuditEventsInput struct {
 	AggregateType string
 	AggregateID   string
+	OrderID       string
 	Limit         int
 	Offset        int
 }
@@ -492,14 +497,24 @@ func (s *SQLService) ListAuditEvents(ctx context.Context, in ListAuditEventsInpu
 		offset = 0
 	}
 
+	orderID := strings.TrimSpace(in.OrderID)
 	rows, err := s.DB.QueryContext(ctx, `
 select aggregate_type, aggregate_id, actor, event_type, payload_json, created_at
 from audit_events
 where ($1::text is null or aggregate_type = $1)
   and ($2::text is null or aggregate_id = $2)
+  and (
+    $5::text is null
+    or (aggregate_type = 'order' and aggregate_id = $5)
+    or (
+      payload_json is not null
+      and payload_json <> ''
+      and payload_json::jsonb->>'order_id' = $5
+    )
+  )
 order by id desc
 limit $3 offset $4
-`, nullableStr(strings.TrimSpace(in.AggregateType)), nullableStr(strings.TrimSpace(in.AggregateID)), limit, offset)
+`, nullableStr(strings.TrimSpace(in.AggregateType)), nullableStr(strings.TrimSpace(in.AggregateID)), limit, offset, nullableStr(orderID))
 	if err != nil {
 		return nil, err
 	}
@@ -575,6 +590,13 @@ limit $4 offset $5
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLService) ListPaymentStatusHistoryForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.PaymentStatusHistoryEntry, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("missing db")
+	}
+	return payments.NewSQLRepository().ListStatusHistoryForOrder(ctx, s.DB, orderID)
 }
 
 func (s *SQLService) RecordAudit(ctx context.Context, actor, aggregateType, aggregateID, eventType, payloadJSON string) error {

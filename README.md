@@ -317,7 +317,8 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `POST /admin/orders/{id}/cancel` — cancel `PENDING_PAYMENT`, release reservations (`Idempotency-Key` required)
 - `POST /admin/orders/{id}/reconcile-stripe` — poll Stripe PI, mark paid if succeeded (`Idempotency-Key` required)
 - `PATCH /admin/orders/{id}/shipment` — set carrier + tracking (ops); advances shipment when packed
-- `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`)
+- `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`, `order_id` — matches `order` aggregate or JSON `order_id` in payload)
+- `GET /admin/orders/{id}` includes `payments` and `payment_status_history` (normalized checkout/webhook/reconcile timeline)
 - `GET /docs` — API browser (Redoc)
 - `GET /admin/console` — minimal read-only ops UI (orders, products, inventory, reservations); finance+ role
 

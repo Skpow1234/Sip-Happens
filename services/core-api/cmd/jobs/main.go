@@ -172,6 +172,7 @@ func runStripeReconcileJob(ctx context.Context) error {
 		DB:        sqlDB,
 		Orders:    ordersSvc,
 		OrderRepo: ordersRepo,
+		Payments:  paymentsRepo,
 		Stripe:    stripeClient,
 		Log:       &stripepayments.SQLEventLogStore{DB: sqlDB},
 		Queue:     &stripepayments.SQLReconcileQueue{DB: sqlDB},

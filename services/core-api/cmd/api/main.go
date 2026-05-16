@@ -123,6 +123,7 @@ func runServer() error {
 
 	srv := &httpserver.Server{
 		Orders:            ordersSvc,
+		Payments:          paymentsRepo,
 		Customers:         customersSvc,
 		Catalog:           catalogRepo,
 		Admin:             adminSvc,
