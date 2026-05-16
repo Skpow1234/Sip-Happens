@@ -11,6 +11,8 @@ Users connect via **SSH** to a TUI, browse a beer catalog, build a cart, and sta
 
 ## Run (Docker only)
 
+Base images are pinned by digest; CVE remediation: [`docs/ops/docker-image-security.md`](docs/ops/docker-image-security.md).
+
 From the repo root:
 
 ### One-command dev bring-up (recommended)
@@ -133,6 +135,16 @@ OUTBOX_PUBLISHER=log docker compose -f infra/compose.yaml -f infra/compose.dev.y
 ```
 
 Outbox env knobs: `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_BASE_BACKOFF_SECONDS`, `OUTBOX_LOCKED_BY`, `NAMESPACE`, `NATS_SUBJECT_PREFIX`.
+
+**JetStream subjects (ADR 0016)** — set `NAMESPACE` (default `dev`) on `outbox-dispatch` and `nats-consume` so publishers and consumers agree:
+
+| Kind | Subject pattern |
+|------|-----------------|
+| Events | `sip_happens.{NAMESPACE}.events.{event_type}` |
+| Consumer filter | `sip_happens.{NAMESPACE}.events.>` |
+| DLQ | `sip_happens.{NAMESPACE}.dlq` |
+
+Optional overrides (`NATS_SUBJECT_PREFIX`, `NATS_CONSUME_SUBJECT`, `NATS_DLQ_SUBJECT`) must still match the same `NAMESPACE`.
 
 ### NATS consumers (fulfillment handoff)
 

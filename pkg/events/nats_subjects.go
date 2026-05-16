@@ -81,3 +81,55 @@ func ValidateEventSubject(namespace, subject, eventType string) error {
 	}
 	return nil
 }
+
+// ValidateEventsSubjectPrefixFormat checks sip_happens.{namespace}.events shape (ADR 0016).
+func ValidateEventsSubjectPrefixFormat(prefix string) error {
+	prefix = strings.TrimSuffix(strings.TrimSpace(prefix), ".")
+	if prefix == "" {
+		return fmt.Errorf("nats subject prefix is required")
+	}
+	const eventsSuffix = ".events"
+	if !strings.HasPrefix(prefix, DomainPrefix+".") || !strings.HasSuffix(prefix, eventsSuffix) {
+		return fmt.Errorf("subject prefix %q must match sip_happens.{namespace}.events (ADR 0016)", prefix)
+	}
+	middle := strings.TrimPrefix(prefix, DomainPrefix+".")
+	middle = strings.TrimSuffix(middle, eventsSuffix)
+	if middle == "" || strings.Contains(middle, ".") {
+		return fmt.Errorf("invalid namespace in subject prefix %q", prefix)
+	}
+	return nil
+}
+
+// ValidateEventsSubjectPrefixForNamespace ensures prefix matches the configured NAMESPACE.
+func ValidateEventsSubjectPrefixForNamespace(namespace, prefix string) error {
+	if err := ValidateEventsSubjectPrefixFormat(prefix); err != nil {
+		return err
+	}
+	want := EventsSubjectPrefix(namespace)
+	if strings.TrimSuffix(strings.TrimSpace(prefix), ".") != want {
+		return fmt.Errorf("NATS_SUBJECT_PREFIX %q must match NAMESPACE %q (expected %q)", prefix, normalizeNamespace(namespace), want)
+	}
+	return nil
+}
+
+// ValidateEventsFilter ensures a consumer filter stays within the namespace event tree.
+func ValidateEventsFilter(namespace, filter string) error {
+	base := EventsSubjectPrefix(namespace)
+	f := strings.TrimSpace(filter)
+	if f == "" {
+		return fmt.Errorf("events filter subject is required")
+	}
+	if !strings.HasPrefix(f, base) {
+		return fmt.Errorf("filter subject %q must be under %q (ADR 0016)", f, base)
+	}
+	return nil
+}
+
+// ValidateDLQSubject ensures DLQ uses the namespace-specific subject.
+func ValidateDLQSubject(namespace, dlq string) error {
+	want := DLQSubject(namespace)
+	if strings.TrimSpace(dlq) != want {
+		return fmt.Errorf("DLQ subject %q must be %q for NAMESPACE=%q", dlq, want, normalizeNamespace(namespace))
+	}
+	return nil
+}

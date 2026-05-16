@@ -115,26 +115,10 @@ func (p *JetStreamPublisher) ensureStream(ctx context.Context) error {
 
 func (p *JetStreamPublisher) subjectForEvent(e Event) (string, error) {
 	prefix := strings.TrimSuffix(strings.TrimSpace(p.SubjectPrefix), ".")
-	if err := validateEventsSubjectPrefix(prefix); err != nil {
+	if err := events.ValidateEventsSubjectPrefixFormat(prefix); err != nil {
 		return "", err
 	}
 	return prefix + "." + e.Type, nil
-}
-
-func validateEventsSubjectPrefix(prefix string) error {
-	if prefix == "" {
-		return fmt.Errorf("nats subject prefix is required")
-	}
-	const eventsSuffix = ".events"
-	if !strings.HasPrefix(prefix, events.DomainPrefix+".") || !strings.HasSuffix(prefix, eventsSuffix) {
-		return fmt.Errorf("subject prefix %q must match sip_happens.{namespace}.events (ADR 0016)", prefix)
-	}
-	middle := strings.TrimPrefix(prefix, events.DomainPrefix+".")
-	middle = strings.TrimSuffix(middle, eventsSuffix)
-	if middle == "" || strings.Contains(middle, ".") {
-		return fmt.Errorf("invalid namespace in subject prefix %q", prefix)
-	}
-	return nil
 }
 
 func ensureStreamTimeout(publishTimeout time.Duration) time.Duration {

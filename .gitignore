@@ -52,3 +52,4 @@ docs
 services/ssh-gateway/entrypoint.sh
 scripts/
 infra/demo/
+infra/docker

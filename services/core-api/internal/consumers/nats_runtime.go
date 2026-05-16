@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+
+	"sip-happens/pkg/events"
 )
 
 type MessageHandler interface {
@@ -21,6 +23,7 @@ type JetStreamRuntime struct {
 	JS nats.JetStreamContext
 
 	Stream        string
+	Namespace     string
 	FilterSubject string // e.g. "sip_happens.dev.events.>"
 	Durable       string // e.g. "core-api"
 
@@ -50,6 +53,9 @@ func (r *JetStreamRuntime) Run(ctx context.Context, h MessageHandler) error {
 	}
 	if h == nil || strings.TrimSpace(h.ConsumerName()) == "" {
 		return fmt.Errorf("missing handler/consumer name")
+	}
+	if err := r.validateNamespaceSubjects(); err != nil {
+		return err
 	}
 
 	batch := r.BatchSize
@@ -152,6 +158,22 @@ func (r *JetStreamRuntime) publishDLQ(ctx context.Context, h MessageHandler, msg
 		DLQPublishedTotal.WithLabelValues(r.Stream, consumer).Inc()
 	}
 	return err
+}
+
+func (r *JetStreamRuntime) validateNamespaceSubjects() error {
+	ns := strings.TrimSpace(r.Namespace)
+	if ns == "" {
+		ns = "dev"
+	}
+	if err := events.ValidateEventsFilter(ns, r.FilterSubject); err != nil {
+		return err
+	}
+	if strings.TrimSpace(r.DLQSubject) != "" {
+		if err := events.ValidateDLQSubject(ns, r.DLQSubject); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func messageIDFromNATS(msg *nats.Msg) string {

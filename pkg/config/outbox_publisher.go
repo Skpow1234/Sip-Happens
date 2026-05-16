@@ -56,6 +56,8 @@ func LoadOutboxPublisher() (OutboxPublisherConfig, error) {
 	c.SubjectPrefix = strings.TrimSpace(os.Getenv("NATS_SUBJECT_PREFIX"))
 	if c.SubjectPrefix == "" {
 		c.SubjectPrefix = events.EventsSubjectPrefix(c.Namespace)
+	} else if err := events.ValidateEventsSubjectPrefixForNamespace(c.Namespace, c.SubjectPrefix); err != nil {
+		return c, err
 	}
 	return c, nil
 }

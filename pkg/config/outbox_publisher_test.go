@@ -38,4 +38,19 @@ func TestLoadOutboxPublisher_NATSOK(t *testing.T) {
 	if cfg.Kind != OutboxPublisherNATS || cfg.NATSURL == "" || cfg.NATSStream == "" {
 		t.Fatalf("cfg=%+v", cfg)
 	}
+	if cfg.SubjectPrefix != "sip_happens.staging.events" {
+		t.Fatalf("subject prefix=%q", cfg.SubjectPrefix)
+	}
+}
+
+func TestLoadOutboxPublisher_RejectsMismatchedSubjectPrefix(t *testing.T) {
+	t.Setenv("OUTBOX_PUBLISHER", "nats")
+	t.Setenv("NATS_URL", "nats://localhost:4222")
+	t.Setenv("NATS_STREAM", "sip_happens")
+	t.Setenv("NAMESPACE", "staging")
+	t.Setenv("NATS_SUBJECT_PREFIX", "sip_happens.dev.events")
+	_, err := LoadOutboxPublisher()
+	if err == nil {
+		t.Fatal("expected namespace/prefix mismatch error")
+	}
 }

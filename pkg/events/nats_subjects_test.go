@@ -31,3 +31,27 @@ func TestValidateEventType_rejectsInvalid(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestValidateEventsSubjectPrefixForNamespace(t *testing.T) {
+	if err := ValidateEventsSubjectPrefixForNamespace("staging", "sip_happens.staging.events"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateEventsSubjectPrefixForNamespace("staging", "sip_happens.dev.events"); err == nil {
+		t.Fatal("expected namespace mismatch")
+	}
+}
+
+func TestValidateEventsFilterAndDLQ(t *testing.T) {
+	if err := ValidateEventsFilter("dev", EventsFilter("dev")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateEventsFilter("dev", "sip_happens.prod.events.>"); err == nil {
+		t.Fatal("expected wrong namespace")
+	}
+	if err := ValidateDLQSubject("dev", DLQSubject("dev")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDLQSubject("dev", DLQSubject("prod")); err == nil {
+		t.Fatal("expected dlq mismatch")
+	}
+}

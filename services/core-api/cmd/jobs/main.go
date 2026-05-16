@@ -326,6 +326,8 @@ func runNATSConsumeJob(ctx context.Context) error {
 	filter := os.Getenv("NATS_CONSUME_SUBJECT")
 	if filter == "" {
 		filter = events.EventsFilter(namespace)
+	} else if err := events.ValidateEventsFilter(namespace, filter); err != nil {
+		return err
 	}
 	durable := os.Getenv("NATS_DURABLE")
 	if durable == "" {
@@ -338,6 +340,8 @@ func runNATSConsumeJob(ctx context.Context) error {
 	dlq := os.Getenv("NATS_DLQ_SUBJECT")
 	if dlq == "" {
 		dlq = events.DLQSubject(namespace)
+	} else if err := events.ValidateDLQSubject(namespace, dlq); err != nil {
+		return err
 	}
 
 	nc, err := nats.Connect(natsURL, nats.Name("sip-happens consumer"))
@@ -398,6 +402,7 @@ func runNATSConsumeJob(ctx context.Context) error {
 	r := &consumers.JetStreamRuntime{
 		JS:            js,
 		Stream:        stream,
+		Namespace:     namespace,
 		FilterSubject: filter,
 		Durable:       durable,
 		Idempotency:   &consumers.SQLIdempotencyStore{DB: sqlDB},

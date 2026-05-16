@@ -121,6 +121,7 @@ func TestOutboxPublishConsume_OrderPaid_Roundtrip(t *testing.T) {
 	runtime := &JetStreamRuntime{
 		JS:            js,
 		Stream:        stream,
+		Namespace:     namespace,
 		FilterSubject: events.EventsFilter(namespace),
 		Durable:       "test-durable-roundtrip",
 		Idempotency:   &SQLIdempotencyStore{DB: tdb.DB},
