@@ -13,8 +13,8 @@ func TestFormatExpiryCountdown(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 	past := now.Add(-time.Second)
-	if formatExpiryCountdown(&past, now) != "expired" {
-		t.Fatal("expected expired")
+	if formatExpiryCountdown(&past, now) != L.Expired {
+		t.Fatalf("expected %q", L.Expired)
 	}
 	if formatExpiryCountdown(nil, now) != "" {
 		t.Fatal("expected empty")

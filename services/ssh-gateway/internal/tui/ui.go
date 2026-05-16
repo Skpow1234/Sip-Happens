@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -12,13 +11,13 @@ import (
 func (m Model) statusBar() string {
 	var parts []string
 	if m.busy {
-		parts = append(parts, "loading…")
+		parts = append(parts, L.StatusBarLoading)
 	}
 	if n := m.state.cartCount(); n > 0 {
-		parts = append(parts, fmt.Sprintf("cart %d", n))
+		parts = append(parts, L.StatusBarCart(n))
 	}
 	if label := m.state.orderLabel(); label != "" {
-		parts = append(parts, "order "+label)
+		parts = append(parts, L.StatusBarOrder(label))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -50,25 +49,25 @@ func formatShipmentSummary(orderStatus string, sh *api.ShipmentView) string {
 	if sh != nil && strings.TrimSpace(sh.Status) != "" {
 		st := strings.TrimSpace(sh.Status)
 		var lines []string
-		lines = append(lines, "Shipment: "+st)
+		lines = append(lines, L.ShipmentLabel+" "+st)
 		if sh.Carrier != "" {
-			lines = append(lines, "Carrier: "+sh.Carrier)
+			lines = append(lines, L.ShipmentCarrier+" "+sh.Carrier)
 		}
 		if sh.TrackingCode != "" {
-			lines = append(lines, "Tracking: "+sh.TrackingCode)
+			lines = append(lines, L.ShipmentTracking+" "+sh.TrackingCode)
 		}
 		if sh.TrackingCode != "" && (orderStatus == "SHIPPED" || st == "IN_TRANSIT" || st == "HANDED_OVER" || st == "DELIVERED") {
-			lines = append(lines, "Track your package with the code above.")
+			lines = append(lines, L.ShipmentTrackHint)
 		}
 		return strings.Join(lines, "\n") + "\n"
 	}
 	switch orderStatus {
 	case "PAID":
-		return "Fulfillment will begin shortly.\n"
+		return L.ShipmentPaid + "\n"
 	case "FULFILLING":
-		return "Your order is being prepared for shipment.\n"
+		return L.ShipmentFulfilling + "\n"
 	case "SHIPPED":
-		return "Your order has shipped. Tracking will appear when the carrier scan is available.\n"
+		return L.ShipmentShipped + "\n"
 	default:
 		return ""
 	}

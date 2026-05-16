@@ -49,7 +49,7 @@ type checkoutFields struct {
 }
 
 func (f *checkoutFields) labels() []string {
-	return []string{"City", "Neighborhood", "Address", "Phone", "Legal ID", "Full name"}
+	return L.CheckoutFieldLabels
 }
 
 func (f *checkoutFields) values() []string {
@@ -194,14 +194,14 @@ func (s *AppState) addToCart(item api.CatalogItem, qty int) {
 
 func (s *AppState) validateCartStock() error {
 	if len(s.cart) == 0 {
-		return fmt.Errorf("cart is empty")
+		return fmt.Errorf("%s", L.ErrCartEmpty)
 	}
 	for _, l := range s.cart {
 		if l.Qty <= 0 {
-			return fmt.Errorf("%s: invalid quantity", l.SKU)
+			return fmt.Errorf("%s", L.ErrCartInvalidQty(l.SKU))
 		}
 		if l.AvailableQty >= 0 && l.Qty > l.AvailableQty {
-			return fmt.Errorf("%s: only %d available (cart has %d)", l.SKU, l.AvailableQty, l.Qty)
+			return fmt.Errorf("%s", L.ErrCartStock(l.SKU, l.AvailableQty, l.Qty))
 		}
 	}
 	return nil
@@ -228,7 +228,7 @@ type catalogFilterFields struct {
 }
 
 func (f *catalogFilterFields) labels() []string {
-	return []string{"Style", "Brewery", "ABV min %", "ABV max %"}
+	return L.FilterFieldLabels
 }
 
 func (f *catalogFilterFields) values() []string {

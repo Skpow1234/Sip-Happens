@@ -231,12 +231,12 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "3", "o":
 			if m.state.lastOrderID == "" {
-				m.err = fmt.Errorf("no recent order in this session")
+				m.err = fmt.Errorf("%s", L.ErrNoRecentOrder)
 				m.screen = screenError
 				return m, nil
 			}
 			if !m.state.orderIDAllowed(m.state.lastOrderID) {
-				m.err = fmt.Errorf("order is not available in this session")
+				m.err = fmt.Errorf("%s", L.ErrOrderNotInSession)
 				m.screen = screenError
 				return m, nil
 			}
@@ -351,7 +351,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			it := m.state.catalog[m.state.catalogCursor]
 			if it.AvailableQty <= 0 {
-				m.err = fmt.Errorf("out of stock")
+				m.err = fmt.Errorf("%s", L.ErrOutOfStock)
 				m.screen = screenError
 				return m, nil
 			}
@@ -373,7 +373,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.state.productDetail != nil {
 				it := m.state.productDetail.AsCatalogItem()
 				if it.AvailableQty <= 0 {
-					m.err = fmt.Errorf("out of stock")
+					m.err = fmt.Errorf("%s", L.ErrOutOfStock)
 					m.screen = screenError
 					return m, nil
 				}
@@ -445,7 +445,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if !m.state.privacyAccepted {
-				m.err = fmt.Errorf("accept the privacy policy (press p) before continuing")
+				m.err = fmt.Errorf("%s", L.ErrPrivacyRequired)
 				m.screen = screenError
 				return m, nil
 			}
@@ -506,7 +506,7 @@ func (m *Model) bumpCartQty(delta int) {
 	}
 	max := m.state.cart[i].AvailableQty
 	if max > 0 && newQty > max {
-		m.err = fmt.Errorf("%s: only %d available", m.state.cart[i].SKU, max)
+		m.err = fmt.Errorf("%s", L.ErrCartLineStock(m.state.cart[i].SKU, max))
 		m.screen = screenError
 		return
 	}
@@ -546,7 +546,7 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadShippingEstimateCmd()
 		}
 		if !m.checkoutValid() {
-			m.err = fmt.Errorf("fill all delivery fields before continuing (city must be Bogotá, Medellín, or Cali)")
+			m.err = fmt.Errorf("%s", L.ErrCheckoutFields)
 			m.screen = screenError
 			return m, nil
 		}
@@ -623,55 +623,46 @@ func (m Model) View() string {
 }
 
 func (m Model) viewBusy() string {
-	return lipgloss.NewStyle().Bold(true).Render("Loading…") + "\n"
+	return lipgloss.NewStyle().Bold(true).Render(L.Loading) + "\n"
 }
 
 func (m Model) viewWelcome() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Sip-Happens")
-	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("Prohibited sale of alcohol to minors.")
-	body := fmt.Sprintf(`Enter your birth date (YYYY-MM-DD):
+	title := lipgloss.NewStyle().Bold(true).Render(L.AppName)
+	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(L.MinorAlcoholWarning)
+	body := fmt.Sprintf(`%s
 
   %s█
 
-enter — continue   n — exit
+%s
 
-Privacy policy: %s
-`, m.state.birthDateInput, m.privacyPolicyURL)
+%s %s
+`, L.WelcomeBirthPrompt, m.state.birthDateInput, L.WelcomeContinue, L.WelcomePrivacyLabel, m.privacyPolicyURL)
 	return fmt.Sprintf("%s\n%s\n\n%s", title, warn, body)
 }
 
 func (m Model) viewMenu() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Main menu")
-	cart := fmt.Sprintf("Cart: %d item(s)", m.state.cartCount())
+	title := lipgloss.NewStyle().Bold(true).Render(L.MenuTitle)
+	cart := L.MenuCart(m.state.cartCount())
 	if label := m.state.orderLabel(); label != "" {
-		cart += fmt.Sprintf("  |  Last order: %s", label)
+		cart += fmt.Sprintf("  |  %s %s", L.MenuLastOrder, label)
 	}
-	help := fmt.Sprintf(`
-  1 — Browse catalog
-  2 — View cart
-  3 — Check last order status
-  4 — Order history
-  ? — Help
-  q — Quit
-
-  Privacy: %s
-`, m.privacyPolicyURL)
+	help := fmt.Sprintf(L.MenuHelp, m.privacyPolicyURL)
 	return fmt.Sprintf("%s\n%s\n%s", title, cart, help)
 }
 
 func (m Model) viewCatalog() string {
-	header := lipgloss.NewStyle().Bold(true).Render("Catalog")
+	header := lipgloss.NewStyle().Bold(true).Render(L.CatalogTitle)
 	page := m.state.catalogQuery.Offset/catalogPageSize + 1
-	meta := fmt.Sprintf("page %d  offset %d", page, m.state.catalogQuery.Offset)
+	meta := L.CatalogPageMeta(page, m.state.catalogQuery.Offset)
 	if sum := m.state.catalogFilterSummary(); sum != "" {
 		meta += "  |  " + sum
 	}
-	help := "↑/↓  enter  a add  b cart  / search  f filters  n/p page  r refresh  esc menu\n\n"
+	help := L.CatalogHelp + "\n\n"
 	if m.state.catalogSearchEdit {
-		return header + "\n\n" + meta + "\n\nSearch: " + m.state.catalogSearchBuf + "█\n\nenter apply  esc cancel\n"
+		return header + "\n\n" + meta + "\n\n" + L.CatalogSearchPrompt + " " + m.state.catalogSearchBuf + "█\n\n" + L.CatalogSearchApply + "\n"
 	}
 	if len(m.state.catalog) == 0 {
-		return header + "\n\n" + meta + "\n\n(No matches — adjust filters or press r)\n" + help
+		return header + "\n\n" + meta + "\n\n" + L.CatalogNoMatches + "\n" + help
 	}
 	var b strings.Builder
 	b.WriteString(header + "\n\n" + meta + "\n\n")
@@ -684,9 +675,9 @@ func (m Model) viewCatalog() string {
 		if invima == "" {
 			invima = "—"
 		}
-		line := fmt.Sprintf("%s%-14s  %-18s  INVIMA:%-14s  %s  avail:%d",
-			cur, it.Product.SKU, truncate(it.Product.Name, 18), truncate(invima, 14),
-			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits), it.AvailableQty)
+		line := fmt.Sprintf("%s%-14s  %-18s  %s:%-14s  %s  %s:%d",
+			cur, it.Product.SKU, truncate(it.Product.Name, 18), L.ProductInvima, truncate(invima, 14),
+			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits), L.CatalogAvail, it.AvailableQty)
 		if strings.TrimSpace(it.Product.ImageURL) != "" {
 			line += "  [img]"
 		}
@@ -699,28 +690,28 @@ func (m Model) viewCatalog() string {
 func (m Model) viewProduct() string {
 	d := m.state.productDetail
 	if d == nil {
-		return "Loading product…\n"
+		return L.LoadingProduct + "\n"
 	}
 	p := d.Product
 	title := lipgloss.NewStyle().Bold(true).Render(p.Name)
 	img := formatProductImageBlock(p.ImageURL)
 	body := fmt.Sprintf(`%s
-SKU: %s  |  %s  |  %.1f%% ABV  |  %d ml
-INVIMA: %s
-Price: %s
-Available: %d
+%s: %s  |  %s  |  %s  |  %s
+%s: %s
+%s: %s
+%s: %d
 %s
-a — add to cart   b — cart   esc — back
+%s
 `,
-		title, p.SKU, p.Brewery, p.ABV, p.VolumeML, p.InvimaReg,
-		formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), d.AvailableQty, img)
+		title, L.ProductSKU, p.SKU, p.Brewery, fmt.Sprintf(L.ProductABV, p.ABV), fmt.Sprintf(L.ProductVolume, p.VolumeML),
+		L.ProductInvima, p.InvimaReg, L.ProductPrice, formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), L.ProductAvailable, d.AvailableQty, img, L.ProductHelp)
 	return body
 }
 
 func (m Model) viewCart() string {
-	header := lipgloss.NewStyle().Bold(true).Render("Cart")
+	header := lipgloss.NewStyle().Bold(true).Render(L.CartTitle)
 	if len(m.state.cart) == 0 {
-		return header + "\n\n(Empty)\n\nesc — menu\n"
+		return header + "\n\n" + L.CartEmpty + "\n\nesc — menú\n"
 	}
 	var b strings.Builder
 	b.WriteString(header + "\n\n")
@@ -731,32 +722,32 @@ func (m Model) viewCart() string {
 		}
 		avail := ""
 		if l.AvailableQty >= 0 {
-			avail = fmt.Sprintf("  max %d", l.AvailableQty)
+			avail = L.CartMaxQty(l.AvailableQty)
 		}
 		b.WriteString(fmt.Sprintf("%s%-14s x%d  %s%s\n",
 			cur, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal()), avail))
 	}
-	b.WriteString(fmt.Sprintf("\nSubtotal: %s\n", formatMoney("COP", m.state.cartSubtotal())))
+	b.WriteString(fmt.Sprintf("\n%s %s\n", L.CartSubtotal, formatMoney("COP", m.state.cartSubtotal())))
 	if c := strings.TrimSpace(m.state.checkout.city); c != "" {
 		if m.state.shippingEstimateErr != "" {
-			b.WriteString(fmt.Sprintf("Shipping (est.): —  (%s)\n", m.state.shippingEstimateErr))
+			b.WriteString(L.CartShippingEst(c, m.state.shippingEstimateErr) + "\n")
 		} else if m.state.shippingMinor > 0 {
 			cur := m.state.shippingCurrency
 			if cur == "" {
 				cur = "COP"
 			}
-			b.WriteString(fmt.Sprintf("Shipping (est., %s): %s\n", c, formatMoney(cur, m.state.shippingMinor)))
+			b.WriteString(L.CartShippingEstValue(c, formatMoney(cur, m.state.shippingMinor)) + "\n")
 		}
 	} else {
-		b.WriteString("Delivery cities: Bogotá, Medellín, Cali — estimate at checkout.\n")
+		b.WriteString(L.CartDeliveryCities + "\n")
 	}
-	b.WriteString("\n+/- qty  d remove  c checkout  esc menu\n")
+	b.WriteString("\n" + L.CartHelp + "\n")
 	return b.String()
 }
 
 func (m Model) viewCheckout() string {
 	f := m.state.checkout
-	title := lipgloss.NewStyle().Bold(true).Render("Delivery details")
+	title := lipgloss.NewStyle().Bold(true).Render(L.CheckoutTitle)
 	var b strings.Builder
 	b.WriteString(title + "\n\n")
 	for i, label := range f.labels() {
@@ -766,24 +757,24 @@ func (m Model) viewCheckout() string {
 		}
 		b.WriteString(fmt.Sprintf("%s%-12s %s\n", mark, label+":", f.values()[i]))
 	}
-	b.WriteString("\ntab / enter — next field  esc — back to cart\n")
-	b.WriteString("\nDelivery cities: Bogotá, Medellín, or Cali.\n")
+	b.WriteString("\n" + L.CheckoutHelp + "\n")
+	b.WriteString("\n" + L.CheckoutCitiesHint + "\n")
 	if m.state.shippingEstimateErr != "" {
-		b.WriteString(fmt.Sprintf("Shipping estimate: —  (%s)\n", m.state.shippingEstimateErr))
+		b.WriteString(L.CheckoutShippingErr(m.state.shippingEstimateErr) + "\n")
 	} else if strings.TrimSpace(f.city) == "" {
-		b.WriteString("Shipping estimate: (enter city)\n")
+		b.WriteString(L.CheckoutShippingWait + "\n")
 	} else {
 		cur := m.state.shippingCurrency
 		if cur == "" {
 			cur = "COP"
 		}
-		b.WriteString(fmt.Sprintf("Shipping estimate: %s\n", formatMoney(cur, m.state.shippingMinor)))
+		b.WriteString(L.CheckoutShippingEst(formatMoney(cur, m.state.shippingMinor)) + "\n")
 	}
 	return b.String()
 }
 
 func (m Model) viewConfirm() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Confirm checkout")
+	title := lipgloss.NewStyle().Bold(true).Render(L.ConfirmTitle)
 	sub := m.state.cartSubtotal()
 	cur := "COP"
 	if m.state.shippingCurrency != "" {
@@ -791,24 +782,21 @@ func (m Model) viewConfirm() string {
 	}
 	ship := m.state.shippingMinor
 	total := sub + ship
-	priv := "[ ]"
-	if m.state.privacyAccepted {
-		priv = "[x]"
-	}
-	body := fmt.Sprintf(`Subtotal: %s
-Shipping (est.): %s
-Total: %s
-Items: %d
+	body := fmt.Sprintf(`%s %s
+%s %s
+%s %s
+%s %d
 
-%s I accept the privacy policy (%s)
+%s
 
-p — toggle privacy policy   y — place order   n — back
-`, formatMoney("COP", sub), formatMoney(cur, ship), formatMoney("COP", total), m.state.cartCount(), priv, m.privacyPolicyURL)
+%s
+`, L.ConfirmSubtotal, formatMoney("COP", sub), L.ConfirmShipping, formatMoney(cur, ship), L.ConfirmTotal, formatMoney("COP", total), L.ConfirmItems, m.state.cartCount(),
+		L.ConfirmPrivacyLine(m.state.privacyAccepted, m.privacyPolicyURL), L.ConfirmHelp)
 	return title + "\n\n" + body
 }
 
 func (m Model) viewPayment() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Pay off-terminal")
+	title := lipgloss.NewStyle().Bold(true).Render(L.PaymentTitle)
 	qr := asciiQR(m.state.stripeURL, m.width)
 	now := m.state.clock
 	if now.IsZero() {
@@ -818,15 +806,14 @@ func (m Model) viewPayment() string {
 	if m.state.orderExpiresAt != nil {
 		cd := formatExpiryCountdown(m.state.orderExpiresAt, now)
 		if cd != "" {
-			expiry = fmt.Sprintf("Pay within: %s\n\n", cd)
+			expiry = L.PaymentPayWithin(cd)
 		}
 	}
 	urlBlock := formatSelectableURL(m.state.stripeURL, m.width)
-	copyHint := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render(
-		"Tip: select the URL lines below (mouse drag or terminal copy) and paste into your browser.")
-	body := fmt.Sprintf(`Order: %s
-Status: %s
-%sScan the QR code or open this URL in your browser (cards are not entered in SSH):
+	copyHint := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render(L.PaymentCopyTip)
+	body := fmt.Sprintf(`%s %s
+%s %s
+%s%s
 
 %s
 
@@ -834,39 +821,29 @@ Status: %s
 
 %s
 
-o — refresh order status   esc — menu
-`, m.state.orderLabel(), m.state.orderStatus, expiry, qr, copyHint, urlBlock)
+%s
+`, L.PaymentOrder, m.state.orderLabel(), L.PaymentStatus, m.state.orderStatus, expiry, L.PaymentQRHint, qr, copyHint, urlBlock, L.PaymentHelp)
 	return title + "\n\n" + body
 }
 
 func (m Model) viewOrderComplete() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10")).Render("Payment received")
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10")).Render(L.OrderCompleteTitle)
 	cur := m.state.lastOrderCurrency
 	if cur == "" {
 		cur = "COP"
 	}
-	body := fmt.Sprintf(`Thank you! Your order is confirmed.
-
-Order: %s
-Total: %s
-Status: %s
-
-We will prepare your shipment and update status when it ships.
-Check order status anytime from the main menu (3 or 4).
-
-enter / esc — back to menu
-`, m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus)
+	body := L.OrderCompleteBody(m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus)
 	return title + "\n\n" + body
 }
 
 func (m Model) viewHelp() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Help")
-	return title + "\n\n" + helpText + "\nesc — back to menu\n"
+	title := lipgloss.NewStyle().Bold(true).Render(L.HelpTitle)
+	return title + "\n\n" + L.HelpBody + "\n" + L.HelpBack + "\n"
 }
 
 func (m Model) viewCatalogFilters() string {
 	f := m.state.catalogFilter
-	title := lipgloss.NewStyle().Bold(true).Render("Catalog filters")
+	title := lipgloss.NewStyle().Bold(true).Render(L.FiltersTitle)
 	var b strings.Builder
 	b.WriteString(title + "\n\n")
 	for i, label := range f.labels() {
@@ -876,15 +853,15 @@ func (m Model) viewCatalogFilters() string {
 		}
 		b.WriteString(fmt.Sprintf("%s%-12s %s\n", mark, label+":", f.values()[i]))
 	}
-	b.WriteString("\ntab / enter — next  esc — back without saving  y — apply\n")
+	b.WriteString("\n" + L.FiltersHelp + "\n")
 	return b.String()
 }
 
 func (m Model) viewOrderHistory() string {
-	header := lipgloss.NewStyle().Bold(true).Render("Order history")
-	help := "↑/↓ move  enter view  r refresh  esc menu\n\n"
+	header := lipgloss.NewStyle().Bold(true).Render(L.HistoryTitle)
+	help := L.HistoryHelp + "\n\n"
 	if len(m.state.orderHistory) == 0 {
-		return header + "\n\n(No orders yet)\n\n" + help
+		return header + "\n\n" + L.HistoryEmpty + "\n\n" + help
 	}
 	var b strings.Builder
 	b.WriteString(header + "\n\n")
@@ -902,8 +879,8 @@ func (m Model) viewOrderHistory() string {
 }
 
 func (m Model) viewOrderStatus() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Order status")
-	body := fmt.Sprintf("Order: %s\nStatus: %s\n\n", m.state.orderLabel(), m.state.orderStatus)
+	title := lipgloss.NewStyle().Bold(true).Render(L.StatusTitle)
+	body := fmt.Sprintf("%s %s\n%s %s\n\n", L.StatusOrder, m.state.orderLabel(), L.PaymentStatus, m.state.orderStatus)
 	if ship := formatShipmentSummary(m.state.orderStatus, m.state.lastShipment); ship != "" {
 		body += ship
 	}
@@ -914,23 +891,23 @@ func (m Model) viewOrderStatus() string {
 			cd = formatExpiryCountdown(m.state.orderExpiresAt, m.state.clock)
 		}
 		if cd != "" {
-			body += fmt.Sprintf("Payment expires in: %s\n\n", cd)
+			body += L.StatusPaymentExpires(cd)
 		}
 	}
-	body += "r refresh  esc menu\n"
+	body += L.StatusHelp + "\n"
 	if m.state.orderStatus == "CANCELLED" {
-		body += "\nOrder was cancelled or expired.\n"
+		body += "\n" + L.StatusCancelled + "\n"
 	}
 	return title + "\n\n" + body
 }
 
 func (m Model) viewError() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")).Render("Error")
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")).Render(L.ErrorTitle)
 	msg := fmt.Sprintf("%v", m.err)
 	if ae, ok := m.err.(*api.APIError); ok {
 		msg = ae.FriendlyMessage()
 	}
-	return fmt.Sprintf("%s\n\n%s\n\nesc — menu   q — quit\n", title, msg)
+	return fmt.Sprintf("%s\n\n%s\n\n%s\n", title, msg, L.ErrorBack)
 }
 
 func truncate(s string, n int) string {
@@ -1116,7 +1093,7 @@ func (m Model) fetchOrderCmd() tea.Cmd {
 	allowed := m.state.orderIDAllowed(id)
 	return func() tea.Msg {
 		if !allowed {
-			return orderLoadedMsg{err: fmt.Errorf("order is not available in this session")}
+			return orderLoadedMsg{err: fmt.Errorf("%s", L.ErrOrderNotInSession)}
 		}
 		res, err := m.api.GetOrder(context.Background(), id)
 		if err != nil {

@@ -43,6 +43,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "PUT", Path: "/admin/inventory"},
 	{Method: "GET", Path: "/admin/inventory/reservations"},
 	{Method: "GET", Path: "/admin/orders"},
+	{Method: "GET", Path: "/admin/orders/export"},
 	{Method: "GET", Path: "/admin/orders/{id}"},
 	{Method: "POST", Path: "/admin/orders/{id}/cancel"},
 	{Method: "POST", Path: "/admin/orders/{id}/reconcile-stripe"},

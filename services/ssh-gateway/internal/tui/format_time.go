@@ -11,7 +11,7 @@ func formatExpiryCountdown(expiresAt *time.Time, now time.Time) string {
 	}
 	left := expiresAt.Sub(now)
 	if left <= 0 {
-		return "expired"
+		return L.Expired
 	}
 	m := int(left.Minutes())
 	s := int(left.Seconds()) % 60

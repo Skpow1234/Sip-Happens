@@ -15,7 +15,7 @@ func parseOptionalABV(s string) (*float64, error) {
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid ABV %q", s)
+		return nil, fmt.Errorf("%s", L.ErrInvalidABV(s))
 	}
 	return &f, nil
 }

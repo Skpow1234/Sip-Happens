@@ -319,6 +319,7 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `PATCH /admin/orders/{id}/shipment` — set carrier + tracking (ops); advances shipment when packed
 - `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`, `order_id` — matches `order` aggregate or JSON `order_id` in payload)
 - `GET /admin/orders/{id}` includes `payments` and `payment_status_history` (normalized checkout/webhook/reconcile timeline)
+- `GET /admin/orders/export` — CSV download for finance (`status`, `created_from`, `created_to`, `limit` up to 10000; same filters as list)
 - `GET /docs` — API browser (Redoc)
 - `GET /admin/console` — minimal read-only ops UI (orders, products, inventory, reservations); finance+ role
 
