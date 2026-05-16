@@ -222,5 +222,40 @@ Pedidos
 		ErrInvalidABV: func(s string) string {
 			return fmt.Sprintf("ABV inválido %q", s)
 		},
+
+		ShellBrand:   "Sip-Happens",
+		ShellShop:    "tienda",
+		ShellAccount: "cuenta",
+		ShellCart:    "carrito",
+		ShellPromo:   "Envío gratis en pedidos mayores a $160.000 COP (ciudades piloto).",
+		CatalogFeatured:   "destacados",
+		CatalogAll:        "catálogo",
+		CatalogSelectHint: "Selecciona una cerveza de la lista.",
+		CatalogFooter:     "↑/↓ productos  a agregar  / buscar  f filtros  n/p página  c carrito  ? ayuda",
+		ProductDetailFooter: "a agregar  enter cantidad",
+		CrumbCart:     "carrito",
+		CrumbShipping: "envío",
+		CrumbPayment:  "pago",
+		CrumbConfirm:  "confirmación",
+		CartFooter:    "esc atrás  ↑/↓ artículos  +/- cantidad  x quitar  enter pagar",
+		CheckoutFooter: "esc carrito  tab/↑↓ campos  enter confirmar",
+		ConfirmFooter:  "esc envío  p privacidad  y confirmar pedido",
+		PaymentFooter:  "o estado  esc tienda",
+		PaymentOffTerminal: "No ingreses tarjetas por SSH. Paga en el navegador o escanea el QR.",
+		AccountOrders: "historial de pedidos",
+		AccountFAQ:    "preguntas frecuentes",
+		AccountAbout:  "acerca de",
+		AccountFAQBody: `Preguntas frecuentes (piloto)
+
+• ¿Cómo pago? Enlace seguro Stripe fuera de la terminal.
+• ¿Entregas? Bogotá, Medellín y Cali (v1).
+• ¿Edad? Debes ser mayor de 18 años.
+• Soporte: usa el contacto en la pantalla de confirmación.`,
+		AccountAboutBody: `Sip-Happens — cerveza artesanal en Colombia.
+
+Política de privacidad: %s
+Derechos del consumidor (SIC): %s`,
+		AccountFooter:     "↑/↓ menú  enter seleccionar  esc tienda",
+		HistoryPaneHelp:   "enter ver pedido  r actualizar",
 	}
 }

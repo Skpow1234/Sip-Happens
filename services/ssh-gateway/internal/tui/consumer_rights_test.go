@@ -15,9 +15,10 @@ func TestConsumerRightsURL_WelcomeCheckoutConfirm(t *testing.T) {
 		t.Fatalf("welcome missing consumer rights: %q", m.View())
 	}
 
-	m.screen = screenMenu
+	m.screen = screenAccount
+	m.state.accountSection = accountAbout
 	if !strings.Contains(m.View(), url) {
-		t.Fatalf("menu missing consumer rights")
+		t.Fatalf("account about missing consumer rights")
 	}
 
 	m.screen = screenCheckout

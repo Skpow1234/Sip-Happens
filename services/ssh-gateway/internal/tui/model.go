@@ -27,10 +27,13 @@ type Model struct {
 	screen screen
 	state  AppState
 
+	notice string
 	err    error
 	busy   bool
 	width  int
 	height int
+
+	helpFromAccount bool
 }
 
 func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataProcessingPolicyURL, supportContact, dispatchETAPolicy string) Model {
@@ -69,14 +72,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
-		case "ctrl+c", "q":
-			if m.screen == screenWelcome || m.screen == screenMenu {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "q":
+			if m.screen == screenWelcome {
 				return m, tea.Quit
 			}
 			if m.screen == screenError {
 				return m, tea.Quit
 			}
-			m.screen = screenMenu
+			if m.usesShell() {
+				return m, tea.Quit
+			}
 			return m, nil
 		}
 		return m.updateKey(msg)
@@ -88,19 +95,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state.catalogCursor >= len(m.state.catalog) {
 			m.state.catalogCursor = 0
 		}
-		return m, nil
+		return m, m.maybeLoadCatalogDetailCmd()
 
 	case detailLoadedMsg:
 		m.busy = false
 		m.state.productDetail = msg.detail
-		m.screen = screenProduct
 		return m, nil
 
 	case checkoutDoneMsg:
 		m.busy = false
 		if msg.err != nil {
-			m.err = msg.err
-			m.screen = screenError
+			m.showErr(msg.err)
+			m.screen = screenConfirm
 			return m, nil
 		}
 		m.state.lastOrderID = msg.result.Order.ID
@@ -118,8 +124,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case orderLoadedMsg:
 		m.busy = false
 		if msg.err != nil {
-			m.err = msg.err
-			m.screen = screenError
+			m.showErr(msg.err)
 			return m, nil
 		}
 		prev := m.state.orderStatus
@@ -195,8 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		m.busy = false
-		m.err = msg.err
-		m.screen = screenError
+		m.showErr(msg.err)
 		return m, nil
 	}
 
@@ -204,6 +208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if next, cmd, ok := m.handleGlobalKey(msg); ok {
+		return next, cmd
+	}
 	switch m.screen {
 	case screenWelcome:
 		switch msg.String() {
@@ -217,9 +224,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.state.birthDate = strings.TrimSpace(m.state.birthDateInput)
 			m.state.ageConfirmed = true
-			m.screen = screenMenu
+			m.state.resetCatalogPage()
+			m.screen = screenCatalog
 			m.busy = true
-			return m, tea.Batch(m.patchBirthDateCmd(), m.loadServerCartCmd())
+			return m, tea.Batch(m.patchBirthDateCmd(), m.loadServerCartCmd(), m.loadCatalogCmd())
 		case "backspace":
 			if len(m.state.birthDateInput) > 0 {
 				m.state.birthDateInput = m.state.birthDateInput[:len(m.state.birthDateInput)-1]
@@ -230,82 +238,71 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case screenMenu:
-		switch msg.String() {
-		case "1", "c":
-			m.state.resetCatalogPage()
-			m.screen = screenCatalog
-			m.busy = true
-			return m, m.loadCatalogCmd()
-		case "2":
-			m.state.catalogCursor = 0
-			m.screen = screenCart
-			if strings.TrimSpace(m.state.checkout.city) != "" {
-				return m, m.loadShippingEstimateCmd()
-			}
-		case "3", "o":
-			if m.state.lastOrderID == "" {
-				m.err = fmt.Errorf("%s", L.ErrNoRecentOrder)
-				m.screen = screenError
-				return m, nil
-			}
-			if !m.state.orderIDAllowed(m.state.lastOrderID) {
-				m.err = fmt.Errorf("%s", L.ErrOrderNotInSession)
-				m.screen = screenError
-				return m, nil
-			}
-			m.screen = screenOrderStatus
-			m.busy = true
-			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
-		case "4":
-			m.screen = screenOrderHistory
-			m.state.orderHistoryCursor = 0
-			m.busy = true
-			return m, m.loadOrderHistoryCmd()
-		case "?", "h":
-			m.screen = screenHelp
-		case "q":
-			return m, tea.Quit
-		}
-
 	case screenHelp:
 		if msg.String() == "esc" || msg.String() == "?" {
-			m.screen = screenMenu
+			if m.helpFromAccount {
+				next, cmd, _ := m.goAccount()
+				return next, cmd
+			}
+			next, cmd, _ := m.goShop()
+			return next, cmd
 		}
 
 	case screenOrderComplete:
 		switch msg.String() {
 		case "esc", "enter", " ":
-			m.screen = screenMenu
+			next, cmd, _ := m.goShop()
+			return next, cmd
 		}
 
-	case screenOrderHistory:
+	case screenAccount:
 		switch msg.String() {
-		case "esc":
-			m.screen = screenMenu
+		case "tab":
+			if m.state.accountSection < accountAbout {
+				m.state.accountSection++
+			} else {
+				m.state.accountSection = accountOrders
+			}
+			if m.state.accountSection == accountOrders {
+				m.busy = true
+				return m, m.loadOrderHistoryCmd()
+			}
 		case "up", "k":
-			if m.state.orderHistoryCursor > 0 {
-				m.state.orderHistoryCursor--
+			if m.state.accountSection == accountOrders && len(m.state.orderHistory) > 0 {
+				if m.state.orderHistoryCursor > 0 {
+					m.state.orderHistoryCursor--
+				}
+			} else if m.state.accountSection > accountOrders {
+				m.state.accountSection--
 			}
 		case "down", "j":
-			if m.state.orderHistoryCursor < len(m.state.orderHistory)-1 {
-				m.state.orderHistoryCursor++
+			if m.state.accountSection == accountOrders && len(m.state.orderHistory) > 0 {
+				if m.state.orderHistoryCursor < len(m.state.orderHistory)-1 {
+					m.state.orderHistoryCursor++
+				}
+			} else if m.state.accountSection < accountAbout {
+				m.state.accountSection++
+				if m.state.accountSection == accountOrders {
+					m.busy = true
+					return m, m.loadOrderHistoryCmd()
+				}
+			}
+		case "enter":
+			if m.state.accountSection == accountOrders && len(m.state.orderHistory) > 0 {
+				o := m.state.orderHistory[m.state.orderHistoryCursor]
+				m.state.lastOrderID = o.ID
+				m.state.lastOrderDisplayRef = o.DisplayRef
+				m.state.rememberOrderID(o.ID)
+				m.state.orderStatus = o.Status
+				m.screen = screenOrderStatus
+				m.busy = true
+				return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
 			}
 		case "r":
-			m.busy = true
-			return m, m.loadOrderHistoryCmd()
-		case "enter":
-			if len(m.state.orderHistory) == 0 {
-				return m, nil
+			if m.state.accountSection == accountOrders {
+				m.busy = true
+				return m, m.loadOrderHistoryCmd()
 			}
-			o := m.state.orderHistory[m.state.orderHistoryCursor]
-			m.state.lastOrderID = o.ID
-			m.state.lastOrderDisplayRef = o.DisplayRef
-			m.state.rememberOrderID(o.ID)
-			m.state.orderStatus = o.Status
-			m.screen = screenOrderStatus
-			m.busy = true
-			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
 		}
 
 	case screenCatalog:
@@ -313,8 +310,6 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.updateCatalogSearchKey(msg)
 		}
 		switch msg.String() {
-		case "esc":
-			m.screen = screenMenu
 		case "/":
 			m.state.catalogSearchEdit = true
 			m.state.catalogSearchBuf = m.state.catalogQuery.Q
@@ -343,67 +338,39 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.state.catalogCursor > 0 {
 				m.state.catalogCursor--
+				return m, m.maybeLoadCatalogDetailCmd()
 			}
 		case "down", "j":
 			if m.state.catalogCursor < len(m.state.catalog)-1 {
 				m.state.catalogCursor++
+				return m, m.maybeLoadCatalogDetailCmd()
 			}
 		case "r":
 			m.busy = true
 			return m, m.loadCatalogCmd()
 		case "enter":
-			if len(m.state.catalog) == 0 {
-				return m, nil
-			}
-			sku := m.state.catalog[m.state.catalogCursor].Product.SKU
-			m.state.productSKU = sku
-			m.busy = true
-			return m, m.loadDetailCmd(sku)
+			return m, m.maybeLoadCatalogDetailCmd()
 		case "a":
 			if len(m.state.catalog) == 0 {
 				return m, nil
 			}
 			it := m.state.catalog[m.state.catalogCursor]
 			if it.AvailableQty <= 0 {
-				m.err = fmt.Errorf("%s", L.ErrOutOfStock)
-				m.screen = screenError
+				m.showErr(fmt.Errorf("%s", L.ErrOutOfStock))
 				return m, nil
 			}
 			m.state.addToCart(it, 1)
-			return m, m.saveServerCartCmd()
-		case "b":
-			m.screen = screenCart
 			return m, m.saveServerCartCmd()
 		}
 
 	case screenCatalogFilters:
 		return m.updateCatalogFilterKey(msg)
 
-	case screenProduct:
-		switch msg.String() {
-		case "esc":
-			m.screen = screenCatalog
-		case "a":
-			if m.state.productDetail != nil {
-				it := m.state.productDetail.AsCatalogItem()
-				if it.AvailableQty <= 0 {
-					m.err = fmt.Errorf("%s", L.ErrOutOfStock)
-					m.screen = screenError
-					return m, nil
-				}
-				m.state.addToCart(it, 1)
-				return m, m.saveServerCartCmd()
-			}
-		case "b":
-			m.screen = screenCart
-			return m, m.saveServerCartCmd()
-		}
-
 	case screenCart:
 		switch msg.String() {
 		case "esc":
-			m.screen = screenMenu
-			return m, m.saveServerCartCmd()
+			next, cmd, _ := m.goShop()
+			return next, cmd
 		case "up", "k":
 			if m.cartCursor() > 0 {
 				m.setCartCursor(m.cartCursor() - 1)
@@ -414,24 +381,19 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "+", "=":
 			m.bumpCartQty(1)
-			if m.screen != screenError {
-				return m, m.saveServerCartCmd()
-			}
+			return m, m.saveServerCartCmd()
 		case "-", "_":
 			m.bumpCartQty(-1)
-			if m.screen != screenError {
-				return m, m.saveServerCartCmd()
-			}
+			return m, m.saveServerCartCmd()
 		case "d", "x":
 			m.removeCartLine()
 			return m, m.saveServerCartCmd()
-		case "c":
+		case "enter":
 			if len(m.state.cart) == 0 {
 				return m, nil
 			}
 			if err := m.state.validateCartStock(); err != nil {
-				m.err = err
-				m.screen = screenError
+				m.showErr(err)
 				return m, nil
 			}
 			m.state.shippingMinor = 0
@@ -454,13 +416,11 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state.privacyAccepted = !m.state.privacyAccepted
 		case "y":
 			if err := m.state.validateCartStock(); err != nil {
-				m.err = err
-				m.screen = screenError
+				m.showErr(err)
 				return m, nil
 			}
 			if !m.state.privacyAccepted {
-				m.err = fmt.Errorf("%s", L.ErrPrivacyRequired)
-				m.screen = screenError
+				m.showErr(fmt.Errorf("%s", L.ErrPrivacyRequired))
 				return m, nil
 			}
 			m.busy = true
@@ -469,8 +429,6 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case screenPayment:
 		switch msg.String() {
-		case "esc":
-			m.screen = screenMenu
 		case "o":
 			m.screen = screenOrderStatus
 			m.busy = true
@@ -490,7 +448,8 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			m.err = nil
-			m.screen = screenMenu
+			next, cmd, _ := m.goShop()
+			return next, cmd
 		}
 	}
 	return m, nil
@@ -520,8 +479,7 @@ func (m *Model) bumpCartQty(delta int) {
 	}
 	max := m.state.cart[i].AvailableQty
 	if max > 0 && newQty > max {
-		m.err = fmt.Errorf("%s", L.ErrCartLineStock(m.state.cart[i].SKU, max))
-		m.screen = screenError
+		m.showErr(fmt.Errorf("%s", L.ErrCartLineStock(m.state.cart[i].SKU, max)))
 		return
 	}
 	m.state.cart[i].Qty = newQty
@@ -560,8 +518,7 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadShippingEstimateCmd()
 		}
 		if !m.checkoutValid() {
-			m.err = fmt.Errorf("%s", L.ErrCheckoutFields)
-			m.screen = screenError
+			m.showErr(fmt.Errorf("%s", L.ErrCheckoutFields))
 			return m, nil
 		}
 		if m.state.idempotencyKey == "" {
@@ -599,41 +556,45 @@ func (m Model) checkoutValid() bool {
 }
 
 func (m Model) View() string {
-	if m.busy {
-		return m.withFooter(m.viewBusy())
-	}
-	switch m.screen {
-	case screenWelcome:
+	if m.screen == screenWelcome {
 		return m.viewWelcome()
-	case screenMenu:
-		return m.withFooter(m.viewMenu())
-	case screenCatalog:
-		return m.withFooter(m.viewCatalog())
-	case screenCatalogFilters:
-		return m.withFooter(m.viewCatalogFilters())
-	case screenProduct:
-		return m.withFooter(m.viewProduct())
-	case screenCart:
-		return m.withFooter(m.viewCart())
-	case screenCheckout:
-		return m.withFooter(m.viewCheckout())
-	case screenConfirm:
-		return m.withFooter(m.viewConfirm())
-	case screenPayment:
-		return m.withFooter(m.viewPayment())
-	case screenOrderStatus:
-		return m.withFooter(m.viewOrderStatus())
-	case screenOrderHistory:
-		return m.withFooter(m.viewOrderHistory())
-	case screenHelp:
-		return m.withFooter(m.viewHelp())
-	case screenOrderComplete:
-		return m.withFooter(m.viewOrderComplete())
-	case screenError:
-		return m.withFooter(m.viewError())
-	default:
-		return ""
 	}
+	if m.screen == screenError {
+		return m.viewError()
+	}
+	body := ""
+	if m.busy && m.screen == screenCatalog && m.state.productDetail == nil {
+		body = m.viewBusy()
+	} else {
+		switch m.screen {
+		case screenCatalog:
+			body = m.viewCatalogSplit()
+		case screenCatalogFilters:
+			body = m.composeLayout(m.viewCatalogFilters(), m.layoutDefaults(tabShop, L.FiltersHelp))
+		case screenCart:
+			body = m.viewCartV2()
+		case screenCheckout:
+			body = m.viewCheckoutV2()
+		case screenConfirm:
+			body = m.viewConfirmV2()
+		case screenPayment:
+			body = m.viewPaymentV2()
+		case screenOrderStatus:
+			body = m.composeLayout(m.viewOrderStatus(), m.layoutDefaults(tabAccount, L.StatusHelp))
+		case screenAccount:
+			body = m.viewAccountShell()
+		case screenHelp:
+			body = m.composeLayout(m.viewHelp(), m.layoutDefaults(m.activeTab(), L.HelpBack))
+		case screenOrderComplete:
+			body = m.composeLayout(m.viewOrderComplete(), m.layoutDefaults(tabCart, "esc — tienda"))
+		default:
+			body = ""
+		}
+	}
+	if body == "" && m.busy {
+		body = m.composeLayout(m.viewBusy(), m.layoutDefaults(m.activeTab(), ""))
+	}
+	return body
 }
 
 func (m Model) viewBusy() string {
@@ -1052,8 +1013,7 @@ func (m Model) updateCatalogFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "y":
 		if err := m.state.applyCatalogFiltersFromForm(); err != nil {
-			m.err = err
-			m.screen = screenError
+			m.showErr(err)
 			return m, nil
 		}
 		m.screen = screenCatalog
@@ -1065,8 +1025,7 @@ func (m Model) updateCatalogFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if err := m.state.applyCatalogFiltersFromForm(); err != nil {
-			m.err = err
-			m.screen = screenError
+			m.showErr(err)
 			return m, nil
 		}
 		m.screen = screenCatalog

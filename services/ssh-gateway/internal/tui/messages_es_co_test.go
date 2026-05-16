@@ -17,11 +17,21 @@ func TestSpanishCO_WelcomeUsesSpanishCopy(t *testing.T) {
 	}
 }
 
-func TestSpanishCO_MenuUsesSpanishCopy(t *testing.T) {
+func TestSpanishCO_ShellUsesSpanishCopy(t *testing.T) {
 	m := NewRootModel(nil, "", "", "", "", "")
-	m.screen = screenMenu
+	m.screen = screenCatalog
+	m.width = 80
 	view := m.View()
-	if !strings.Contains(view, "Menú principal") || !strings.Contains(view, "Ver catálogo") {
-		t.Fatalf("expected Spanish menu: %q", view)
+	if !strings.Contains(view, "tienda") || !strings.Contains(view, "carrito") {
+		t.Fatalf("expected Spanish shell tabs: %q", view)
+	}
+}
+
+func TestSpanishCO_AccountMenuSpanish(t *testing.T) {
+	m := NewRootModel(nil, "", "", "", "", "")
+	m.screen = screenAccount
+	m.width = 80
+	if !strings.Contains(m.View(), "historial de pedidos") {
+		t.Fatalf("expected Spanish account menu")
 	}
 }

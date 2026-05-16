@@ -107,6 +107,34 @@ type Messages struct {
 	ErrNoRecentOrder     string
 	ErrOrderNotInSession string
 	ErrInvalidABV        func(s string) string
+
+	// Shell (TUI v2)
+	ShellBrand            string
+	ShellShop             string
+	ShellAccount          string
+	ShellCart             string
+	ShellPromo            string
+	CatalogFeatured       string
+	CatalogAll            string
+	CatalogSelectHint     string
+	CatalogFooter         string
+	ProductDetailFooter   string
+	CrumbCart             string
+	CrumbShipping         string
+	CrumbPayment          string
+	CrumbConfirm          string
+	CartFooter            string
+	CheckoutFooter        string
+	ConfirmFooter         string
+	PaymentFooter         string
+	PaymentOffTerminal    string
+	AccountOrders         string
+	AccountFAQ            string
+	AccountAbout          string
+	AccountFAQBody        string
+	AccountAboutBody      string
+	AccountFooter         string
+	HistoryPaneHelp       string
 }
 
 // L is the active locale (Spanish Colombia).

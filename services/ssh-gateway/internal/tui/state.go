@@ -24,6 +24,7 @@ const (
 	screenCatalogFilters
 	screenHelp
 	screenOrderComplete
+	screenAccount
 	screenError
 )
 
@@ -124,6 +125,8 @@ type AppState struct {
 	shippingMinor       int64
 	shippingCurrency    string
 	shippingEstimateErr string
+
+	accountSection int
 }
 
 func (s *AppState) rememberOrderID(id string) {
