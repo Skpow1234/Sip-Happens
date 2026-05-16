@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"sip-happens/pkg/ids"
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/ids"
 )
 
 type Service interface {
@@ -33,6 +33,9 @@ type Service interface {
 	RecordAudit(ctx context.Context, actor, aggregateType, aggregateID, eventType, payloadJSON string) error
 
 	SetProductImageURL(ctx context.Context, actor string, productID domain.ProductID, imageURL string) error
+
+	// ProductUpdatedAt returns the row version used for If-Match / ETag optimistic locking.
+	ProductUpdatedAt(ctx context.Context, productID domain.ProductID) (time.Time, error)
 }
 
 type SQLService struct {
@@ -66,14 +69,14 @@ type UpsertProductInput struct {
 
 type PatchProductInput struct {
 	// Optional fields; when nil/zero-value + not present, no change.
-	Name      *string `json:"name"`
-	Brewery   *string `json:"brewery"`
-	Style     *string `json:"style"`
+	Name      *string  `json:"name"`
+	Brewery   *string  `json:"brewery"`
+	Style     *string  `json:"style"`
 	ABV       *float64 `json:"abv"`
-	VolumeML  *int    `json:"volume_ml"`
-	InvimaReg *string `json:"invima_reg"`
-	ImageURL  *string `json:"image_url"`
-	IsActive  *bool   `json:"is_active"`
+	VolumeML  *int     `json:"volume_ml"`
+	InvimaReg *string  `json:"invima_reg"`
+	ImageURL  *string  `json:"image_url"`
+	IsActive  *bool    `json:"is_active"`
 }
 
 type SetPriceInput struct {
@@ -332,6 +335,21 @@ where id=$10
 	return nil
 }
 
+func (s *SQLService) ProductUpdatedAt(ctx context.Context, productID domain.ProductID) (time.Time, error) {
+	if s.DB == nil {
+		return time.Time{}, fmt.Errorf("missing db")
+	}
+	if productID == "" {
+		return time.Time{}, domain.ErrInvalidInput
+	}
+	var updatedAt time.Time
+	err := s.DB.QueryRowContext(ctx, `select updated_at from products where id=$1`, string(productID)).Scan(&updatedAt)
+	if err == sql.ErrNoRows {
+		return time.Time{}, domain.ErrNotFound
+	}
+	return updatedAt, err
+}
+
 func (s *SQLService) SetProductImageURL(ctx context.Context, actor string, productID domain.ProductID, imageURL string) error {
 	if s.DB == nil {
 		return fmt.Errorf("missing db")
@@ -507,7 +525,7 @@ func (s *SQLService) ListOrdersAdmin(ctx context.Context, in ListOrdersAdminInpu
 	to := nullableTime(in.CreatedTo)
 
 	rows, err := s.DB.QueryContext(ctx, `
-select id, status, customer_id,
+select id, display_ref, status, customer_id,
        subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
        city, neighborhood, address_line1, phone, legal_id, full_name,
        stripe_checkout_session_id, stripe_payment_intent_id,
@@ -529,7 +547,7 @@ limit $4 offset $5
 		var o domain.Order
 		var expiresAt sql.NullTime
 		if err := rows.Scan(
-			&o.ID, &o.Status, &o.CustomerID,
+			&o.ID, &o.DisplayRef, &o.Status, &o.CustomerID,
 			&o.SubtotalMinorUnits, &o.ShippingMinorUnits, &o.TotalMinorUnits, &o.Currency,
 			&o.City, &o.Neighborhood, &o.AddressLine1, &o.Phone, &o.LegalID, &o.FullName,
 			&o.StripeCheckoutSessionID, &o.StripePaymentIntentID,
@@ -613,4 +631,3 @@ func nullableTime(t *time.Time) any {
 	}
 	return *t
 }
-

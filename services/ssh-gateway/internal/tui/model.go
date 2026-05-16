@@ -84,6 +84,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state.lastOrderID = msg.result.Order.ID
+		m.state.lastOrderDisplayRef = msg.result.Order.DisplayRef
 		m.state.rememberOrderID(msg.result.Order.ID)
 		m.state.setOrderSnapshot(msg.result.Order, nil)
 		if msg.result.Stripe != nil {
@@ -279,6 +280,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			o := m.state.orderHistory[m.state.orderHistoryCursor]
 			m.state.lastOrderID = o.ID
+			m.state.lastOrderDisplayRef = o.DisplayRef
 			m.state.rememberOrderID(o.ID)
 			m.state.orderStatus = o.Status
 			m.screen = screenOrderStatus
@@ -635,8 +637,8 @@ Privacy: %s
 func (m Model) viewMenu() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Main menu")
 	cart := fmt.Sprintf("Cart: %d item(s)", m.state.cartCount())
-	if m.state.lastOrderID != "" {
-		cart += fmt.Sprintf("  |  Last order: %s", m.state.lastOrderID)
+	if label := m.state.orderLabel(); label != "" {
+		cart += fmt.Sprintf("  |  Last order: %s", label)
 	}
 	help := `
   1 — Browse catalog
@@ -821,7 +823,7 @@ Status: %s
 %s
 
 o — refresh order status   esc — menu
-`, m.state.lastOrderID, m.state.orderStatus, expiry, qr, copyHint, urlBlock)
+`, m.state.orderLabel(), m.state.orderStatus, expiry, qr, copyHint, urlBlock)
 	return title + "\n\n" + body
 }
 
@@ -841,7 +843,7 @@ We will prepare your shipment and update status when it ships.
 Check order status anytime from the main menu (3 or 4).
 
 enter / esc — back to menu
-`, m.state.lastOrderID, formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus)
+`, m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus)
 	return title + "\n\n" + body
 }
 
@@ -879,12 +881,9 @@ func (m Model) viewOrderHistory() string {
 		if i == m.state.orderHistoryCursor {
 			cur = "> "
 		}
-		shortID := o.ID
-		if len(shortID) > 8 {
-			shortID = shortID[:8]
-		}
-		b.WriteString(fmt.Sprintf("%s%s  %-18s  %s\n",
-			cur, shortID, o.Status, formatMoney(o.Currency, o.TotalMinorUnits)))
+		label := formatOrderLabel(o.ID, o.DisplayRef)
+		b.WriteString(fmt.Sprintf("%s%-18s  %-18s  %s\n",
+			cur, label, o.Status, formatMoney(o.Currency, o.TotalMinorUnits)))
 	}
 	b.WriteString("\n" + help)
 	return b.String()
@@ -892,7 +891,7 @@ func (m Model) viewOrderHistory() string {
 
 func (m Model) viewOrderStatus() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Order status")
-	body := fmt.Sprintf("Order: %s\nStatus: %s\n\n", m.state.lastOrderID, m.state.orderStatus)
+	body := fmt.Sprintf("Order: %s\nStatus: %s\n\n", m.state.orderLabel(), m.state.orderStatus)
 	if ship := formatShipmentSummary(m.state.orderStatus, m.state.lastShipment); ship != "" {
 		body += ship
 	}
@@ -974,6 +973,7 @@ func (m *Model) prefillCheckout(c api.CustomerView) {
 		f.fullName = c.FullName
 	}
 }
+
 type tickMsg struct{}
 
 func (m Model) loadCatalogCmd() tea.Cmd {

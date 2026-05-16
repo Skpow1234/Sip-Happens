@@ -17,6 +17,7 @@ const (
 
 type Order struct {
 	ID         OrderID
+	DisplayRef string
 	Status     OrderStatus
 	CustomerID CustomerID
 

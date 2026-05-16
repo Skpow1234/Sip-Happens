@@ -17,11 +17,8 @@ func (m Model) statusBar() string {
 	if n := m.state.cartCount(); n > 0 {
 		parts = append(parts, fmt.Sprintf("cart %d", n))
 	}
-	if id := strings.TrimSpace(m.state.lastOrderID); id != "" {
-		if len(id) > 8 {
-			id = id[:8]
-		}
-		parts = append(parts, "order "+id)
+	if label := m.state.orderLabel(); label != "" {
+		parts = append(parts, "order "+label)
 	}
 	if len(parts) == 0 {
 		return ""
@@ -36,6 +33,17 @@ func (m Model) withFooter(body string) string {
 	}
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	return body + "\n\n" + style.Render(bar)
+}
+
+func formatOrderLabel(id, displayRef string) string {
+	if dr := strings.TrimSpace(displayRef); dr != "" {
+		return dr
+	}
+	id = strings.TrimSpace(id)
+	if len(id) > 12 {
+		return id[:8] + "…"
+	}
+	return id
 }
 
 func formatShipmentSummary(orderStatus string, sh *api.ShipmentView) string {

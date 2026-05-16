@@ -43,8 +43,8 @@ on conflict (ssh_fingerprint) do nothing
 	}
 
 	_, err = tdb.DB.ExecContext(ctx, `
-insert into orders (id, status, customer_id, subtotal_minor_units, shipping_minor_units, total_minor_units, currency, created_at, updated_at)
-values ('order-a', 'PENDING_PAYMENT', 'cust-a', 1000, 0, 1000, 'COP', now(), now())
+insert into orders (id, display_ref, status, customer_id, subtotal_minor_units, shipping_minor_units, total_minor_units, currency, created_at, updated_at)
+values ('order-a', 'SH-ORDERA01', 'PENDING_PAYMENT', 'cust-a', 1000, 0, 1000, 'COP', now(), now())
 `)
 	if err != nil {
 		t.Fatalf("seed order: %v", err)

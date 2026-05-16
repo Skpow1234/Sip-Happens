@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"time"
 
-	"sip-happens/pkg/ids"
-	"sip-happens/services/core-api/internal/catalog"
-	"sip-happens/services/core-api/internal/db"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/events"
+	"sip-happens/pkg/ids"
 	"sip-happens/pkg/obslog"
+	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
@@ -77,6 +77,10 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 			return err
 		}
 		orderID := domain.OrderID(orderUUID)
+		displayRef, err := ids.NewOrderDisplayRef()
+		if err != nil {
+			return err
+		}
 
 		// Price snapshot + product snapshot; reserve inventory after order row exists (FK).
 		var subtotal int64
@@ -137,6 +141,7 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 		total := subtotal + ship
 		order := domain.Order{
 			ID:         orderID,
+			DisplayRef: displayRef,
 			Status:     domain.OrderStatusPendingPayment,
 			CustomerID: in.CustomerID,
 
@@ -388,4 +393,3 @@ func (s *service) SetStripeRefs(ctx context.Context, id domain.OrderID, checkout
 		return s.orders.SetStripeRefs(ctx, tx, id, checkoutSessionID, paymentIntentID)
 	})
 }
-

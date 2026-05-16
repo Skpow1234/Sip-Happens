@@ -39,4 +39,3 @@ func UUIDv4() (string, error) {
 		b[10], b[11], b[12], b[13], b[14], b[15],
 	), nil
 }
-

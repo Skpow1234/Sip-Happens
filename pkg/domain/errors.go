@@ -8,6 +8,7 @@ var (
 	ErrConflict       = errors.New("conflict")
 	ErrUnauthorized   = errors.New("unauthorized")
 	ErrForbidden      = errors.New("forbidden")
-	ErrAlreadyApplied = errors.New("already applied")
+	ErrAlreadyApplied      = errors.New("already applied")
+	ErrPreconditionFailed  = errors.New("precondition failed")
 )
 

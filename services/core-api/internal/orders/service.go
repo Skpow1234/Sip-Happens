@@ -50,4 +50,3 @@ type CreatePendingOrderItem struct {
 	ProductID domain.ProductID
 	Qty       int
 }
-

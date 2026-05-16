@@ -21,7 +21,7 @@ func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
 func (r *SQLRepository) Get(ctx context.Context, q Querier, id domain.OrderID) (*domain.Order, error) {
 	row := q.QueryRowContext(ctx, `
-select id, status, customer_id,
+select id, display_ref, status, customer_id,
        subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
        city, neighborhood, address_line1, phone, legal_id, full_name,
        stripe_checkout_session_id, stripe_payment_intent_id,
@@ -33,7 +33,7 @@ where id = $1
 	var o domain.Order
 	var expiresAt sql.NullTime
 	if err := row.Scan(
-		&o.ID, &o.Status, &o.CustomerID,
+		&o.ID, &o.DisplayRef, &o.Status, &o.CustomerID,
 		&o.SubtotalMinorUnits, &o.ShippingMinorUnits, &o.TotalMinorUnits, &o.Currency,
 		&o.City, &o.Neighborhood, &o.AddressLine1, &o.Phone, &o.LegalID, &o.FullName,
 		&o.StripeCheckoutSessionID, &o.StripePaymentIntentID,
@@ -83,19 +83,19 @@ func (r *SQLRepository) Insert(ctx context.Context, tx *sql.Tx, order domain.Ord
 	// For now, we assume the caller sets order.ID, or the DB provides it via default.
 	_, err := tx.ExecContext(ctx, `
 insert into orders (
-  id, status, customer_id,
+  id, display_ref, status, customer_id,
   subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
   city, neighborhood, address_line1, phone, legal_id, full_name,
   stripe_checkout_session_id, stripe_payment_intent_id,
   expires_at, created_at, updated_at
 ) values (
-  $1, $2, $3,
-  $4, $5, $6, $7,
-  $8, $9, $10, $11, $12, $13,
-  $14, $15,
-  $16, $17, $18
+  $1, $2, $3, $4,
+  $5, $6, $7, $8,
+  $9, $10, $11, $12, $13, $14,
+  $15, $16,
+  $17, $18, $19
 )
-`, string(order.ID), order.Status, string(order.CustomerID),
+`, string(order.ID), order.DisplayRef, order.Status, string(order.CustomerID),
 		order.SubtotalMinorUnits, order.ShippingMinorUnits, order.TotalMinorUnits, order.Currency,
 		order.City, order.Neighborhood, order.AddressLine1, order.Phone, order.LegalID, order.FullName,
 		order.StripeCheckoutSessionID, order.StripePaymentIntentID,
@@ -208,7 +208,7 @@ func (r *SQLRepository) ListByCustomer(ctx context.Context, q Querier, customerI
 		limit = 100
 	}
 	rows, err := q.QueryContext(ctx, `
-select id, status, customer_id,
+select id, display_ref, status, customer_id,
        subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
        city, neighborhood, address_line1, phone, legal_id, full_name,
        stripe_checkout_session_id, stripe_payment_intent_id,
@@ -228,7 +228,7 @@ limit $2
 		var o domain.Order
 		var expiresAt sql.NullTime
 		if err := rows.Scan(
-			&o.ID, &o.Status, &o.CustomerID,
+			&o.ID, &o.DisplayRef, &o.Status, &o.CustomerID,
 			&o.SubtotalMinorUnits, &o.ShippingMinorUnits, &o.TotalMinorUnits, &o.Currency,
 			&o.City, &o.Neighborhood, &o.AddressLine1, &o.Phone, &o.LegalID, &o.FullName,
 			&o.StripeCheckoutSessionID, &o.StripePaymentIntentID,

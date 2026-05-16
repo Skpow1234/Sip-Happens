@@ -326,14 +326,18 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
 		return
 	}
+	productID := domain.ProductID(id)
 	switch r.Method {
 	case http.MethodPut:
+		if !s.checkAdminProductIfMatch(w, r, productID) {
+			return
+		}
 		var req admin.UpsertProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
-		err := s.Admin.PutProductByID(r.Context(), "admin", domain.ProductID(id), req)
+		err := s.Admin.PutProductByID(r.Context(), "admin", productID, req)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
@@ -352,14 +356,17 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		s.writeAdminProductNoContent(w, r, productID)
 	case http.MethodPatch:
+		if !s.checkAdminProductIfMatch(w, r, productID) {
+			return
+		}
 		var req admin.PatchProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
-		err := s.Admin.PatchProductByID(r.Context(), "admin", domain.ProductID(id), req)
+		err := s.Admin.PatchProductByID(r.Context(), "admin", productID, req)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
@@ -378,10 +385,10 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 			writeAPIError(w, r, status, code, "request invalid")
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		s.writeAdminProductNoContent(w, r, productID)
 	case http.MethodDelete:
 		reason := r.URL.Query().Get("reason")
-		err := s.Admin.DeactivateProduct(r.Context(), "admin", domain.ProductID(id), reason)
+		err := s.Admin.DeactivateProduct(r.Context(), "admin", productID, reason)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if err == domain.ErrInvalidInput {
@@ -866,7 +873,11 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := parseLimitQuery(r, 50, 100)
+	limit, err := parseCatalogLimitQuery(r)
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", err.Error())
+		return
+	}
 	offset := parseOffsetQuery(r)
 
 	page, err := s.Catalog.ListActiveProducts(r.Context(), s.DB, catalog.ListCatalogFilter{

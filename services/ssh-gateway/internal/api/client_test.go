@@ -18,8 +18,8 @@ func TestGetCatalog_Unsigned(t *testing.T) {
 			"currency": "COP",
 			"items": []map[string]any{
 				{
-					"Product": map[string]any{"ID": "p1", "SKU": "SKU-1", "Name": "Beer"},
-					"Price":   map[string]any{"Currency": "COP", "AmountMinorUnits": int64(1000)},
+					"Product":       map[string]any{"ID": "p1", "SKU": "SKU-1", "Name": "Beer"},
+					"Price":         map[string]any{"Currency": "COP", "AmountMinorUnits": int64(1000)},
 					"available_qty": 5,
 				},
 			},

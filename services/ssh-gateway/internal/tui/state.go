@@ -30,12 +30,12 @@ const (
 const catalogPageSize = 15
 
 type CartLine struct {
-	ProductID string
-	SKU       string
-	Name      string
-	Currency  string
-	UnitPrice int64
-	Qty       int
+	ProductID    string
+	SKU          string
+	Name         string
+	Currency     string
+	UnitPrice    int64
+	Qty          int
 	AvailableQty int
 }
 
@@ -93,24 +93,25 @@ type AppState struct {
 	cart            []CartLine
 	checkout        checkoutFields
 
-	catalog       []api.CatalogItem
-	catalogCursor int
-	catalogQuery  api.CatalogQuery
-	catalogHasMore bool
+	catalog           []api.CatalogItem
+	catalogCursor     int
+	catalogQuery      api.CatalogQuery
+	catalogHasMore    bool
 	catalogSearchEdit bool
 	catalogSearchBuf  string
 	catalogFilter     catalogFilterFields
-	productSKU    string
-	productDetail *api.CatalogDetail
+	productSKU        string
+	productDetail     *api.CatalogDetail
 
-	lastOrderID string
-	stripeURL   string
-	orderStatus string
-	orderExpiresAt *time.Time
-	lastOrderTotal int64
-	lastOrderCurrency string
-	lastShipment   *api.ShipmentView
-	clock          time.Time
+	lastOrderID         string
+	lastOrderDisplayRef string
+	stripeURL           string
+	orderStatus         string
+	orderExpiresAt      *time.Time
+	lastOrderTotal      int64
+	lastOrderCurrency   string
+	lastShipment        *api.ShipmentView
+	clock               time.Time
 
 	orderHistory       []api.OrderView
 	orderHistoryCursor int
@@ -206,7 +207,12 @@ func (s *AppState) validateCartStock() error {
 	return nil
 }
 
+func (s *AppState) orderLabel() string {
+	return formatOrderLabel(s.lastOrderID, s.lastOrderDisplayRef)
+}
+
 func (s *AppState) setOrderSnapshot(order api.OrderView, shipment *api.ShipmentView) {
+	s.lastOrderDisplayRef = strings.TrimSpace(order.DisplayRef)
 	s.orderStatus = order.Status
 	s.lastOrderTotal = order.TotalMinorUnits
 	if order.Currency != "" {

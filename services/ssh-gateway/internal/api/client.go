@@ -114,22 +114,23 @@ type CheckoutItem struct {
 }
 
 type CheckoutRequest struct {
-	Currency     string         `json:"currency"`
-	City         string         `json:"city"`
-	Neighborhood string         `json:"neighborhood"`
-	AddressLine1 string         `json:"address_line1"`
-	Phone        string         `json:"phone"`
-	LegalID      string         `json:"legal_id"`
-	FullName         string         `json:"full_name"`
-	BirthDate        string         `json:"birth_date,omitempty"`
-	PrivacyConsent   bool           `json:"privacy_consent"`
-	SuccessURL       string         `json:"success_url"`
-	CancelURL        string         `json:"cancel_url"`
-	Items            []CheckoutItem `json:"items"`
+	Currency       string         `json:"currency"`
+	City           string         `json:"city"`
+	Neighborhood   string         `json:"neighborhood"`
+	AddressLine1   string         `json:"address_line1"`
+	Phone          string         `json:"phone"`
+	LegalID        string         `json:"legal_id"`
+	FullName       string         `json:"full_name"`
+	BirthDate      string         `json:"birth_date,omitempty"`
+	PrivacyConsent bool           `json:"privacy_consent"`
+	SuccessURL     string         `json:"success_url"`
+	CancelURL      string         `json:"cancel_url"`
+	Items          []CheckoutItem `json:"items"`
 }
 
 type OrderView struct {
 	ID                 string     `json:"ID"`
+	DisplayRef         string     `json:"DisplayRef"`
 	Status             string     `json:"Status"`
 	SubtotalMinorUnits int64      `json:"SubtotalMinorUnits"`
 	ShippingMinorUnits int64      `json:"ShippingMinorUnits"`
