@@ -19,7 +19,11 @@ type Service interface {
 type CreateCheckoutInput struct {
 	OrderID  domain.OrderID
 	Currency string
-	Total    int64 // minor units (COP on Stripe == pesos)
+	// SubtotalMinorUnits is merchandise before shipping.
+	SubtotalMinorUnits int64
+	ShippingMinorUnits int64
+	// TotalMinorUnits must equal SubtotalMinorUnits + ShippingMinorUnits.
+	TotalMinorUnits int64
 
 	ExpiresAt time.Time
 

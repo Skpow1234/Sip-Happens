@@ -26,6 +26,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "PATCH", Path: "/customers/me"},
 	{Method: "GET", Path: "/cart"},
 	{Method: "PUT", Path: "/cart"},
+	{Method: "GET", Path: "/shipping/estimate"},
 	{Method: "GET", Path: "/orders"},
 	{Method: "GET", Path: "/orders/{id}"},
 	{Method: "POST", Path: "/checkout"},
@@ -39,6 +40,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "DELETE", Path: "/admin/prices"},
 	{Method: "POST", Path: "/admin/inventory"},
 	{Method: "PUT", Path: "/admin/inventory"},
+	{Method: "GET", Path: "/admin/orders"},
 	{Method: "GET", Path: "/admin/audit-events"},
 	{Method: "POST", Path: "/webhooks/stripe"},
 }

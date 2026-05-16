@@ -124,14 +124,19 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 		}
 
 		exp := now.Add(15 * time.Minute)
+		ship := in.ShippingMinorUnits
+		if ship < 0 {
+			ship = 0
+		}
+		total := subtotal + ship
 		order := domain.Order{
 			ID:         orderID,
 			Status:     domain.OrderStatusPendingPayment,
 			CustomerID: in.CustomerID,
 
 			SubtotalMinorUnits: subtotal,
-			ShippingMinorUnits: 0,
-			TotalMinorUnits:    subtotal,
+			ShippingMinorUnits: ship,
+			TotalMinorUnits:    total,
 			Currency:           in.Currency,
 
 			City:         in.City,

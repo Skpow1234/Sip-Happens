@@ -22,6 +22,9 @@ type Service interface {
 	UpsertInventory(ctx context.Context, actor string, in UpsertInventoryInput) error
 
 	ListAuditEvents(ctx context.Context, in ListAuditEventsInput) ([]domain.AuditEvent, error)
+
+	// ListOrdersAdmin lists orders across customers (newest first) with optional filters.
+	ListOrdersAdmin(ctx context.Context, in ListOrdersAdminInput) ([]domain.Order, error)
 }
 
 type SQLService struct {
@@ -80,6 +83,14 @@ type ListAuditEventsInput struct {
 	AggregateID   string
 	Limit         int
 	Offset        int
+}
+
+type ListOrdersAdminInput struct {
+	Status      string
+	CreatedFrom *time.Time
+	CreatedTo   *time.Time
+	Limit       int
+	Offset      int
 }
 
 func (s *SQLService) ListProducts(ctx context.Context, in ListProductsInput) ([]ProductRow, error) {
@@ -431,6 +442,66 @@ limit $3 offset $4
 	return out, rows.Err()
 }
 
+func (s *SQLService) ListOrdersAdmin(ctx context.Context, in ListOrdersAdminInput) ([]domain.Order, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("missing db")
+	}
+	limit := in.Limit
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	offset := in.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var status any
+	if strings.TrimSpace(in.Status) != "" {
+		status = strings.TrimSpace(in.Status)
+	}
+	from := nullableTime(in.CreatedFrom)
+	to := nullableTime(in.CreatedTo)
+
+	rows, err := s.DB.QueryContext(ctx, `
+select id, status, customer_id,
+       subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
+       city, neighborhood, address_line1, phone, legal_id, full_name,
+       stripe_checkout_session_id, stripe_payment_intent_id,
+       expires_at, created_at, updated_at
+from orders
+where ($1::text is null or status = $1)
+  and ($2::timestamptz is null or created_at >= $2)
+  and ($3::timestamptz is null or created_at <= $3)
+order by created_at desc
+limit $4 offset $5
+`, status, from, to, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Order
+	for rows.Next() {
+		var o domain.Order
+		var expiresAt sql.NullTime
+		if err := rows.Scan(
+			&o.ID, &o.Status, &o.CustomerID,
+			&o.SubtotalMinorUnits, &o.ShippingMinorUnits, &o.TotalMinorUnits, &o.Currency,
+			&o.City, &o.Neighborhood, &o.AddressLine1, &o.Phone, &o.LegalID, &o.FullName,
+			&o.StripeCheckoutSessionID, &o.StripePaymentIntentID,
+			&expiresAt, &o.CreatedAt, &o.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if expiresAt.Valid {
+			t := expiresAt.Time
+			o.ExpiresAt = &t
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 func (s *SQLService) insertAudit(ctx context.Context, aggType, aggID, actor, eventType, payload string) error {
 	if actor == "" {
 		actor = "admin"
@@ -447,5 +518,12 @@ func nullableStr(s string) any {
 		return nil
 	}
 	return s
+}
+
+func nullableTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return *t
 }
 

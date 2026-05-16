@@ -38,6 +38,8 @@ type CreatePendingOrderInput struct {
 	LegalID      string
 	FullName     string
 
+	ShippingMinorUnits int64
+
 	Items []CreatePendingOrderItem
 }
 

@@ -25,8 +25,14 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 	if in.Currency == "" {
 		return nil, errors.New("missing currency")
 	}
-	if in.Total <= 0 {
+	if in.TotalMinorUnits <= 0 {
 		return nil, errors.New("invalid total")
+	}
+	if in.SubtotalMinorUnits < 0 || in.ShippingMinorUnits < 0 {
+		return nil, errors.New("invalid amounts")
+	}
+	if in.SubtotalMinorUnits+in.ShippingMinorUnits != in.TotalMinorUnits {
+		return nil, errors.New("total mismatch")
 	}
 	if in.SuccessURL == "" || in.CancelURL == "" {
 		return nil, errors.New("missing success/cancel url")
@@ -46,7 +52,33 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 		Metadata: map[string]string{
 			"order_id": string(in.OrderID),
 		},
-		LineItems: []*stripe.CheckoutSessionLineItemParams{
+	}
+
+	if in.ShippingMinorUnits > 0 && in.SubtotalMinorUnits > 0 {
+		params.LineItems = []*stripe.CheckoutSessionLineItemParams{
+			{
+				Quantity: stripe.Int64(1),
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency: stripe.String(in.Currency),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String(fmt.Sprintf("Order %s (items)", in.OrderID)),
+					},
+					UnitAmount: stripe.Int64(in.SubtotalMinorUnits),
+				},
+			},
+			{
+				Quantity: stripe.Int64(1),
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency: stripe.String(in.Currency),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String("Shipping"),
+					},
+					UnitAmount: stripe.Int64(in.ShippingMinorUnits),
+				},
+			},
+		}
+	} else {
+		params.LineItems = []*stripe.CheckoutSessionLineItemParams{
 			{
 				Quantity: stripe.Int64(1),
 				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
@@ -54,10 +86,10 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
 						Name: stripe.String(fmt.Sprintf("Order %s", in.OrderID)),
 					},
-					UnitAmount: stripe.Int64(in.Total),
+					UnitAmount: stripe.Int64(in.TotalMinorUnits),
 				},
 			},
-		},
+		}
 	}
 
 	// Use a deterministic idempotency key per order.

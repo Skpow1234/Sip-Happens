@@ -13,6 +13,7 @@ import (
 	"sip-happens/pkg/age"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
+	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/orders"
@@ -110,11 +111,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/cart", s.requireSigned(http.HandlerFunc(s.handleCart)))
+	mux.Handle("/shipping/estimate", s.requireSigned(http.HandlerFunc(s.handleShippingEstimate)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
 	mux.Handle("/admin/prices", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminPrices))))
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
+	mux.HandleFunc("/admin/orders", s.handleAdminOrders)
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
 
 	if s.StripeWebhook != nil {
@@ -525,6 +528,111 @@ func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": evts, "limit": limit, "offset": offset})
 }
 
+func (s *Server) handleAdminOrders(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.Admin == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	status, err := orderStatusFilterOrEmpty(r.URL.Query().Get("status"))
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid status filter")
+		return
+	}
+	createdFrom, err := parseOptionalRFC3339Query(r, "created_from")
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid created_from (RFC3339)")
+		return
+	}
+	createdTo, err := parseOptionalRFC3339Query(r, "created_to")
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid created_to (RFC3339)")
+		return
+	}
+
+	limit := parseLimitQuery(r, 100, 500)
+	offset := parseOffsetQuery(r)
+
+	orders, err := s.Admin.ListOrdersAdmin(r.Context(), admin.ListOrdersAdminInput{
+		Status:      status,
+		CreatedFrom: createdFrom,
+		CreatedTo:   createdTo,
+		Limit:       limit,
+		Offset:      offset,
+	})
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"orders": orders, "limit": limit, "offset": offset})
+}
+
+func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.DB == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	cur := strings.TrimSpace(r.URL.Query().Get("currency"))
+	if cur == "" {
+		cur = "COP"
+	}
+	canon, err := shipping.CanonicalCity(r.URL.Query().Get("city"))
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", err.Error())
+		return
+	}
+	key := shipping.CityKey(canon)
+	n, err := shipping.LookupAmountMinor(r.Context(), s.DB, key, cur)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"city":                 canon,
+		"currency":             cur,
+		"shipping_minor_units": n,
+	})
+}
+
+func parseOptionalRFC3339Query(r *http.Request, key string) (*time.Time, error) {
+	s := strings.TrimSpace(r.URL.Query().Get(key))
+	if s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil, domain.ErrInvalidInput
+	}
+	return &t, nil
+}
+
+func orderStatusFilterOrEmpty(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "", nil
+	}
+	switch domain.OrderStatus(v) {
+	case domain.OrderStatusDraft, domain.OrderStatusPendingPayment, domain.OrderStatusPaid,
+		domain.OrderStatusFulfilling, domain.OrderStatusShipped, domain.OrderStatusCancelled:
+		return v, nil
+	default:
+		return "", domain.ErrInvalidInput
+	}
+}
+
 func parseIntDefault(s string, def int) int {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -872,6 +980,23 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "privacy_consent required")
 		return
 	}
+	if strings.TrimSpace(req.Currency) == "" {
+		req.Currency = "COP"
+	}
+	canonCity, err := shipping.CanonicalCity(req.City)
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", err.Error())
+		return
+	}
+	req.City = canonCity
+
+	cityKey := shipping.CityKey(canonCity)
+	shipMinor, err := shipping.LookupAmountMinor(r.Context(), s.DB, cityKey, req.Currency)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+
 	if err := s.saveCustomerProfile(r.Context(), customerID, req); err != nil {
 		if err == domain.ErrInvalidInput {
 			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid birth_date or age")
@@ -893,6 +1018,8 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		Phone:        req.Phone,
 		LegalID:      req.LegalID,
 		FullName:     req.FullName,
+
+		ShippingMinorUnits: shipMinor,
 	}
 	for _, it := range req.Items {
 		in.Items = append(in.Items, orders.CreatePendingOrderItem{
@@ -927,12 +1054,14 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 			exp = *o.ExpiresAt
 		}
 		stripeOut, err = s.Stripe.CreateCheckout(r.Context(), stripepayments.CreateCheckoutInput{
-			OrderID:    o.ID,
-			Currency:   o.Currency,
-			Total:      o.TotalMinorUnits,
-			ExpiresAt:  exp,
-			SuccessURL: req.SuccessURL,
-			CancelURL:  req.CancelURL,
+			OrderID:            o.ID,
+			Currency:           o.Currency,
+			SubtotalMinorUnits: o.SubtotalMinorUnits,
+			ShippingMinorUnits: o.ShippingMinorUnits,
+			TotalMinorUnits:    o.TotalMinorUnits,
+			ExpiresAt:          exp,
+			SuccessURL:         req.SuccessURL,
+			CancelURL:          req.CancelURL,
 		})
 		if err != nil {
 			writeAPIError(w, r, http.StatusBadGateway, "bad_gateway", "stripe error")

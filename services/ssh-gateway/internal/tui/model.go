@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"sip-happens/pkg/shipping"
 	"sip-happens/services/ssh-gateway/internal/api"
 )
 
@@ -34,7 +35,7 @@ func NewRootModel(client *api.Client) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.loadServerCartCmd()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -140,13 +141,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.birthDate = msg.customer.BirthDate
 			}
 		}
+		if m.screen == screenCheckout {
+			return m, m.loadShippingEstimateCmd()
+		}
 		return m, nil
 
 	case cartLoadedMsg:
 		m.busy = false
-		if len(msg.items) > 0 {
-			m.state.cart = cartLinesFromAPI(msg.items)
+		m.state.cart = cartLinesFromAPI(msg.items)
+		return m, nil
+
+	case shippingEstimateMsg:
+		if msg.err != nil {
+			m.state.shippingEstimateErr = msg.err.Error()
+			m.state.shippingMinor = 0
+			m.state.shippingCurrency = ""
+			return m, nil
 		}
+		m.state.shippingEstimateErr = ""
+		m.state.shippingMinor = msg.minor
+		m.state.shippingCurrency = msg.currency
 		return m, nil
 
 	case tickMsg:
@@ -205,6 +219,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "2":
 			m.state.catalogCursor = 0
 			m.screen = screenCart
+			if strings.TrimSpace(m.state.checkout.city) != "" {
+				return m, m.loadShippingEstimateCmd()
+			}
 		case "3", "o":
 			if m.state.lastOrderID == "" {
 				m.err = fmt.Errorf("no recent order in this session")
@@ -395,6 +412,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.screen = screenError
 				return m, nil
 			}
+			m.state.shippingMinor = 0
+			m.state.shippingCurrency = ""
+			m.state.shippingEstimateErr = ""
 			m.screen = screenCheckout
 			m.state.checkout.focus = 0
 			m.busy = true
@@ -504,6 +524,7 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.screen = screenCart
+		return m, m.loadShippingEstimateCmd()
 	case "tab":
 		f.focus = (f.focus + 1) % len(f.labels())
 	case "shift+tab":
@@ -514,10 +535,10 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if f.focus < len(f.labels())-1 {
 			f.focus++
-			return m, nil
+			return m, m.loadShippingEstimateCmd()
 		}
 		if !m.checkoutValid() {
-			m.err = fmt.Errorf("fill all delivery fields before continuing")
+			m.err = fmt.Errorf("fill all delivery fields before continuing (city must be Bogotá, Medellín, or Cali)")
 			m.screen = screenError
 			return m, nil
 		}
@@ -525,6 +546,7 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state.idempotencyKey = randomHex(16)
 		}
 		m.screen = screenConfirm
+		return m, nil
 	case "backspace":
 		cur := f.current()
 		if len(cur) > 0 {
@@ -535,7 +557,7 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			f.setCurrent(f.current() + string(msg.Runes))
 		}
 	}
-	return m, nil
+	return m, m.loadShippingEstimateCmd()
 }
 
 func (m Model) checkoutValid() bool {
@@ -545,7 +567,13 @@ func (m Model) checkoutValid() bool {
 			return false
 		}
 	}
-	return len(m.state.cart) > 0
+	if len(m.state.cart) == 0 {
+		return false
+	}
+	if _, err := shipping.CanonicalCity(m.state.checkout.city); err != nil {
+		return false
+	}
+	return true
 }
 
 func (m Model) View() string {
@@ -690,8 +718,21 @@ func (m Model) viewCart() string {
 		b.WriteString(fmt.Sprintf("%s%-14s x%d  %s%s\n",
 			cur, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal()), avail))
 	}
-	b.WriteString(fmt.Sprintf("\nSubtotal: %s\n\n", formatMoney("COP", m.state.cartSubtotal())))
-	b.WriteString("+/- qty  d remove  c checkout  esc menu\n")
+	b.WriteString(fmt.Sprintf("\nSubtotal: %s\n", formatMoney("COP", m.state.cartSubtotal())))
+	if c := strings.TrimSpace(m.state.checkout.city); c != "" {
+		if m.state.shippingEstimateErr != "" {
+			b.WriteString(fmt.Sprintf("Shipping (est.): —  (%s)\n", m.state.shippingEstimateErr))
+		} else if m.state.shippingMinor > 0 {
+			cur := m.state.shippingCurrency
+			if cur == "" {
+				cur = "COP"
+			}
+			b.WriteString(fmt.Sprintf("Shipping (est., %s): %s\n", c, formatMoney(cur, m.state.shippingMinor)))
+		}
+	} else {
+		b.WriteString("Delivery cities: Bogotá, Medellín, Cali — estimate at checkout.\n")
+	}
+	b.WriteString("\n+/- qty  d remove  c checkout  esc menu\n")
 	return b.String()
 }
 
@@ -708,23 +749,43 @@ func (m Model) viewCheckout() string {
 		b.WriteString(fmt.Sprintf("%s%-12s %s\n", mark, label+":", f.values()[i]))
 	}
 	b.WriteString("\ntab / enter — next field  esc — back to cart\n")
+	b.WriteString("\nDelivery cities: Bogotá, Medellín, or Cali.\n")
+	if m.state.shippingEstimateErr != "" {
+		b.WriteString(fmt.Sprintf("Shipping estimate: —  (%s)\n", m.state.shippingEstimateErr))
+	} else if strings.TrimSpace(f.city) == "" {
+		b.WriteString("Shipping estimate: (enter city)\n")
+	} else {
+		cur := m.state.shippingCurrency
+		if cur == "" {
+			cur = "COP"
+		}
+		b.WriteString(fmt.Sprintf("Shipping estimate: %s\n", formatMoney(cur, m.state.shippingMinor)))
+	}
 	return b.String()
 }
 
 func (m Model) viewConfirm() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Confirm checkout")
-	sub := formatMoney("COP", m.state.cartSubtotal())
+	sub := m.state.cartSubtotal()
+	cur := "COP"
+	if m.state.shippingCurrency != "" {
+		cur = m.state.shippingCurrency
+	}
+	ship := m.state.shippingMinor
+	total := sub + ship
 	priv := "[ ]"
 	if m.state.privacyAccepted {
 		priv = "[x]"
 	}
-	body := fmt.Sprintf(`Total: %s
+	body := fmt.Sprintf(`Subtotal: %s
+Shipping (est.): %s
+Total: %s
 Items: %d
 
 %s I accept the privacy policy (%s)
 
 p — toggle accept   y — place order   n — back
-`, sub, m.state.cartCount(), priv, privacyPolicyURL)
+`, formatMoney("COP", sub), formatMoney(cur, ship), formatMoney("COP", total), m.state.cartCount(), priv, privacyPolicyURL)
 	return title + "\n\n" + body
 }
 
@@ -881,6 +942,11 @@ type paymentTickMsg struct{ now time.Time }
 type orderHistoryLoadedMsg struct{ orders []api.OrderView }
 type customerLoadedMsg struct{ customer *api.CustomerView }
 type cartLoadedMsg struct{ items []api.CartLine }
+type shippingEstimateMsg struct {
+	minor    int64
+	currency string
+	err      error
+}
 type errMsg struct{ err error }
 
 func (m *Model) prefillCheckout(c api.CustomerView) {
@@ -1062,6 +1128,24 @@ func (m Model) loadServerCartCmd() tea.Cmd {
 			return errMsg{err: err}
 		}
 		return cartLoadedMsg{items: items}
+	}
+}
+
+func (m Model) loadShippingEstimateCmd() tea.Cmd {
+	city := strings.TrimSpace(m.state.checkout.city)
+	client := m.api
+	return func() tea.Msg {
+		if city == "" {
+			return shippingEstimateMsg{currency: "COP"}
+		}
+		est, err := client.GetShippingEstimate(context.Background(), city, "COP")
+		if err != nil {
+			return shippingEstimateMsg{err: err}
+		}
+		return shippingEstimateMsg{
+			minor:    est.ShippingMinorUnits,
+			currency: est.Currency,
+		}
 	}
 }
 

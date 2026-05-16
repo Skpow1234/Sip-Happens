@@ -17,6 +17,22 @@ type MockClient struct{}
 func (c MockClient) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*CreateCheckoutOutput, error) {
 	_ = ctx
 
+	if in.OrderID == "" {
+		return nil, fmt.Errorf("missing order id")
+	}
+	if in.Currency == "" {
+		return nil, fmt.Errorf("missing currency")
+	}
+	if in.TotalMinorUnits <= 0 {
+		return nil, fmt.Errorf("invalid total")
+	}
+	if in.SubtotalMinorUnits < 0 || in.ShippingMinorUnits < 0 {
+		return nil, fmt.Errorf("invalid amounts")
+	}
+	if in.SubtotalMinorUnits+in.ShippingMinorUnits != in.TotalMinorUnits {
+		return nil, fmt.Errorf("total mismatch")
+	}
+
 	suffix, err := ids.RandomHex(8)
 	if err != nil {
 		return nil, err

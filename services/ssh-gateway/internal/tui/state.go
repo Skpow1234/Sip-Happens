@@ -118,6 +118,11 @@ type AppState struct {
 	allowedOrderIDs map[string]struct{}
 
 	idempotencyKey string
+
+	// Shipping estimate for checkout / cart (from GET /shipping/estimate).
+	shippingMinor       int64
+	shippingCurrency    string
+	shippingEstimateErr string
 }
 
 func (s *AppState) rememberOrderID(id string) {

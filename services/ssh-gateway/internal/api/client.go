@@ -127,12 +127,14 @@ type CheckoutRequest struct {
 }
 
 type OrderView struct {
-	ID              string     `json:"ID"`
-	Status          string     `json:"Status"`
-	TotalMinorUnits int64      `json:"TotalMinorUnits"`
-	Currency        string     `json:"Currency"`
-	ExpiresAt       *time.Time `json:"ExpiresAt"`
-	CreatedAt       time.Time  `json:"CreatedAt"`
+	ID                 string     `json:"ID"`
+	Status             string     `json:"Status"`
+	SubtotalMinorUnits int64      `json:"SubtotalMinorUnits"`
+	ShippingMinorUnits int64      `json:"ShippingMinorUnits"`
+	TotalMinorUnits    int64      `json:"TotalMinorUnits"`
+	Currency           string     `json:"Currency"`
+	ExpiresAt          *time.Time `json:"ExpiresAt"`
+	CreatedAt          time.Time  `json:"CreatedAt"`
 }
 
 type StripeCheckoutView struct {
@@ -436,6 +438,40 @@ func (c *Client) PutCart(ctx context.Context, items []CartLine) error {
 		return parseAPIError(resp.StatusCode, body)
 	}
 	return nil
+}
+
+// ShippingEstimate is the JSON shape of GET /shipping/estimate.
+type ShippingEstimate struct {
+	City               string `json:"city"`
+	Currency           string `json:"currency"`
+	ShippingMinorUnits int64  `json:"shipping_minor_units"`
+}
+
+func (c *Client) GetShippingEstimate(ctx context.Context, city, currency string) (*ShippingEstimate, error) {
+	if currency == "" {
+		currency = "COP"
+	}
+	q := url.Values{}
+	q.Set("city", city)
+	q.Set("currency", currency)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/shipping/estimate?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out ShippingEstimate
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (c *Client) ListOrders(ctx context.Context, limit int) ([]OrderView, error) {

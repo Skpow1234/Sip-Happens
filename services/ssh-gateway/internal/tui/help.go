@@ -35,6 +35,7 @@ Cart
 Checkout
   tab     next field
   enter   next field / confirm
+  Cities  Bogotá, Medellín, Cali (accents optional)
 
 Payment
   o       order status
