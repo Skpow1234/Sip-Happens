@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/obslog"
 	"sip-happens/services/core-api/internal/orders"
 )
 
@@ -138,7 +139,14 @@ func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error 
 			Status:      domain.PaymentStatusSucceeded,
 			RawPayload:  evt.RawObject,
 		}
-		return h.Orders.MarkPaid(ctx, orderID, payment)
+		if err := h.Orders.MarkPaid(ctx, orderID, payment); err != nil {
+			return err
+		}
+		obslog.Info(obslog.WithOrderID(ctx, string(orderID)), "stripe_webhook_applied", map[string]any{
+			"stripe_event_id": evt.ID,
+			"stripe_type":     evt.Type,
+		})
+		return nil
 	case "checkout.session.expired":
 		obj, err := evt.AsCheckoutSession()
 		if err != nil {

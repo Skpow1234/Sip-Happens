@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"sip-happens/pkg/obslog"
 	"strings"
 	"time"
 
@@ -71,7 +71,12 @@ func (r *JetStreamRuntime) Run(ctx context.Context, h MessageHandler) error {
 		return err
 	}
 
-	log.Printf("consumer starting (stream=%s, filter=%s, durable=%s, consumer=%s)", r.Stream, r.FilterSubject, r.Durable, h.ConsumerName())
+	obslog.Info(ctx, "nats_consumer_starting", map[string]any{
+		"stream":   r.Stream,
+		"filter":   r.FilterSubject,
+		"durable":  r.Durable,
+		"consumer": h.ConsumerName(),
+	})
 
 	for {
 		select {

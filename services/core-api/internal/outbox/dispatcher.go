@@ -5,9 +5,10 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 	"time"
+
+	"sip-happens/pkg/obslog"
 )
 
 type Publisher interface {
@@ -19,8 +20,17 @@ type Publisher interface {
 type LogPublisher struct{}
 
 func (p LogPublisher) Publish(ctx context.Context, e Event) error {
-	_ = ctx
-	log.Printf("outbox publish type=%s id=%s aggregate=%s/%s v=%d request_id=%s", e.Type, e.ID, e.AggregateType, e.AggregateID, e.Version, e.RequestID)
+	ctx = obslog.WithRequestID(ctx, e.RequestID)
+	if e.AggregateType == "order" {
+		ctx = obslog.WithOrderID(ctx, e.AggregateID)
+	}
+	obslog.Info(ctx, "outbox_publish", map[string]any{
+		"event_type":     e.Type,
+		"event_id":       e.ID,
+		"aggregate_type": e.AggregateType,
+		"aggregate_id":   e.AggregateID,
+		"version":        e.Version,
+	})
 	return nil
 }
 

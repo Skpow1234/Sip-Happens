@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"sip-happens/pkg/age"
+	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/ids"
 	"sip-happens/pkg/shipping"
@@ -171,6 +171,7 @@ func (s *Server) Handler() http.Handler {
 
 	h := http.Handler(mux)
 	h = WithRequestID(h)
+	h = WithCustomerContext(h)
 	h = AccessLog(metrics)(h)
 	return h
 }
@@ -1186,7 +1187,8 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	o, items, err := s.Orders.CreatePendingOrder(r.Context(), in)
+	checkoutCtx := obslog.WithCustomerID(r.Context(), string(customerID))
+	o, items, err := s.Orders.CreatePendingOrder(checkoutCtx, in)
 	if err != nil {
 		status := http.StatusInternalServerError
 		code := "internal"
@@ -1266,8 +1268,10 @@ func (s *Server) maybeSendPaymentLinkEmail(o *domain.Order, checkoutFullName, pa
 				emailAddr = cust.Email
 			}
 		}
+		logCtx := obslog.WithOrderID(ctx, string(o.ID))
+		logCtx = obslog.WithCustomerID(logCtx, string(o.CustomerID))
 		if err := s.Email.SendPaymentLink(ctx, o, emailAddr, name, paymentURL); err != nil {
-			log.Printf("payment link email failed order_id=%s: %v", o.ID, err)
+			obslog.Warn(logCtx, "payment_link_email_failed", map[string]any{"err": err.Error()})
 		}
 	}()
 }

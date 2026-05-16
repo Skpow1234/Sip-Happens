@@ -10,6 +10,7 @@ import (
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/events"
+	"sip-happens/pkg/obslog"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
@@ -195,6 +196,12 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 	if err != nil {
 		return nil, nil, err
 	}
+	ctx = obslog.WithOrderID(ctx, string(createdOrder.ID))
+	ctx = obslog.WithCustomerID(ctx, string(in.CustomerID))
+	obslog.Info(ctx, "order_created", map[string]any{
+		"currency": createdOrder.Currency,
+		"total":    createdOrder.TotalMinorUnits,
+	})
 	return createdOrder, createdItems, nil
 }
 
@@ -361,9 +368,18 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 			return err
 		}
 
-		return s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
+		if err := s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
 			return events.NewOrderPaidEnvelope(string(id), paymentID, "", paidAt)
+		}); err != nil {
+			return err
+		}
+		logCtx := obslog.WithOrderID(ctx, string(id))
+		logCtx = obslog.WithCustomerID(logCtx, string(o.CustomerID))
+		obslog.Info(logCtx, "order_paid", map[string]any{
+			"payment_id": paymentID,
+			"provider":   payment.Provider,
 		})
+		return nil
 	})
 }
 

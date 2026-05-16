@@ -3,20 +3,17 @@ package http
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"sip-happens/pkg/auth"
+	"sip-happens/pkg/obslog"
 )
 
 const HeaderRequestID = "X-Request-Id"
-
-type ctxKey string
-
-const requestIDKey ctxKey = "request_id"
 
 func RequestIDFromHeader(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get(HeaderRequestID))
@@ -30,7 +27,19 @@ func WithRequestID(next http.Handler) http.Handler {
 			r.Header.Set(HeaderRequestID, rid)
 		}
 		w.Header().Set(HeaderRequestID, rid)
-		next.ServeHTTP(w, r)
+		ctx := obslog.WithRequestID(r.Context(), rid)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// WithCustomerContext attaches SSH fingerprint as customer correlation when present.
+func WithCustomerContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if fp := strings.TrimSpace(r.Header.Get(auth.HeaderFingerprint)); fp != "" {
+			ctx = obslog.WithCustomerID(ctx, "fp:"+fp)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -95,20 +104,13 @@ func AccessLog(m *Metrics) func(http.Handler) http.Handler {
 				m.RequestDuration.With(ls).Observe(dur)
 			}
 
-			remoteIP := clientIP(r)
-			entry := map[string]any{
-				"ts":          time.Now().UTC().Format(time.RFC3339Nano),
-				"level":       "info",
-				"msg":         "http_request",
-				"request_id":  RequestIDFromHeader(r),
+			obslog.Info(r.Context(), "http_request", map[string]any{
 				"method":      method,
 				"path":        path,
 				"status":      status,
 				"duration_ms": int64(time.Since(start) / time.Millisecond),
-				"remote_ip":   remoteIP,
-			}
-			b, _ := json.Marshal(entry)
-			log.Println(string(b))
+				"remote_ip":   clientIP(r),
+			})
 		})
 	}
 }

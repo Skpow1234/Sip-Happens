@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/nats-io/nats.go"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/events"
 	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/outbox"
@@ -64,11 +64,15 @@ func (h OrderPaidHandler) Handle(ctx context.Context, m *nats.Msg) error {
 	if err := h.Saga.OnOrderPaid(ctx, time.Now().UTC(), orderID); err != nil {
 		return err
 	}
+	logCtx := obslog.WithOrderID(ctx, string(orderID))
 	if h.Emails != nil {
 		if err := h.Emails.SendReceiptForOrder(ctx, orderID); err != nil {
-			log.Printf("receipt email failed order_id=%s: %v", orderID, err)
+			obslog.Warn(logCtx, "receipt_email_failed", map[string]any{"err": err.Error()})
 		}
 	}
-	log.Printf("order.paid handled order_id=%s event_id=%s", orderID, m.Header.Get(outbox.NatsHeaderEventID))
+	obslog.Info(logCtx, "order_paid_consumed", map[string]any{
+		"event_id": m.Header.Get(outbox.NatsHeaderEventID),
+		"consumer": h.ConsumerName(),
+	})
 	return nil
 }

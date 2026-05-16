@@ -200,6 +200,13 @@ TLS reverse proxy (Caddy, optional in Compose):
 - **`https://localhost:8443`** → `core-api:8080` with internal TLS (`infra/caddy/Caddyfile`)
 - Use for Stripe webhook forwarding and admin API over HTTPS in local dev (`curl -k` until you trust the Caddy CA)
 
+Observability:
+
+- **`GET /metrics`** — Prometheus (HTTP, outbox backlog, pending orders, NATS consumer)
+- Grafana dashboard: [`docs/observability/grafana/sip-happens.json`](docs/observability/grafana/sip-happens.json)
+- Alert rules: [`docs/observability/prometheus/alerts.yml`](docs/observability/prometheus/alerts.yml)
+- Logs are JSON lines with `request_id`, `customer_id`, and `order_id` when available
+
 Database config is currently provided by Compose:
 
 - `POSTGRES_DSN` is set for the `core-api` container to reach the `postgres` service.

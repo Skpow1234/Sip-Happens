@@ -19,6 +19,7 @@ import (
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/email"
 	httpserver "sip-happens/services/core-api/internal/http"
+	"sip-happens/services/core-api/internal/observability"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/migrate"
 	"sip-happens/services/core-api/internal/objectstore"
@@ -123,6 +124,7 @@ func runServer() error {
 	if err := sqlDB.PingContext(pingCtx); err != nil {
 		return err
 	}
+	observability.RegisterDBStatsCollector(sqlDB)
 
 	d := db.New(sqlDB)
 
