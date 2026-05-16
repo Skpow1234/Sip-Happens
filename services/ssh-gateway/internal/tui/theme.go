@@ -6,24 +6,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Palette: Terminal.shop-style layout with a Sip-Happens gold/copper shop theme
-// (not the reference orange — gold selection, violet key hints, grey chrome).
+// 16-color ANSI palette (Terminal.shop-compatible). No 256/truecolor codes — renders
+// the same in legacy SSH, Windows Terminal, and modern emulators without setup.
 var (
-	colorText       = lipgloss.Color("15")  // primary white
-	colorMuted      = lipgloss.Color("245") // labels, inactive list
-	colorDim        = lipgloss.Color("240") // borders, separators
-	colorAccent     = lipgloss.Color("179") // selection / CTA fill (gold)
-	colorOnAccent   = lipgloss.Color("16")  // text on gold
-	colorBrand      = lipgloss.Color("220") // wordmark, prices
-	colorHint       = lipgloss.Color("135") // enter / action hints (violet)
-	colorSpec       = lipgloss.Color("245")
-	colorLink       = lipgloss.Color("39")
-	colorWarn       = lipgloss.Color("203")
+	colorText     = lipgloss.Color("15") // bright white
+	colorMuted    = lipgloss.Color("8")  // bright black / grey
+	colorDim        = lipgloss.Color("8")
+	colorAccent     = lipgloss.Color("11") // bright yellow (≈ orange highlight)
+	colorOnAccent   = lipgloss.Color("0")  // black on highlight
+	colorBrand      = lipgloss.Color("11") // prices / brand accent
+	colorHint       = lipgloss.Color("13") // bright magenta (enter hints)
+	colorSpec       = lipgloss.Color("8")
+	colorLink       = lipgloss.Color("14") // bright cyan
+	colorWarn       = lipgloss.Color("9")  // bright red
 	colorDanger     = lipgloss.Color("9")
-	colorBorder     = lipgloss.Color("238")
-	colorFoam       = lipgloss.Color("252")
-	colorBeerMid    = lipgloss.Color("214")
-	colorBeerDeep   = lipgloss.Color("208")
+	colorBorder     = lipgloss.Color("8")
+	colorFoam       = lipgloss.Color("15")
+	colorBeerMid    = lipgloss.Color("11")
+	colorBeerDeep   = lipgloss.Color("3") // yellow
 )
 
 func styleBrand() lipgloss.Style {
@@ -138,7 +138,6 @@ func styleWelcomeFrame() lipgloss.Style {
 		Padding(1, 2)
 }
 
-// formatFooterHints styles shortcut footers like Terminal.shop (bold key, grey label).
 func formatFooterHints(hints string) string {
 	chunks := splitFooterChunks(hints)
 	if len(chunks) == 0 {
