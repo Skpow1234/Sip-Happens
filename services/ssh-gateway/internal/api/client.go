@@ -62,54 +62,44 @@ func NewSignedClientV2(baseURL string, keyID string, hmacSecret string, sshFinge
 	}
 }
 
+// CatalogProduct mirrors core-api catalog JSON (PascalCase field names).
+type CatalogProduct struct {
+	ID          string  `json:"ID"`
+	SKU         string  `json:"SKU"`
+	Name        string  `json:"Name"`
+	Brewery     string  `json:"Brewery"`
+	Style       string  `json:"Style"`
+	ABV         float64 `json:"ABV"`
+	VolumeML    int     `json:"VolumeML"`
+	InvimaReg   string  `json:"InvimaReg"`
+	Description string  `json:"Description"`
+	IBU         *int    `json:"IBU"`
+	ImageURL    string  `json:"ImageURL"`
+}
+
+type catalogPrice struct {
+	Currency         string `json:"Currency"`
+	AmountMinorUnits int64  `json:"AmountMinorUnits"`
+}
+
 type CatalogItem struct {
-	Product struct {
-		ID        string  `json:"ID"`
-		SKU       string  `json:"SKU"`
-		Name      string  `json:"Name"`
-		Brewery   string  `json:"Brewery"`
-		Style     string  `json:"Style"`
-		ABV       float64 `json:"ABV"`
-		VolumeML  int     `json:"VolumeML"`
-		InvimaReg   string  `json:"InvimaReg"`
-		Description string  `json:"Description"`
-		IBU         *int    `json:"IBU"`
-		ImageURL    string  `json:"ImageURL"`
-	} `json:"Product"`
-	Price struct {
-		Currency         string `json:"Currency"`
-		AmountMinorUnits int64  `json:"AmountMinorUnits"`
-	} `json:"Price"`
-	AvailableQty int `json:"available_qty"`
+	Product      CatalogProduct `json:"Product"`
+	Price        catalogPrice   `json:"Price"`
+	AvailableQty int            `json:"available_qty"`
 }
 
 type CatalogDetail struct {
-	Product struct {
-		ID          string  `json:"ID"`
-		SKU         string  `json:"SKU"`
-		Name        string  `json:"Name"`
-		Brewery     string  `json:"Brewery"`
-		Style       string  `json:"Style"`
-		ABV         float64 `json:"ABV"`
-		VolumeML    int     `json:"VolumeML"`
-		InvimaReg   string  `json:"InvimaReg"`
-		Description string  `json:"Description"`
-		IBU         *int    `json:"IBU"`
-		ImageURL    string  `json:"ImageURL"`
-	} `json:"product"`
-	Price struct {
-		Currency         string `json:"Currency"`
-		AmountMinorUnits int64  `json:"AmountMinorUnits"`
-	} `json:"price"`
-	AvailableQty int `json:"available_qty"`
+	Product      CatalogProduct `json:"product"`
+	Price        catalogPrice   `json:"price"`
+	AvailableQty int            `json:"available_qty"`
 }
 
 func (d CatalogDetail) AsCatalogItem() CatalogItem {
-	var it CatalogItem
-	it.Product = d.Product
-	it.Price = d.Price
-	it.AvailableQty = d.AvailableQty
-	return it
+	return CatalogItem{
+		Product:      d.Product,
+		Price:        d.Price,
+		AvailableQty: d.AvailableQty,
+	}
 }
 
 type CheckoutItem struct {

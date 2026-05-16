@@ -105,11 +105,20 @@ set email=excluded.email, full_name=excluded.full_name, updated_at=excluded.upda
 			return nil, err
 		}
 
-		_, err = tx.ExecContext(ctx, `
+		err = tx.QueryRowContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
 values ($1,$2,$3,$4,$5,$6,$7,$8,true,$9,$10)
-on conflict (sku) do nothing
-`, pid, p.SKU, p.Name, p.Brewery, p.Style, p.ABV, p.VolumeML, p.Invima, now, now)
+on conflict (sku) do update set
+  name=excluded.name,
+  brewery=excluded.brewery,
+  style=excluded.style,
+  abv=excluded.abv,
+  volume_ml=excluded.volume_ml,
+  invima_reg=excluded.invima_reg,
+  is_active=true,
+  updated_at=excluded.updated_at
+returning id
+`, pid, p.SKU, p.Name, p.Brewery, p.Style, p.ABV, p.VolumeML, p.Invima, now, now).Scan(&pid)
 		if err != nil {
 			return nil, fmt.Errorf("insert product %s: %w", p.SKU, err)
 		}

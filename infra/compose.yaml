@@ -218,7 +218,7 @@ services:
       - miniodata:/data
 
   minio-init:
-    image: minio/mc:RELEASE.2024-11-05T19-55-45Z
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       - minio
     entrypoint: >
