@@ -9,6 +9,7 @@ import (
 	"sip-happens/pkg/events"
 	"sip-happens/pkg/ids"
 	"sip-happens/pkg/obslog"
+	"sip-happens/services/core-api/internal/audit"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/inventory"
@@ -23,13 +24,14 @@ type service struct {
 	catalog   catalog.Repository
 	payments  payments.Repository
 	outbox    outbox.Store
+	audit     *audit.Store
 }
 
 func NewService(d *db.DB, ordersRepo Repository, inventoryRepo inventory.Repository, catalogRepo catalog.Repository, paymentsRepo payments.Repository) Service {
-	return NewServiceWithOutbox(d, ordersRepo, inventoryRepo, catalogRepo, paymentsRepo, nil)
+	return NewServiceWithOutbox(d, ordersRepo, inventoryRepo, catalogRepo, paymentsRepo, nil, nil)
 }
 
-func NewServiceWithOutbox(d *db.DB, ordersRepo Repository, inventoryRepo inventory.Repository, catalogRepo catalog.Repository, paymentsRepo payments.Repository, outboxStore outbox.Store) Service {
+func NewServiceWithOutbox(d *db.DB, ordersRepo Repository, inventoryRepo inventory.Repository, catalogRepo catalog.Repository, paymentsRepo payments.Repository, outboxStore outbox.Store, auditStore *audit.Store) Service {
 	return &service{
 		db:        d,
 		orders:    ordersRepo,
@@ -37,6 +39,7 @@ func NewServiceWithOutbox(d *db.DB, ordersRepo Repository, inventoryRepo invento
 		catalog:   catalogRepo,
 		payments:  paymentsRepo,
 		outbox:    outboxStore,
+		audit:     auditStore,
 	}
 }
 
@@ -170,6 +173,10 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 			return err
 		}
 
+		skuByProduct := make(map[domain.ProductID]string, len(items))
+		for _, it := range items {
+			skuByProduct[it.ProductID] = it.SKU
+		}
 		for _, line := range toReserve {
 			inv, err := s.inventory.LockForUpdate(ctx, tx, line.productID)
 			if err != nil {
@@ -186,6 +193,7 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 			if err := s.inventory.CreateReservation(ctx, tx, orderID, line.productID, line.qty); err != nil {
 				return err
 			}
+			s.recordInventoryReserved(ctx, tx, orderID, line.productID, skuByProduct[line.productID], line.qty)
 		}
 
 		if err := s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
@@ -276,6 +284,8 @@ func (s *service) cancelPendingInTx(ctx context.Context, tx *sql.Tx, id domain.O
 	if err != nil {
 		return err
 	}
+	orderItems, _ := s.orders.GetItems(ctx, tx, id)
+	skuByProduct := skuMapFromItems(orderItems)
 	now := time.Now()
 	for _, rr := range res {
 		inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
@@ -291,6 +301,7 @@ func (s *service) cancelPendingInTx(ctx context.Context, tx *sql.Tx, id domain.O
 			return err
 		}
 		_ = s.inventory.MarkReservationReleased(ctx, tx, id, rr.ProductID)
+		s.recordInventoryReleased(ctx, tx, id, rr.ProductID, skuByProduct[rr.ProductID], rr.Qty, reason)
 	}
 
 	if err := s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusCancelled); err != nil {
@@ -330,6 +341,7 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 			}
 		}
 
+		skuByProduct := skuMapFromItems(items)
 		for _, rr := range res {
 			inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
 			if err != nil {
@@ -345,6 +357,7 @@ func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domai
 				return err
 			}
 			_ = s.inventory.MarkReservationConsumed(ctx, tx, id, rr.ProductID)
+			s.recordInventoryReleased(ctx, tx, id, rr.ProductID, skuByProduct[rr.ProductID], rr.Qty, "paid")
 		}
 
 		paidAt := time.Now()
