@@ -9,8 +9,9 @@ type Messages struct {
 	WelcomeBirthPrompt   string
 	WelcomeContinue      string
 	WelcomeExit          string
-	WelcomePrivacyLabel  string
-	MenuTitle            string
+	WelcomePrivacyLabel       string
+	WelcomeConsumerRightsLabel string
+	MenuTitle                 string
 	MenuCart             func(n int) string
 	MenuLastOrder        string
 	MenuHelp             string
@@ -42,14 +43,16 @@ type Messages struct {
 	CheckoutCitiesHint   string
 	CheckoutShippingErr  func(err string) string
 	CheckoutShippingWait string
-	CheckoutShippingEst  func(amount string) string
-	ConfirmTitle         string
+	CheckoutShippingEst       func(amount string) string
+	CheckoutConsumerRightsLine func(url string) string
+	ConfirmTitle              string
 	ConfirmSubtotal      string
 	ConfirmShipping      string
 	ConfirmTotal         string
 	ConfirmItems         string
-	ConfirmPrivacyLine   func(checked bool, url string) string
-	ConfirmHelp          string
+	ConfirmPrivacyLine         func(checked bool, url string) string
+	ConfirmConsumerRightsLine  func(url string) string
+	ConfirmHelp                string
 	PaymentTitle         string
 	PaymentOrder         string
 	PaymentStatus        string
@@ -58,7 +61,8 @@ type Messages struct {
 	PaymentCopyTip       string
 	PaymentHelp          string
 	OrderCompleteTitle   string
-	OrderCompleteBody    func(order, total, status string) string
+	OrderCompleteBody              func(order, total, status string) string
+	OrderCompleteConsumerRightsLine func(url string) string
 	HelpTitle            string
 	HelpBack             string
 	HelpBody             string

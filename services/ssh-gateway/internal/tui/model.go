@@ -18,7 +18,8 @@ import (
 type Model struct {
 	api *api.Client
 
-	privacyPolicyURL string
+	privacyPolicyURL    string
+	consumerRightsURL   string
 
 	screen screen
 	state  AppState
@@ -29,14 +30,18 @@ type Model struct {
 	height int
 }
 
-func NewRootModel(client *api.Client, privacyPolicyURL string) Model {
+func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL string) Model {
 	if strings.TrimSpace(privacyPolicyURL) == "" {
 		privacyPolicyURL = DefaultPrivacyPolicyURL
 	}
+	if strings.TrimSpace(consumerRightsURL) == "" {
+		consumerRightsURL = DefaultConsumerRightsURL
+	}
 	return Model{
-		api:              client,
-		privacyPolicyURL: privacyPolicyURL,
-		screen:           screenWelcome,
+		api:                client,
+		privacyPolicyURL:   privacyPolicyURL,
+		consumerRightsURL:  consumerRightsURL,
+		screen:             screenWelcome,
 	}
 }
 
@@ -636,7 +641,10 @@ func (m Model) viewWelcome() string {
 %s
 
 %s %s
-`, L.WelcomeBirthPrompt, m.state.birthDateInput, L.WelcomeContinue, L.WelcomePrivacyLabel, m.privacyPolicyURL)
+%s %s
+`, L.WelcomeBirthPrompt, m.state.birthDateInput, L.WelcomeContinue,
+		L.WelcomePrivacyLabel, m.privacyPolicyURL,
+		L.WelcomeConsumerRightsLabel, m.consumerRightsURL)
 	return fmt.Sprintf("%s\n%s\n\n%s", title, warn, body)
 }
 
@@ -646,7 +654,7 @@ func (m Model) viewMenu() string {
 	if label := m.state.orderLabel(); label != "" {
 		cart += fmt.Sprintf("  |  %s %s", L.MenuLastOrder, label)
 	}
-	help := fmt.Sprintf(L.MenuHelp, m.privacyPolicyURL)
+	help := fmt.Sprintf(L.MenuHelp, m.privacyPolicyURL, m.consumerRightsURL)
 	return fmt.Sprintf("%s\n%s\n%s", title, cart, help)
 }
 
@@ -770,6 +778,7 @@ func (m Model) viewCheckout() string {
 		}
 		b.WriteString(L.CheckoutShippingEst(formatMoney(cur, m.state.shippingMinor)) + "\n")
 	}
+	b.WriteString("\n" + L.CheckoutConsumerRightsLine(m.consumerRightsURL) + "\n")
 	return b.String()
 }
 
@@ -790,8 +799,11 @@ func (m Model) viewConfirm() string {
 %s
 
 %s
+
+%s
 `, L.ConfirmSubtotal, formatMoney("COP", sub), L.ConfirmShipping, formatMoney(cur, ship), L.ConfirmTotal, formatMoney("COP", total), L.ConfirmItems, m.state.cartCount(),
-		L.ConfirmPrivacyLine(m.state.privacyAccepted, m.privacyPolicyURL), L.ConfirmHelp)
+		L.ConfirmPrivacyLine(m.state.privacyAccepted, m.privacyPolicyURL),
+		L.ConfirmConsumerRightsLine(m.consumerRightsURL), L.ConfirmHelp)
 	return title + "\n\n" + body
 }
 
@@ -832,7 +844,8 @@ func (m Model) viewOrderComplete() string {
 	if cur == "" {
 		cur = "COP"
 	}
-	body := L.OrderCompleteBody(m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus)
+	body := L.OrderCompleteBody(m.state.orderLabel(), formatMoney(cur, m.state.lastOrderTotal), m.state.orderStatus) +
+		"\n\n" + L.OrderCompleteConsumerRightsLine(m.consumerRightsURL)
 	return title + "\n\n" + body
 }
 

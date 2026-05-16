@@ -1319,6 +1319,32 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	birthForAge := strings.TrimSpace(req.BirthDate)
+	if birthForAge == "" && s.Customers != nil {
+		if cust, err := s.Customers.GetByID(r.Context(), customerID); err == nil && cust != nil && !cust.BirthDate.IsZero() {
+			birthForAge = cust.BirthDate.Format("2006-01-02")
+		}
+	}
+	if err := s.Customers.RecordAgeVerification(r.Context(), customerID, o.ID, birthForAge, "checkout"); err != nil {
+		if err == domain.ErrInvalidInput {
+			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "age verification required")
+			return
+		}
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	if s.Admin != nil {
+		actor := strings.TrimSpace(r.Header.Get("X-SSH-Fingerprint"))
+		if actor == "" {
+			actor = "customer:" + string(customerID)
+		}
+		payload, _ := json.Marshal(map[string]string{
+			"method":      "checkout",
+			"customer_id": string(customerID),
+		})
+		_ = s.Admin.RecordAudit(r.Context(), actor, "order", string(o.ID), "age.verified", string(payload))
+	}
+
 	var stripeOut *stripepayments.CreateCheckoutOutput
 	if s.Stripe != nil {
 		exp := time.Now().Add(15 * time.Minute)

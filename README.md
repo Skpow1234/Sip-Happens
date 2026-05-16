@@ -239,6 +239,7 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SSH_AUTHORIZED_KEYS_PATH`**: path inside ssh-gateway container (default `/data/authorized_keys`)
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches `infra/demo/sip-happens-demo.pub` and `seed demo`)
 - **`PRIVACY_POLICY_URL`**: shown on ssh-gateway TUI welcome and checkout consent (default `https://sip-happens.local/privacy`)
+- **`CONSUMER_RIGHTS_URL`**: SIC consumer-protection link on TUI welcome, menu, checkout, confirm, and order complete (default `https://www.sic.gov.co/proteccion-del-consumidor`)
 - **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
 - **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
 - **`FEATURE_FLAGS`**: comma-separated toggles — see [Feature flags](#feature-flags) below

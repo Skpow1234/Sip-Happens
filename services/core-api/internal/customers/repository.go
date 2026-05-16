@@ -3,6 +3,7 @@ package customers
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"sip-happens/pkg/domain"
 )
@@ -17,6 +18,7 @@ type Repository interface {
 	LoadCart(ctx context.Context, q Querier, customerID domain.CustomerID) ([]CartLine, error)
 	SaveCart(ctx context.Context, q Querier, customerID domain.CustomerID, itemsJSON []byte) error
 	RecordConsent(ctx context.Context, q Querier, customerID domain.CustomerID, purpose string) error
+	InsertAgeVerification(ctx context.Context, q Querier, id string, customerID domain.CustomerID, orderID domain.OrderID, birthDate time.Time, affirmedAt time.Time, method string) error
 }
 
 type Querier interface {

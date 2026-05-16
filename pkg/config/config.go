@@ -329,6 +329,8 @@ type SSHGateway struct {
 	DevFingerprint string
 	// PrivacyPolicyURL is shown in the TUI welcome and checkout consent screens.
 	PrivacyPolicyURL string
+	// ConsumerRightsURL is the SIC consumer-protection link shown in the TUI (DESIGN §5.3).
+	ConsumerRightsURL string
 	// DisablePasswordAuth rejects SSH password logins (recommended in production).
 	DisablePasswordAuth bool
 	// DisablePortForwarding denies SSH local/reverse port forwarding.
@@ -350,6 +352,7 @@ func LoadSSHGateway() (SSHGateway, error) {
 	c.AuthorizedKeysPath = getenvDefault("SSH_AUTHORIZED_KEYS_PATH", "/data/authorized_keys")
 	c.DevFingerprint = strings.TrimSpace(os.Getenv("SSH_DEV_FINGERPRINT"))
 	c.PrivacyPolicyURL = getenvDefault("PRIVACY_POLICY_URL", "https://sip-happens.local/privacy")
+	c.ConsumerRightsURL = getenvDefault("CONSUMER_RIGHTS_URL", "https://www.sic.gov.co/proteccion-del-consumidor")
 	c.DisablePasswordAuth = getenvBoolDefault("SSH_DISABLE_PASSWORD_AUTH", false)
 	c.DisablePortForwarding = getenvBoolDefault("SSH_DISABLE_PORT_FORWARDING", true)
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")

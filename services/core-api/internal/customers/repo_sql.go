@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"sip-happens/pkg/domain"
 )
@@ -125,5 +126,13 @@ values ($1, $2, now(), null)
 on conflict (customer_id, purpose) do update
 set granted_at = now(), revoked_at = null
 `, string(customerID), purpose)
+	return err
+}
+
+func (r *SQLRepository) InsertAgeVerification(ctx context.Context, q Querier, id string, customerID domain.CustomerID, orderID domain.OrderID, birthDate, affirmedAt time.Time, method string) error {
+	_, err := q.ExecContext(ctx, `
+insert into age_verifications (id, customer_id, order_id, birth_date, affirmed_at, method, created_at)
+values ($1, $2, $3, $4::date, $5, $6, now())
+`, id, string(customerID), string(orderID), birthDate.Format("2006-01-02"), affirmedAt, method)
 	return err
 }

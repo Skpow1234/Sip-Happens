@@ -11,8 +11,9 @@ func SpanishCO() Messages {
 		MinorAlcoholWarning: "Prohibida la venta de alcohol a menores de edad.",
 		WelcomeBirthPrompt:  "Ingresa tu fecha de nacimiento (AAAA-MM-DD):",
 		WelcomeContinue:     "enter — continuar   n — salir",
-		WelcomePrivacyLabel: "Política de privacidad:",
-		MenuTitle:           "Menú principal",
+		WelcomePrivacyLabel:        "Política de privacidad:",
+		WelcomeConsumerRightsLabel: "Derechos del consumidor (SIC):",
+		MenuTitle:                  "Menú principal",
 		MenuCart: func(n int) string {
 			return fmt.Sprintf("Carrito: %d artículo(s)", n)
 		},
@@ -26,6 +27,7 @@ func SpanishCO() Messages {
   q — Salir
 
   Privacidad: %s
+  Derechos del consumidor (SIC): %s
 `,
 		CatalogTitle: "Catálogo",
 		CatalogPageMeta: func(page, offset int) string {
@@ -70,7 +72,10 @@ func SpanishCO() Messages {
 		CheckoutShippingEst: func(amount string) string {
 			return fmt.Sprintf("Estimación de envío: %s", amount)
 		},
-		ConfirmTitle:    "Confirmar pedido",
+		CheckoutConsumerRightsLine: func(url string) string {
+			return fmt.Sprintf("Derechos del consumidor (SIC): %s", url)
+		},
+		ConfirmTitle: "Confirmar pedido",
 		ConfirmSubtotal: "Subtotal:",
 		ConfirmShipping: "Envío (est.):",
 		ConfirmTotal:    "Total:",
@@ -81,6 +86,9 @@ func SpanishCO() Messages {
 				mark = "[x]"
 			}
 			return fmt.Sprintf("%s Acepto la política de privacidad (%s)", mark, url)
+		},
+		ConfirmConsumerRightsLine: func(url string) string {
+			return fmt.Sprintf("Información sobre derechos del consumidor (SIC): %s", url)
 		},
 		ConfirmHelp: "p — política de privacidad   y — confirmar pedido   n — volver",
 		PaymentTitle:  "Pago fuera de la terminal",
@@ -105,6 +113,9 @@ Revisa el estado desde el menú principal (3 o 4).
 
 enter / esc — volver al menú
 `, order, total, status)
+		},
+		OrderCompleteConsumerRightsLine: func(url string) string {
+			return fmt.Sprintf("Derechos del consumidor (SIC): %s", url)
 		},
 		HelpTitle: "Ayuda",
 		HelpBack:  "esc — volver al menú",

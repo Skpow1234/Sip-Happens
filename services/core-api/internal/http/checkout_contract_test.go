@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/db"
@@ -67,6 +68,7 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 		Catalog:           catalog.NewSQLRepository(),
 		Orders:            ordersSvc,
 		Customers:         customers.NewService(tdb.DB, customers.NewSQLRepository()),
+		Admin:             &admin.SQLService{DB: tdb.DB},
 		Stripe:            stripepayments.MockClient{},
 		CoreAPIHMACKeys:   map[string]string{"dev": "test-secret"},
 		CoreAPIHMACSecret: "",
@@ -124,5 +126,25 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 	}
 	if out.Stripe.URL == "" {
 		t.Fatal("expected stripe.URL")
+	}
+
+	var ageCount int
+	if err := tdb.DB.QueryRowContext(ctx, `
+select count(*) from age_verifications where order_id=$1 and method='checkout'
+`, out.Order.ID).Scan(&ageCount); err != nil {
+		t.Fatal(err)
+	}
+	if ageCount != 1 {
+		t.Fatalf("expected 1 age_verification, got %d", ageCount)
+	}
+
+	var auditCount int
+	if err := tdb.DB.QueryRowContext(ctx, `
+select count(*) from audit_events where aggregate_id=$1 and event_type='age.verified'
+`, out.Order.ID).Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("expected 1 age.verified audit, got %d", auditCount)
 	}
 }
