@@ -54,7 +54,7 @@ func (m Model) composeLayout(body string, opts layoutOpts) string {
 		parts = append(parts, m.renderNoticeBar())
 	}
 	if opts.showPromo {
-		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Align(lipgloss.Center).Width(m.width).Render(L.ShellPromo))
+		parts = append(parts, stylePromo().Align(lipgloss.Center).Width(m.width).Render(L.ShellPromo))
 	}
 	if opts.footer != "" {
 		parts = append(parts, m.renderFooter(opts.footer))
@@ -74,19 +74,19 @@ func (m Model) renderTopBar(active shellTab) string {
 			text = fmt.Sprintf("%s %s %s [%d]", key, label, formatMoneyShort("COP", m.state.cartSubtotal()), m.state.cartCount())
 		}
 		if tab == active {
-			return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("15")).
-				Width(cell).Align(lipgloss.Center).Render(text)
+			return styleActiveTab().Width(cell).Align(lipgloss.Center).Render(text)
 		}
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Width(cell).Align(lipgloss.Center).Render(text)
+		return styleInactiveTab().Width(cell).Align(lipgloss.Center).Render(text)
 	}
+	brand := styleBrand().Width(cell).Align(lipgloss.Center).Render(L.ShellBrand)
 	cells := []string{
-		mk("", L.ShellBrand, tabShop),
+		brand,
 		mk("s", L.ShellShop, tabShop),
 		mk("a", L.ShellAccount, tabAccount),
 		mk("c", L.ShellCart, tabCart),
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, cells...)
-	return lipgloss.NewStyle().Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(lipgloss.Color("8")).Render(row)
+	return styleTopBorder().Render(row)
 }
 
 func formatMoneyShort(currency string, minor int64) string {
@@ -109,12 +109,12 @@ func (m Model) renderBreadcrumbs(step checkoutCrumb) string {
 	var cells []string
 	for _, p := range parts {
 		if p.step == step {
-			cells = append(cells, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Render(p.label))
+			cells = append(cells, styleCrumbActive().Render(p.label))
 		} else {
-			cells = append(cells, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(p.label))
+			cells = append(cells, styleCrumbInactive().Render(p.label))
 		}
 	}
-	return strings.Join(cells, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(" / "))
+	return strings.Join(cells, styleCrumbSep().Render(" / "))
 }
 
 func (m Model) renderNoticeBar() string {
@@ -131,27 +131,39 @@ func (m Model) renderNoticeBar() string {
 }
 
 func (m Model) renderFooter(hints string) string {
-	return lipgloss.NewStyle().Border(lipgloss.NormalBorder(), true, false, false, false).BorderForeground(lipgloss.Color("8")).
-		Foreground(lipgloss.Color("8")).Render(hints)
+	return styleFooter().Render(hints)
 }
 
 func selectedLine(mark, text string, selected bool) string {
 	if selected {
-		return lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Render(mark+text) + "\n"
+		prefix := mark
+		if prefix == "" {
+			prefix = "› "
+		}
+		return styleActiveTab().Render(prefix + text) + "\n"
 	}
-	return mark + text + "\n"
+	return styleDim().Render("  " + text) + "\n"
+}
+
+func catalogLine(sku, name string, selected bool) string {
+	skuPart := lipgloss.NewStyle().Foreground(colorSKU).Width(14).Render(truncate(sku, 14))
+	namePart := lipgloss.NewStyle().Foreground(colorText).Render(truncate(name, 40))
+	line := skuPart + " " + namePart
+	if selected {
+		return styleActiveTab().Render("› "+line) + "\n"
+	}
+	return "  " + line + "\n"
 }
 
 func box(title, inner string, width int) string {
 	if width < 10 {
 		width = 40
 	}
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("8")).
-		Width(width).
-		Padding(0, 1).
-		Render(lipgloss.NewStyle().Bold(true).Render(title) + "\n" + inner)
+	titleRendered := ""
+	if title != "" {
+		titleRendered = styleBoxTitle().Render(title) + "\n"
+	}
+	return styleBox().Width(width).Render(titleRendered + inner)
 }
 
 func splitHorizontal(leftWidth int, left, right string) string {

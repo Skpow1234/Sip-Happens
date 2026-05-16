@@ -61,53 +61,16 @@ set email=excluded.email, full_name=excluded.full_name, updated_at=excluded.upda
 		return nil, fmt.Errorf("insert customer: %w", err)
 	}
 
-	type demoProduct struct {
-		SKU      string
-		Name     string
-		Brewery  string
-		Style    string
-		ABV      float64
-		VolumeML int
-		Invima   string
-		PriceCOP int64
-		OnHand   int
-	}
-
-	products := []demoProduct{
-		{
-			SKU:      "DEMO-IPA-330",
-			Name:     "Demo IPA 330ml",
-			Brewery:  "Demo Brewery",
-			Style:    "IPA",
-			ABV:      6.2,
-			VolumeML: 330,
-			Invima:   "INVIMA-DEMO-IPA-001",
-			PriceCOP: 11900,
-			OnHand:   50,
-		},
-		{
-			SKU:      "DEMO-LAGER-330",
-			Name:     "Demo Lager 330ml",
-			Brewery:  "Demo Brewery",
-			Style:    "Lager",
-			ABV:      4.6,
-			VolumeML: 330,
-			Invima:   "INVIMA-DEMO-LAGER-001",
-			PriceCOP: 8900,
-			OnHand:   80,
-		},
-	}
-
 	var idsOut []string
-	for _, p := range products {
+	for _, p := range demoProducts() {
 		pid, err := ids.UUIDv4()
 		if err != nil {
 			return nil, err
 		}
 
 		err = tx.QueryRowContext(ctx, `
-insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
-values ($1,$2,$3,$4,$5,$6,$7,$8,true,$9,$10)
+insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, description, ibu, is_active, created_at, updated_at)
+values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12)
 on conflict (sku) do update set
   name=excluded.name,
   brewery=excluded.brewery,
@@ -115,10 +78,12 @@ on conflict (sku) do update set
   abv=excluded.abv,
   volume_ml=excluded.volume_ml,
   invima_reg=excluded.invima_reg,
+  description=excluded.description,
+  ibu=excluded.ibu,
   is_active=true,
   updated_at=excluded.updated_at
 returning id
-`, pid, p.SKU, p.Name, p.Brewery, p.Style, p.ABV, p.VolumeML, p.Invima, now, now).Scan(&pid)
+`, pid, p.SKU, p.Name, p.Brewery, p.Style, p.ABV, p.VolumeML, p.Invima, p.Description, p.IBU, now, now).Scan(&pid)
 		if err != nil {
 			return nil, fmt.Errorf("insert product %s: %w", p.SKU, err)
 		}

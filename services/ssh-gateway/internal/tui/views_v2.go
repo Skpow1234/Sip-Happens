@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 func (m Model) layoutDefaults(tab shellTab, footer string) layoutOpts {
@@ -32,7 +30,7 @@ func (m Model) viewCatalogSplit() string {
 
 func (m Model) catalogListPane(width int) string {
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render("~ "+L.CatalogFeatured+" ~") + "\n")
+	b.WriteString(styleSection().Render("~ "+L.CatalogFeatured+" ~") + "\n")
 	if m.state.catalogSearchEdit {
 		b.WriteString(L.CatalogSearchPrompt + " " + m.state.catalogSearchBuf + "█\n")
 		return b.String()
@@ -42,14 +40,20 @@ func (m Model) catalogListPane(width int) string {
 		return b.String()
 	}
 	for i, it := range m.state.catalog {
-		name := truncate(it.Product.Name, width-6)
-		line := fmt.Sprintf("%-14s %s", it.Product.SKU, name)
-		b.WriteString(selectedLine("", line, i == m.state.catalogCursor))
+		name := truncate(it.Product.Name, width-16)
+		b.WriteString(catalogLine(it.Product.SKU, name, i == m.state.catalogCursor))
 	}
-	b.WriteString("\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("~ "+L.CatalogAll+" ~") + "\n")
+	b.WriteString("\n" + styleSection().Render("~ "+L.CatalogAll+" ~") + "\n")
 	page := m.state.catalogQuery.Offset/catalogPageSize + 1
-	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(
-		L.CatalogPageMeta(page, m.state.catalogQuery.Offset)) + "\n")
+	var meta strings.Builder
+	meta.WriteString(styleMuted().Render(L.CatalogPageMeta(page, m.state.catalogQuery.Offset)))
+	if m.state.catalogHasMore {
+		meta.WriteString(stylePromo().Render("  · n → siguiente"))
+	}
+	if m.state.catalogQuery.Offset > 0 {
+		meta.WriteString(stylePromo().Render("  · p ← anterior"))
+	}
+	b.WriteString(meta.String() + "\n")
 	return b.String()
 }
 
@@ -59,15 +63,14 @@ func (m Model) catalogDetailPane() string {
 		return L.LoadingProduct + "\n"
 	}
 	if d == nil {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(L.CatalogSelectHint) + "\n"
+		return styleMuted().Render(L.CatalogSelectHint) + "\n"
 	}
 	p := d.Product
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(p.Name) + "\n")
-	b.WriteString(fmt.Sprintf("%s  |  %s  |  %s\n",
-		fmt.Sprintf(L.ProductVolume, p.VolumeML), fmt.Sprintf(L.ProductABV, p.ABV), p.Brewery))
-	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Render(
-		formatMoney(d.Price.Currency, d.Price.AmountMinorUnits)) + "\n\n")
+	b.WriteString(styleBrand().Render(p.Name) + "\n")
+	b.WriteString(styleSpec().Render(fmt.Sprintf("%s  |  %s  |  %s",
+		fmt.Sprintf(L.ProductVolume, p.VolumeML), fmt.Sprintf(L.ProductABV, p.ABV), p.Brewery)) + "\n")
+	b.WriteString(stylePrice().Render(formatMoney(d.Price.Currency, d.Price.AmountMinorUnits)) + "\n\n")
 	if desc := strings.TrimSpace(p.Description); desc != "" {
 		b.WriteString(desc + "\n\n")
 	}

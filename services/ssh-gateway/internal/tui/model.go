@@ -229,12 +229,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.busy = true
 			return m, tea.Batch(m.patchBirthDateCmd(), m.loadServerCartCmd(), m.loadCatalogCmd())
 		case "backspace":
-			if len(m.state.birthDateInput) > 0 {
-				m.state.birthDateInput = m.state.birthDateInput[:len(m.state.birthDateInput)-1]
-			}
+			m.state.birthDateInput = backspaceBirthDateInput(m.state.birthDateInput)
 		default:
 			if len(msg.Runes) == 1 && msg.Type == tea.KeyRunes {
-				m.state.birthDateInput += string(msg.Runes)
+				m.state.birthDateInput = appendBirthDateInput(m.state.birthDateInput, msg.Runes[0])
 			}
 		}
 
@@ -598,24 +596,29 @@ func (m Model) View() string {
 }
 
 func (m Model) viewBusy() string {
-	return lipgloss.NewStyle().Bold(true).Render(L.Loading) + "\n"
+	return styleBrand().Render(L.Loading) + "\n"
 }
 
 func (m Model) viewWelcome() string {
-	title := lipgloss.NewStyle().Bold(true).Render(L.AppName)
-	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(L.MinorAlcoholWarning)
+	title := styleBrand().Render(L.AppName)
+	warn := lipgloss.NewStyle().Foreground(colorWarn).Bold(true).Render(L.MinorAlcoholWarning)
+	input := styleInputCursor().Render(m.state.birthDateInput + "█")
 	body := fmt.Sprintf(`%s
 
-  %s█
+  %s
 
 %s
 
 %s %s
 %s %s
-`, L.WelcomeBirthPrompt, m.state.birthDateInput, L.WelcomeContinue,
-		L.WelcomePrivacyLabel, m.privacyPolicyURL,
-		L.WelcomeConsumerRightsLabel, m.consumerRightsURL)
+`, styleText().Render(L.WelcomeBirthPrompt), input, styleMuted().Render(L.WelcomeContinue),
+		styleMuted().Render(L.WelcomePrivacyLabel), styleLink().Render(m.privacyPolicyURL),
+		styleMuted().Render(L.WelcomeConsumerRightsLabel), styleLink().Render(m.consumerRightsURL))
 	return fmt.Sprintf("%s\n%s\n\n%s", title, warn, body)
+}
+
+func styleText() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(colorText)
 }
 
 func (m Model) viewMenu() string {
