@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <p>Hola{{if .CustomerName}} {{.CustomerName}}{{end}},</p>
+  <p>Tu pedido <strong>{{.OrderID}}</strong> está listo para pagar.</p>
+  <p>Total: <strong>{{.TotalDisplay}}</strong></p>
+  {{if .ExpiresAt}}<p>Vence: {{.ExpiresAt}}</p>{{end}}
+  <p><a href="{{.PaymentURL}}">Completar pago en Stripe</a></p>
+  <p>— Sip-Happens</p>
+</body>
+</html>

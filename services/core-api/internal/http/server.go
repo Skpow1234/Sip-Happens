@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 
@@ -45,6 +47,8 @@ type Server struct {
 	// Feature flags for gradual rollout.
 	// Names are lowercased strings (e.g. "catalog_cache").
 	FeatureFlags map[string]struct{}
+
+	Email *email.Service
 }
 
 func (s *Server) Handler() http.Handler {
@@ -1183,6 +1187,9 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_ = s.Orders.SetStripeRefs(r.Context(), o.ID, stripeOut.CheckoutSessionID, stripeOut.PaymentIntentID)
+		if stripeOut.URL != "" {
+			s.maybeSendPaymentLinkEmail(o, req.FullName, stripeOut.URL)
+		}
 	}
 
 	w.Header().Set("content-type", "application/json")
@@ -1191,6 +1198,38 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		"items":  items,
 		"stripe": stripeOut,
 	})
+}
+
+func (s *Server) featureEnabled(name string) bool {
+	if s.FeatureFlags == nil {
+		return false
+	}
+	_, ok := s.FeatureFlags[strings.ToLower(strings.TrimSpace(name))]
+	return ok
+}
+
+func (s *Server) maybeSendPaymentLinkEmail(o *domain.Order, checkoutFullName, paymentURL string) {
+	if s.Email == nil || !s.featureEnabled("email_payment_link") || o == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		name := strings.TrimSpace(checkoutFullName)
+		emailAddr := ""
+		if s.DB != nil {
+			cust, err := s.loadCustomer(ctx, o.CustomerID)
+			if err == nil && cust != nil {
+				if name == "" {
+					name = cust.FullName
+				}
+				emailAddr = cust.Email
+			}
+		}
+		if err := s.Email.SendPaymentLink(ctx, o, emailAddr, name, paymentURL); err != nil {
+			log.Printf("payment link email failed order_id=%s: %v", o.ID, err)
+		}
+	}()
 }
 
 func (s *Server) loadCustomer(ctx context.Context, id domain.CustomerID) (*domain.Customer, error) {

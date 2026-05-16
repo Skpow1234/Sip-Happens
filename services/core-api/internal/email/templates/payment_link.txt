@@ -1,0 +1,11 @@
+Hola{{if .CustomerName}} {{.CustomerName}}{{end}},
+
+Tu pedido {{.OrderID}} está listo para pagar.
+
+Total: {{.TotalDisplay}}
+{{if .ExpiresAt}}Vence: {{.ExpiresAt}}{{end}}
+
+Completa el pago aquí:
+{{.PaymentURL}}
+
+— Sip-Happens

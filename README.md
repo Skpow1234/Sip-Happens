@@ -179,6 +179,12 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
 - **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
 - **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
+- **`FEATURE_FLAGS`**: comma-separated toggles (e.g. `catalog_cache`, `email_payment_link`, `email_receipt`)
+- **`EMAIL_PROVIDER`**: `log` (default; prints to stdout) or `smtp`
+- **`EMAIL_FROM`**: sender address (default `noreply@sip-happens.local`)
+- **`SMTP_HOST`**, **`SMTP_PORT`** (default `587`), **`SMTP_USER`**, **`SMTP_PASSWORD`**: required when `EMAIL_PROVIDER=smtp`
+
+Transactional email (Spanish templates) is sent only when the matching flag is set and the customer has an email on file: payment link after `POST /checkout` (`email_payment_link`), receipt when `order.paid` is consumed (`email_receipt` on `nats-consume`).
 
 Database config is currently provided by Compose:
 

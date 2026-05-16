@@ -18,9 +18,11 @@ import (
 
 	"sip-happens/pkg/config"
 	"sip-happens/pkg/events"
+	"sip-happens/pkg/featureflags"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/db"
+	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/fulfillment"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/orders"
@@ -368,12 +370,23 @@ func runNATSConsumeJob(ctx context.Context) error {
 	}
 
 	fulfillmentSvc := &fulfillment.SQLService{DB: sqlDB}
+	var emailSvc *email.Service
+	if mailer, err := email.NewMailerFromEnv(); err != nil {
+		return err
+	} else {
+		flags := featureflags.Parse(os.Getenv("FEATURE_FLAGS"))
+		emailSvc, err = email.NewService(mailer, sqlDB, flags)
+		if err != nil {
+			return err
+		}
+	}
 	handler := consumers.OrderPaidHandler{
 		Namespace: namespace,
 		Name:      consumerName,
 		Saga: workflows.Saga{
 			Fulfillment: fulfillmentSvc,
 		},
+		Emails: emailSvc,
 	}
 
 	r := &consumers.JetStreamRuntime{

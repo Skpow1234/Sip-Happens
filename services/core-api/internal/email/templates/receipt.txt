@@ -1,0 +1,11 @@
+Hola{{if .CustomerName}} {{.CustomerName}}{{end}},
+
+Recibimos tu pago. Gracias por tu compra.
+
+Pedido: {{.OrderID}}
+Total: {{.TotalDisplay}}
+Fecha: {{.PaidAt}}
+
+{{.ItemsSummary}}
+
+— Sip-Happens

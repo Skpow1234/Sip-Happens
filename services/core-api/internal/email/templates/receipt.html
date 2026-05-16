@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <p>Hola{{if .CustomerName}} {{.CustomerName}}{{end}},</p>
+  <p>Recibimos tu pago. Gracias por tu compra.</p>
+  <ul>
+    <li>Pedido: <strong>{{.OrderID}}</strong></li>
+    <li>Total: <strong>{{.TotalDisplay}}</strong></li>
+    <li>Fecha: {{.PaidAt}}</li>
+  </ul>
+  <pre style="font-family: sans-serif; white-space: pre-wrap;">{{.ItemsSummary}}</pre>
+  <p>— Sip-Happens</p>
+</body>
+</html>

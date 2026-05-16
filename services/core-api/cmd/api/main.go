@@ -15,6 +15,7 @@ import (
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/pkg/config"
 	"sip-happens/services/core-api/internal/db"
+	"sip-happens/services/core-api/internal/email"
 	httpserver "sip-happens/services/core-api/internal/http"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/migrate"
@@ -144,6 +145,15 @@ func runServer() error {
 		}
 	}
 
+	mailer, err := email.NewMailerFromEnv()
+	if err != nil {
+		return err
+	}
+	emailSvc, err := email.NewService(mailer, sqlDB, cfg.Flags)
+	if err != nil {
+		return err
+	}
+
 	srv := &httpserver.Server{
 		Orders:            ordersSvc,
 		Catalog:           catalogRepo,
@@ -159,6 +169,7 @@ func runServer() error {
 		Stripe:            selectStripeClient(cfg),
 		StripeWebhook:     stripeWebhook,
 		StripeWebhookPath: cfg.StripeWebhookPath,
+		Email:             emailSvc,
 	}
 
 	httpSrv := &http.Server{

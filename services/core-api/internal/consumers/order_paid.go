@@ -11,6 +11,7 @@ import (
 
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/events"
+	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/workflows"
 )
@@ -20,6 +21,7 @@ type OrderPaidHandler struct {
 	Namespace string
 	Name      string // idempotency / metrics consumer name
 	Saga      workflows.Saga
+	Emails    *email.Service
 }
 
 func (h OrderPaidHandler) ConsumerName() string {
@@ -61,6 +63,11 @@ func (h OrderPaidHandler) Handle(ctx context.Context, m *nats.Msg) error {
 
 	if err := h.Saga.OnOrderPaid(ctx, time.Now().UTC(), orderID); err != nil {
 		return err
+	}
+	if h.Emails != nil {
+		if err := h.Emails.SendReceiptForOrder(ctx, orderID); err != nil {
+			log.Printf("receipt email failed order_id=%s: %v", orderID, err)
+		}
 	}
 	log.Printf("order.paid handled order_id=%s event_id=%s", orderID, m.Header.Get(outbox.NatsHeaderEventID))
 	return nil
