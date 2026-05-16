@@ -12,6 +12,11 @@ import (
 	"sip-happens/pkg/auth"
 )
 
+// RateLimiter is implemented by in-memory and Redis token bucket limiters.
+type RateLimiter interface {
+	Allow(key string, now time.Time) bool
+}
+
 type TokenBucketLimiter struct {
 	Capacity   float64
 	RefillRate float64 // tokens per second
@@ -73,7 +78,7 @@ func (l *TokenBucketLimiter) Allow(key string, now time.Time) bool {
 }
 
 type RateLimitMiddleware struct {
-	Limiter *TokenBucketLimiter
+	Limiter RateLimiter
 	KeyFn   func(r *http.Request) string
 }
 

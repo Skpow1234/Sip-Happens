@@ -9,11 +9,13 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 
 	"sip-happens/services/core-api/internal/admin"
 	_ "sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/pkg/config"
+	"sip-happens/pkg/redisutil"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/email"
 	httpserver "sip-happens/services/core-api/internal/http"
@@ -145,6 +147,15 @@ func runServer() error {
 		}
 	}
 
+	var redisClient *redis.Client
+	if cfg.RedisURL != "" {
+		redisClient, err = redisutil.Open(cfg.RedisURL)
+		if err != nil {
+			return err
+		}
+		defer redisClient.Close()
+	}
+
 	mailer, err := email.NewMailerFromEnv()
 	if err != nil {
 		return err
@@ -170,6 +181,8 @@ func runServer() error {
 		StripeWebhook:     stripeWebhook,
 		StripeWebhookPath: cfg.StripeWebhookPath,
 		Email:             emailSvc,
+		Redis:             redisClient,
+		RedisRequired:     cfg.RedisRequired,
 	}
 
 	httpSrv := &http.Server{

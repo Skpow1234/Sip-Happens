@@ -6,16 +6,16 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type SWRCache struct {
 	FreshFor time.Duration
 	StaleFor time.Duration
 
-	mu    sync.Mutex
-	items map[string]*swrItem
+	store swrStore
 }
 
 type swrItem struct {
@@ -28,9 +28,23 @@ type swrItem struct {
 	refreshing bool
 }
 
+// NewSWRCache returns an in-memory stale-while-revalidate cache.
+func NewSWRCache(fresh, stale time.Duration) *SWRCache {
+	c := &SWRCache{FreshFor: fresh, StaleFor: stale}
+	c.store = newMemorySWRStore()
+	return c
+}
+
+// NewRedisSWRCache uses Redis as the backing store (shared across core-api replicas).
+func NewRedisSWRCache(rdb *redis.Client, namespace string, fresh, stale time.Duration) *SWRCache {
+	c := &SWRCache{FreshFor: fresh, StaleFor: stale}
+	c.store = newRedisSWRStore(rdb, namespace)
+	return c
+}
+
 func (c *SWRCache) WrapGET(next http.Handler, keyFn func(r *http.Request) string) http.Handler {
-	if c.items == nil {
-		c.items = map[string]*swrItem{}
+	if c.store == nil {
+		c.store = newMemorySWRStore()
 	}
 	if c.FreshFor <= 0 {
 		c.FreshFor = 15 * time.Second
@@ -51,92 +65,57 @@ func (c *SWRCache) WrapGET(next http.Handler, keyFn func(r *http.Request) string
 		}
 
 		now := time.Now()
-		if hit, ok := c.tryServe(w, r, k, now, next); ok {
-			_ = hit
+		if c.tryServe(w, r, k, now, next) {
 			return
 		}
-		// Miss: compute synchronously.
 		status, ct, body := computeResponse(next, r)
 		if status == http.StatusOK && len(body) > 0 {
-			c.store(k, status, ct, body, now)
+			c.store.save(k, swrItem{
+				status:      status,
+				contentType: ct,
+				body:        append([]byte(nil), body...),
+				freshUntil:  now.Add(c.FreshFor),
+				staleUntil:  now.Add(c.FreshFor + c.StaleFor),
+			})
 		}
 		writeRecorded(w, status, ct, body, "MISS")
 	})
 }
 
-func (c *SWRCache) tryServe(w http.ResponseWriter, r *http.Request, key string, now time.Time, next http.Handler) (served bool, ok bool) {
-	c.mu.Lock()
-	it, exists := c.items[key]
-	if exists && now.After(it.staleUntil) {
-		delete(c.items, key)
-		exists = false
-	}
-	if !exists {
-		c.mu.Unlock()
-		return false, false
-	}
-
-	if now.Before(it.freshUntil) {
-		status, ct, body := it.status, it.contentType, append([]byte(nil), it.body...)
-		c.mu.Unlock()
-		writeRecorded(w, status, ct, body, "HIT")
-		return true, true
-	}
-
-	// Stale-while-revalidate.
-	if now.Before(it.staleUntil) {
-		shouldRefresh := !it.refreshing
-		if shouldRefresh {
-			it.refreshing = true
-		}
-		status, ct, body := it.status, it.contentType, append([]byte(nil), it.body...)
-		c.mu.Unlock()
-
-		if shouldRefresh {
+func (c *SWRCache) tryServe(w http.ResponseWriter, r *http.Request, key string, now time.Time, next http.Handler) bool {
+	it, kind := c.store.load(key, now)
+	switch kind {
+	case swrLookupFresh:
+		writeRecorded(w, it.status, it.contentType, it.body, "HIT")
+		return true
+	case swrLookupStale:
+		if c.store.tryBeginRefresh(key) {
 			go c.refresh(context.Background(), key, r, next)
 		}
-		writeRecorded(w, status, ct, body, "STALE")
-		return true, true
+		writeRecorded(w, it.status, it.contentType, it.body, "STALE")
+		return true
+	default:
+		return false
 	}
-
-	// Too old.
-	delete(c.items, key)
-	c.mu.Unlock()
-	return false, false
 }
 
 func (c *SWRCache) refresh(ctx context.Context, key string, r *http.Request, next http.Handler) {
-	// Clone the request to avoid races on body/ctx. Catalog GET has no body.
 	req := r.Clone(ctx)
 	status, ct, body := computeResponse(next, req)
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	it, ok := c.items[key]
-	if !ok {
-		return
-	}
-	it.refreshing = false
-	if status == http.StatusOK && len(body) > 0 {
+	ok := status == http.StatusOK && len(body) > 0
+	var it swrItem
+	if ok {
 		now := time.Now()
-		it.status = status
-		it.contentType = ct
-		it.body = append([]byte(nil), body...)
-		it.freshUntil = now.Add(c.FreshFor)
-		it.staleUntil = now.Add(c.FreshFor + c.StaleFor)
+		it = swrItem{
+			status:      status,
+			contentType: ct,
+			body:        append([]byte(nil), body...),
+			freshUntil:  now.Add(c.FreshFor),
+			staleUntil:  now.Add(c.FreshFor + c.StaleFor),
+		}
 	}
-}
-
-func (c *SWRCache) store(key string, status int, ct string, body []byte, now time.Time) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.items[key] = &swrItem{
-		status:      status,
-		contentType: ct,
-		body:        append([]byte(nil), body...),
-		freshUntil:  now.Add(c.FreshFor),
-		staleUntil:  now.Add(c.FreshFor + c.StaleFor),
-	}
+	c.store.endRefresh(key, it, ok)
 }
 
 func computeResponse(next http.Handler, r *http.Request) (status int, contentType string, body []byte) {
@@ -181,4 +160,3 @@ func canonicalQuery(r *http.Request, keys ...string) string {
 	}
 	return strings.Join(parts, "&")
 }
-

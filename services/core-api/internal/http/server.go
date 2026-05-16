@@ -22,6 +22,7 @@ import (
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
@@ -49,6 +50,11 @@ type Server struct {
 	FeatureFlags map[string]struct{}
 
 	Email *email.Service
+
+	// Redis is optional; used when feature flags request shared cache or rate limits.
+	Redis *redis.Client
+	// RedisRequired makes /readyz fail when Redis is configured but unreachable.
+	RedisRequired bool
 }
 
 func (s *Server) Handler() http.Handler {
@@ -60,13 +66,34 @@ func (s *Server) Handler() http.Handler {
 	}
 	idem := &IdempotencyMiddleware{Store: idemStore, TTL: 24 * time.Hour, Prefix: strings.TrimSpace(s.Namespace)}
 
-	catalogCache := &SWRCache{FreshFor: 15 * time.Second, StaleFor: 45 * time.Second}
+	nsPrefix := strings.TrimSpace(s.Namespace)
+	if nsPrefix == "" {
+		nsPrefix = "dev"
+	}
 
-	// Best-effort rate limiting. This is not relied on for correctness and is safe
-	// to be in-memory. For multi-node, limits will be per-node unless we later
-	// switch to a shared backend (e.g., Redis).
+	var catalogCache *SWRCache
+	if s.featureEnabled("catalog_cache_redis") && s.Redis != nil {
+		catalogCache = NewRedisSWRCache(s.Redis, nsPrefix, 15*time.Second, 45*time.Second)
+	} else {
+		catalogCache = NewSWRCache(15*time.Second, 45*time.Second)
+	}
+
+	checkoutLimiter := RateLimiter(&TokenBucketLimiter{Capacity: 10, RefillRate: 10.0 / 60.0, TTL: 30 * time.Minute})
+	adminLimiter := RateLimiter(&TokenBucketLimiter{Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute})
+	if s.featureEnabled("redis_rate_limit") && s.Redis != nil {
+		rlPrefix := fmt.Sprintf("sip:%s:rl", nsPrefix)
+		checkoutLimiter = &RedisTokenBucketLimiter{
+			Client: s.Redis, KeyPrefix: rlPrefix,
+			Capacity: 10, RefillRate: 10.0 / 60.0, TTL: 30 * time.Minute,
+		}
+		adminLimiter = &RedisTokenBucketLimiter{
+			Client: s.Redis, KeyPrefix: rlPrefix,
+			Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute,
+		}
+	}
+
 	checkoutRL := (&RateLimitMiddleware{
-		Limiter: &TokenBucketLimiter{Capacity: 10, RefillRate: 10.0 / 60.0, TTL: 30 * time.Minute}, // 10/min burst 10
+		Limiter: checkoutLimiter,
 		KeyFn: func(r *http.Request) string {
 			p := strings.TrimSpace(s.Namespace)
 			if p == "" {
@@ -76,7 +103,7 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	adminRL := (&RateLimitMiddleware{
-		Limiter: &TokenBucketLimiter{Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute}, // 60/min burst 60
+		Limiter: adminLimiter,
 		KeyFn: func(r *http.Request) string {
 			p := strings.TrimSpace(s.Namespace)
 			if p == "" {
@@ -92,8 +119,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/openapi.yaml", s.handleOpenAPISpec)
 	mux.HandleFunc("/docs", s.handleOpenAPIDocs)
-	// Feature flag: catalog_cache
-	if _, ok := s.FeatureFlags["catalog_cache"]; ok {
+	// Feature flag: catalog_cache (in-memory) or catalog_cache_redis (shared SWR; requires REDIS_URL).
+	if s.featureEnabled("catalog_cache") || s.featureEnabled("catalog_cache_redis") {
 		mux.Handle("/catalog", catalogCache.WrapGET(http.HandlerFunc(s.handleCatalog), func(r *http.Request) string {
 			p := strings.TrimSpace(s.Namespace)
 			if p == "" {
@@ -188,6 +215,15 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if err := s.DB.PingContext(ctx); err != nil {
 		writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "db not ready")
+		return
+	}
+	if s.Redis != nil {
+		if err := s.Redis.Ping(ctx).Err(); err != nil {
+			writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "redis not ready")
+			return
+		}
+	} else if s.RedisRequired {
+		writeAPIError(w, r, http.StatusServiceUnavailable, "not_ready", "redis not configured")
 		return
 	}
 	w.Header().Set("content-type", "application/json")

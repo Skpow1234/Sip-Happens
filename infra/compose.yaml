@@ -11,6 +11,16 @@ services:
       timeout: 5s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   postgres:
     image: postgres:16
     environment:
@@ -41,10 +51,14 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
       CORE_API_HMAC_KEY_ID: ${CORE_API_HMAC_KEY_ID:-dev}
       CORE_API_HMAC_KEYS: ${CORE_API_HMAC_KEYS:-dev:dev-hmac-secret}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      FEATURE_FLAGS: ${FEATURE_FLAGS:-}
     depends_on:
       postgres:
         condition: service_healthy
       nats:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8080:8080"

@@ -179,7 +179,9 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`SSH_DEV_FINGERPRINT`**: dev-only fallback fingerprint when no SSH public key is offered (Compose default matches demo seed customer)
 - **`SSH_DISABLE_PASSWORD_AUTH`**: reject password SSH logins (default `1` in Compose)
 - **`SSH_DISABLE_PORT_FORWARDING`**: deny SSH port forwarding (default `1`)
-- **`FEATURE_FLAGS`**: comma-separated toggles (e.g. `catalog_cache`, `email_payment_link`, `email_receipt`)
+- **`FEATURE_FLAGS`**: comma-separated toggles (e.g. `catalog_cache`, `catalog_cache_redis`, `redis_rate_limit`, `email_payment_link`, `email_receipt`)
+- **`REDIS_URL`**: optional Redis URL (Compose sets `redis://redis:6379/0` for `core-api`)
+- **`REDIS_REQUIRED`**: set to `1` to fail `/readyz` when Redis is required but unavailable
 - **`EMAIL_PROVIDER`**: `log` (default; prints to stdout) or `smtp`
 - **`EMAIL_FROM`**: sender address (default `noreply@sip-happens.local`)
 - **`SMTP_HOST`**, **`SMTP_PORT`** (default `587`), **`SMTP_USER`**, **`SMTP_PASSWORD`**: required when `EMAIL_PROVIDER=smtp`

@@ -37,6 +37,9 @@ type CoreAPI struct {
 	// CoreAPIHMACKeyID and CoreAPIHMACKeys enable v2 signing (key-id + rotation).
 	CoreAPIHMACKeyID string
 	CoreAPIHMACKeys  map[string]string
+
+	RedisURL      string
+	RedisRequired bool
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -72,6 +75,8 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 	c.CoreAPIHMACKeyID = strings.TrimSpace(os.Getenv("CORE_API_HMAC_KEY_ID"))
 	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))
+	c.RedisURL = strings.TrimSpace(os.Getenv("REDIS_URL"))
+	c.RedisRequired = RedisRequiredForReadyz()
 
 	return c, nil
 }
