@@ -325,6 +325,12 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - [`docs/runbooks/incident-stripe-webhook-outage.md`](docs/runbooks/incident-stripe-webhook-outage.md)
 - [`docs/runbooks/incident-postgres-failover.md`](docs/runbooks/incident-postgres-failover.md)
 
+**Security runbooks**
+
+- [`docs/runbooks/rotate-ssh-host-key.md`](docs/runbooks/rotate-ssh-host-key.md)
+- [`docs/runbooks/rotate-admin-tokens.md`](docs/runbooks/rotate-admin-tokens.md)
+- [`docs/runbooks/rotate-core-api-hmac-keys.md`](docs/runbooks/rotate-core-api-hmac-keys.md)
+
 ## Observability
 
 - **Request IDs**: `ssh-gateway` sends `X-Request-Id` to `core-api` and `core-api` echoes it back on responses.
