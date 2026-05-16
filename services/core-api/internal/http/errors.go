@@ -8,13 +8,14 @@ import (
 // Stable error response shape for all endpoints.
 //
 // Example:
-// {
-//   "error": {
-//     "code": "invalid_input",
-//     "message": "one or more fields are invalid",
-//     "request_id": "...."
-//   }
-// }
+//
+//	{
+//	  "error": {
+//	    "code": "invalid_input",
+//	    "message": "one or more fields are invalid",
+//	    "request_id": "...."
+//	  }
+//	}
 type apiError struct {
 	Code      string `json:"code"`
 	Message   string `json:"message"`

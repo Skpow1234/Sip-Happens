@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/orders"
@@ -65,6 +66,7 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 		DB:                tdb.DB,
 		Catalog:           catalog.NewSQLRepository(),
 		Orders:            ordersSvc,
+		Customers:         customers.NewService(tdb.DB, customers.NewSQLRepository()),
 		Stripe:            stripepayments.MockClient{},
 		CoreAPIHMACKeys:   map[string]string{"dev": "test-secret"},
 		CoreAPIHMACSecret: "",

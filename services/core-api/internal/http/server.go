@@ -10,13 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"sip-happens/pkg/age"
 	"sip-happens/pkg/domain"
-	"sip-happens/pkg/ids"
 	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
@@ -28,6 +27,7 @@ import (
 
 type Server struct {
 	Orders      orders.Service
+	Customers   customers.Service
 	Catalog     catalog.Repository
 	Admin       admin.Service
 	AdminToken  string
@@ -973,7 +973,7 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if s.Orders == nil {
+	if s.Orders == nil || s.Customers == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
@@ -982,7 +982,7 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
 		return
 	}
-	customerID, err := s.lookupCustomerIDByFingerprint(r.Context(), fp)
+	customerID, err := s.Customers.IDByFingerprint(r.Context(), fp)
 	if err != nil {
 		if err == domain.ErrNotFound {
 			w.Header().Set("content-type", "application/json")
@@ -1012,7 +1012,7 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
 		return
 	}
-	if s.Orders == nil {
+	if s.Orders == nil || s.Customers == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
@@ -1021,7 +1021,7 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
 		return
 	}
-	customerID, err := s.lookupCustomerIDByFingerprint(r.Context(), fp)
+	customerID, err := s.Customers.IDByFingerprint(r.Context(), fp)
 	if err != nil {
 		if err == domain.ErrNotFound {
 			writeAPIError(w, r, http.StatusNotFound, "not_found", "order not found")
@@ -1114,6 +1114,10 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if s.Orders == nil || s.Customers == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
 
 	var req checkoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1124,8 +1128,8 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	customerID := domain.CustomerID(req.CustomerID)
 	if customerID == "" {
 		fp := r.Header.Get("X-SSH-Fingerprint")
-		if fp != "" && s.DB != nil {
-			id, err := s.getOrCreateCustomerIDByFingerprint(r.Context(), fp)
+		if fp != "" && s.Customers != nil {
+			id, err := s.Customers.GetOrCreateByFingerprint(r.Context(), fp)
 			if err == nil {
 				customerID = id
 			}
@@ -1156,7 +1160,15 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.saveCustomerProfile(r.Context(), customerID, req); err != nil {
+	if err := s.Customers.SaveCheckoutProfile(r.Context(), customerID, customers.CheckoutProfile{
+		City:         req.City,
+		Neighborhood: req.Neighborhood,
+		AddressLine1: req.AddressLine1,
+		Phone:        req.Phone,
+		LegalID:      req.LegalID,
+		FullName:     req.FullName,
+		BirthDate:    req.BirthDate,
+	}); err != nil {
 		if err == domain.ErrInvalidInput {
 			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid birth_date or age")
 			return
@@ -1164,8 +1176,8 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
-	_ = s.recordCustomerConsent(r.Context(), customerID, "privacy_policy")
-	_ = s.saveCustomerCart(r.Context(), customerID, []cartLineJSON{})
+	_ = s.Customers.RecordConsent(r.Context(), customerID, "privacy_policy")
+	_ = s.Customers.SaveCart(r.Context(), customerID, nil)
 
 	in := orders.CreatePendingOrderInput{
 		CustomerID: customerID,
@@ -1259,8 +1271,8 @@ func (s *Server) maybeSendPaymentLinkEmail(o *domain.Order, checkoutFullName, pa
 		defer cancel()
 		name := strings.TrimSpace(checkoutFullName)
 		emailAddr := ""
-		if s.DB != nil {
-			cust, err := s.loadCustomer(ctx, o.CustomerID)
+		if s.Customers != nil {
+			cust, err := s.Customers.GetByID(ctx, o.CustomerID)
 			if err == nil && cust != nil {
 				if name == "" {
 					name = cust.FullName
@@ -1274,107 +1286,4 @@ func (s *Server) maybeSendPaymentLinkEmail(o *domain.Order, checkoutFullName, pa
 			obslog.Warn(logCtx, "payment_link_email_failed", map[string]any{"err": err.Error()})
 		}
 	}()
-}
-
-func (s *Server) loadCustomer(ctx context.Context, id domain.CustomerID) (*domain.Customer, error) {
-	row := s.DB.QueryRowContext(ctx, `
-select id, ssh_fingerprint, email, phone, legal_id, full_name, birth_date,
-       address_line1, neighborhood, city, created_at, updated_at
-from customers where id=$1
-`, string(id))
-	var c domain.Customer
-	var email, phone, legalID, fullName, addr, hood, city sql.NullString
-	var birth sql.NullTime
-	if err := row.Scan(
-		&c.ID, &c.SSHFingerprint, &email, &phone, &legalID, &fullName, &birth,
-		&addr, &hood, &city, &c.CreatedAt, &c.UpdatedAt,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
-		}
-		return nil, err
-	}
-	c.Email = email.String
-	c.Phone = phone.String
-	c.LegalID = legalID.String
-	c.FullName = fullName.String
-	c.AddressLine1 = addr.String
-	c.Neighborhood = hood.String
-	c.City = city.String
-	if birth.Valid {
-		c.BirthDate = birth.Time
-	}
-	return &c, nil
-}
-
-func (s *Server) saveCustomerProfile(ctx context.Context, id domain.CustomerID, req checkoutRequest) error {
-	if s.DB == nil {
-		return nil
-	}
-	var birth any
-	if strings.TrimSpace(req.BirthDate) != "" {
-		bd, err := parseBirthDate(req.BirthDate)
-		if err != nil {
-			return domain.ErrInvalidInput
-		}
-		if !age.IsAdult(bd, time.Now()) {
-			return domain.ErrInvalidInput
-		}
-		birth = bd
-	}
-	_, err := s.DB.ExecContext(ctx, `
-update customers
-set city=$2, neighborhood=$3, address_line1=$4, phone=$5, legal_id=$6, full_name=$7,
-    birth_date=coalesce($8, birth_date), updated_at=now()
-where id=$1
-`, string(id), req.City, req.Neighborhood, req.AddressLine1, req.Phone, req.LegalID, req.FullName, birth)
-	return err
-}
-
-func (s *Server) lookupCustomerIDByFingerprint(ctx context.Context, fp string) (domain.CustomerID, error) {
-	if fp == "" {
-		return "", domain.ErrInvalidInput
-	}
-	row := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
-	var id string
-	if err := row.Scan(&id); err != nil {
-		if err == sql.ErrNoRows {
-			return "", domain.ErrNotFound
-		}
-		return "", err
-	}
-	return domain.CustomerID(id), nil
-}
-
-func (s *Server) getOrCreateCustomerIDByFingerprint(ctx context.Context, fp string) (domain.CustomerID, error) {
-	if fp == "" {
-		return "", domain.ErrInvalidInput
-	}
-	if id, err := s.lookupCustomerIDByFingerprint(ctx, fp); err == nil {
-		return id, nil
-	} else if err != domain.ErrNotFound {
-		return "", err
-	}
-
-	// Insert.
-	uuid, err := ids.UUIDv4()
-	if err != nil {
-		return "", err
-	}
-	newID := uuid
-	_, err = s.DB.ExecContext(ctx, `
-insert into customers (id, ssh_fingerprint, created_at, updated_at)
-values ($1,$2,now(),now())
-on conflict (ssh_fingerprint) do nothing
-`, newID, fp)
-	if err != nil {
-		return "", err
-	}
-	// Re-read to return canonical id.
-	var id string
-	row2 := s.DB.QueryRowContext(ctx, `select id from customers where ssh_fingerprint=$1`, fp)
-	if err := row2.Scan(&id); err != nil {
-		return "", err
-	}
-	return domain.CustomerID(id), nil
 }

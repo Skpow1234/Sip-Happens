@@ -1,13 +1,13 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"sip-happens/pkg/age"
 	"sip-happens/pkg/domain"
+	"sip-happens/services/core-api/internal/customers"
 )
 
 type patchCustomerRequest struct {
@@ -32,7 +32,7 @@ func (s *Server) handleCustomerMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCustomerMeGet(w http.ResponseWriter, r *http.Request) {
-	if s.DB == nil {
+	if s.Customers == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
@@ -41,12 +41,12 @@ func (s *Server) handleCustomerMeGet(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
 		return
 	}
-	customerID, err := s.getOrCreateCustomerIDByFingerprint(r.Context(), fp)
+	customerID, err := s.Customers.GetOrCreateByFingerprint(r.Context(), fp)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
-	c, err := s.loadCustomer(r.Context(), customerID)
+	c, err := s.Customers.GetByID(r.Context(), customerID)
 	if err != nil {
 		if err == domain.ErrNotFound {
 			writeAPIError(w, r, http.StatusNotFound, "not_found", "customer not found")
@@ -60,7 +60,7 @@ func (s *Server) handleCustomerMeGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCustomerMePatch(w http.ResponseWriter, r *http.Request) {
-	if s.DB == nil {
+	if s.Customers == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
@@ -74,12 +74,12 @@ func (s *Server) handleCustomerMePatch(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 		return
 	}
-	customerID, err := s.getOrCreateCustomerIDByFingerprint(r.Context(), fp)
+	customerID, err := s.Customers.GetOrCreateByFingerprint(r.Context(), fp)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
-	c, err := s.loadCustomer(r.Context(), customerID)
+	c, err := s.Customers.GetByID(r.Context(), customerID)
 	if err != nil {
 		if err == domain.ErrNotFound {
 			writeAPIError(w, r, http.StatusNotFound, "not_found", "customer not found")
@@ -107,7 +107,7 @@ func (s *Server) handleCustomerMePatch(w http.ResponseWriter, r *http.Request) {
 		c.FullName = *req.FullName
 	}
 	if req.BirthDate != nil {
-		bd, err := parseBirthDate(*req.BirthDate)
+		bd, err := customers.ParseBirthDate(*req.BirthDate)
 		if err != nil {
 			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid birth_date (use YYYY-MM-DD)")
 			return
@@ -118,7 +118,7 @@ func (s *Server) handleCustomerMePatch(w http.ResponseWriter, r *http.Request) {
 		}
 		c.BirthDate = bd
 	}
-	if err := s.updateCustomer(r.Context(), c); err != nil {
+	if err := s.Customers.Update(r.Context(), c); err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
@@ -142,22 +142,8 @@ func customerJSON(c *domain.Customer) map[string]any {
 	return out
 }
 
-func (s *Server) updateCustomer(ctx context.Context, c *domain.Customer) error {
-	var birth any
-	if !c.BirthDate.IsZero() {
-		birth = c.BirthDate
-	}
-	_, err := s.DB.ExecContext(ctx, `
-update customers
-set city=$2, neighborhood=$3, address_line1=$4, phone=$5, legal_id=$6, full_name=$7,
-    birth_date=$8, updated_at=now()
-where id=$1
-`, string(c.ID), c.City, c.Neighborhood, c.AddressLine1, c.Phone, c.LegalID, c.FullName, birth)
-	return err
-}
-
 func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
-	if s.DB == nil {
+	if s.Customers == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
@@ -166,7 +152,7 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
 		return
 	}
-	customerID, err := s.getOrCreateCustomerIDByFingerprint(r.Context(), fp)
+	customerID, err := s.Customers.GetOrCreateByFingerprint(r.Context(), fp)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
@@ -174,7 +160,7 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		items, err := s.loadCustomerCart(r.Context(), customerID)
+		items, err := s.Customers.LoadCart(r.Context(), customerID)
 		if err != nil {
 			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 			return
@@ -184,14 +170,14 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		var body struct {
-			Items []cartLineJSON `json:"items"`
+			Items []customers.CartLine `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
 			return
 		}
 		if body.Items == nil {
-			body.Items = []cartLineJSON{}
+			body.Items = []customers.CartLine{}
 		}
 		for _, it := range body.Items {
 			if it.ProductID == "" || it.Qty <= 0 {
@@ -199,7 +185,7 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if err := s.saveCustomerCart(r.Context(), customerID, body.Items); err != nil {
+		if err := s.Customers.SaveCart(r.Context(), customerID, body.Items); err != nil {
 			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 			return
 		}

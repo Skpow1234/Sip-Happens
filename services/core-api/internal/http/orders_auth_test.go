@@ -10,6 +10,7 @@ import (
 
 	"sip-happens/pkg/auth"
 	"sip-happens/services/core-api/internal/catalog"
+	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/orders"
@@ -60,6 +61,7 @@ values ('order-a', 'PENDING_PAYMENT', 'cust-a', 1000, 0, 1000, 'COP', now(), now
 	srv := &Server{
 		DB:              tdb.DB,
 		Orders:          ordersSvc,
+		Customers:       customers.NewService(tdb.DB, customers.NewSQLRepository()),
 		CoreAPIHMACKeys: map[string]string{"dev": "test-secret"},
 	}
 	ts := httptest.NewServer(srv.Handler())
