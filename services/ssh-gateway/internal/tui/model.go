@@ -599,24 +599,6 @@ func (m Model) viewBusy() string {
 	return styleBrand().Render(L.Loading) + "\n"
 }
 
-func (m Model) viewWelcome() string {
-	title := styleBrand().Render(L.AppName)
-	warn := lipgloss.NewStyle().Foreground(colorWarn).Bold(true).Render(L.MinorAlcoholWarning)
-	input := styleInputCursor().Render(m.state.birthDateInput + "█")
-	body := fmt.Sprintf(`%s
-
-  %s
-
-%s
-
-%s %s
-%s %s
-`, styleText().Render(L.WelcomeBirthPrompt), input, styleMuted().Render(L.WelcomeContinue),
-		styleMuted().Render(L.WelcomePrivacyLabel), styleLink().Render(m.privacyPolicyURL),
-		styleMuted().Render(L.WelcomeConsumerRightsLabel), styleLink().Render(m.consumerRightsURL))
-	return fmt.Sprintf("%s\n%s\n\n%s", title, warn, body)
-}
-
 func styleText() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colorText)
 }
