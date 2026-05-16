@@ -18,6 +18,7 @@ import (
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/email"
+	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 
@@ -55,6 +56,8 @@ type Server struct {
 	Redis *redis.Client
 	// RedisRequired makes /readyz fail when Redis is configured but unreachable.
 	RedisRequired bool
+
+	ProductImages objectstore.ProductImages
 }
 
 func (s *Server) Handler() http.Handler {
@@ -148,6 +151,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
+	mux.Handle("POST /admin/products/{id}/image", adminRL.Wrap(http.HandlerFunc(s.handleAdminProductImage)))
 	mux.Handle("/admin/prices", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminPrices))))
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
 	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))

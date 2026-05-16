@@ -72,6 +72,7 @@ type CatalogItem struct {
 		ABV       float64 `json:"ABV"`
 		VolumeML  int     `json:"VolumeML"`
 		InvimaReg string  `json:"InvimaReg"`
+		ImageURL  string  `json:"ImageURL"`
 	} `json:"Product"`
 	Price struct {
 		Currency         string `json:"Currency"`
@@ -90,6 +91,7 @@ type CatalogDetail struct {
 		ABV       float64 `json:"ABV"`
 		VolumeML  int     `json:"VolumeML"`
 		InvimaReg string  `json:"InvimaReg"`
+		ImageURL  string  `json:"ImageURL"`
 	} `json:"product"`
 	Price struct {
 		Currency         string `json:"Currency"`

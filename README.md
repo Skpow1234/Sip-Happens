@@ -188,6 +188,18 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 
 Transactional email (Spanish templates) is sent only when the matching flag is set and the customer has an email on file: payment link after `POST /checkout` (`email_payment_link`), receipt when `order.paid` is consumed (`email_receipt` on `nats-consume`).
 
+Object storage (MinIO, optional in Compose):
+
+- **`MINIO_ENDPOINT`**, **`MINIO_ACCESS_KEY`**, **`MINIO_SECRET_KEY`**, **`MINIO_BUCKET`** (default `product-images`)
+- **`MINIO_PUBLIC_URL`**: public base URL stored in `products.image_url` (e.g. `http://localhost:9000/product-images`)
+- **`MINIO_USE_SSL`**: `1` when the endpoint uses TLS
+- Upload product images: `POST /admin/products/{id}/image` (`multipart/form-data`, field `image`, ops token)
+
+TLS reverse proxy (Caddy, optional in Compose):
+
+- **`https://localhost:8443`** → `core-api:8080` with internal TLS (`infra/caddy/Caddyfile`)
+- Use for Stripe webhook forwarding and admin API over HTTPS in local dev (`curl -k` until you trust the Caddy CA)
+
 Database config is currently provided by Compose:
 
 - `POSTGRES_DSN` is set for the `core-api` container to reach the `postgres` service.

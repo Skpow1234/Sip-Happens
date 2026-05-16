@@ -40,6 +40,8 @@ type CoreAPI struct {
 
 	RedisURL      string
 	RedisRequired bool
+
+	MinIO MinIO
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -77,6 +79,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))
 	c.RedisURL = strings.TrimSpace(os.Getenv("REDIS_URL"))
 	c.RedisRequired = RedisRequiredForReadyz()
+	c.MinIO = LoadMinIO()
 
 	return c, nil
 }

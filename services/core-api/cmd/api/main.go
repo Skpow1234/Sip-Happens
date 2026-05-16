@@ -21,6 +21,7 @@ import (
 	httpserver "sip-happens/services/core-api/internal/http"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/migrate"
+	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
@@ -165,6 +166,11 @@ func runServer() error {
 		return err
 	}
 
+	productImages, err := objectstore.NewProductImagesFromEnv()
+	if err != nil {
+		return err
+	}
+
 	srv := &httpserver.Server{
 		Orders:            ordersSvc,
 		Catalog:           catalogRepo,
@@ -183,6 +189,7 @@ func runServer() error {
 		Email:             emailSvc,
 		Redis:             redisClient,
 		RedisRequired:     cfg.RedisRequired,
+		ProductImages:     productImages,
 	}
 
 	httpSrv := &http.Server{

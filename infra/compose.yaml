@@ -53,6 +53,12 @@ services:
       CORE_API_HMAC_KEYS: ${CORE_API_HMAC_KEYS:-dev:dev-hmac-secret}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       FEATURE_FLAGS: ${FEATURE_FLAGS:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minio}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-miniosecret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-product-images}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000/product-images}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,6 +66,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
     ports:
       - "8080:8080"
 
@@ -184,6 +192,43 @@ services:
       JOB_BATCH_LIMIT: ${JOB_BATCH_LIMIT:-100}
     command: ["fulfillment-runner"]
 
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-miniosecret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-05T19-55-45Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 2;
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb -p local/product-images || true;
+      mc anonymous set download local/product-images;
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-miniosecret}
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "8443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - core-api
+
   # Optional: run Stripe CLI in a container (so you don't need local installs).
   # Usage examples are documented in docs/runbooks/stripe-webhook-local.md
   stripe-cli:
@@ -195,3 +240,4 @@ services:
 
 volumes:
   sshkeys:
+  miniodata:

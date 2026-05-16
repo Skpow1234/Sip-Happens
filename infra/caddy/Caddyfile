@@ -1,1 +1,11 @@
+# Local TLS reverse proxy for core-api (admin, webhooks, public API).
+# Browser: https://localhost:8443/healthz (trust Caddy internal CA or use curl -k).
 
+{
+	admin off
+}
+
+:443 {
+	tls internal
+	reverse_proxy core-api:8080
+}

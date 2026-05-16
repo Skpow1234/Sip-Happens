@@ -670,10 +670,13 @@ func (m Model) viewCatalog() string {
 		if i == m.state.catalogCursor {
 			cur = "> "
 		}
-		line := fmt.Sprintf("%s%-14s  %-22s  %s  avail:%d\n",
+		line := fmt.Sprintf("%s%-14s  %-22s  %s  avail:%d",
 			cur, it.Product.SKU, truncate(it.Product.Name, 22),
 			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits), it.AvailableQty)
-		b.WriteString(line)
+		if strings.TrimSpace(it.Product.ImageURL) != "" {
+			line += "  [img]"
+		}
+		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n" + help)
 	return b.String()
@@ -686,16 +689,17 @@ func (m Model) viewProduct() string {
 	}
 	p := d.Product
 	title := lipgloss.NewStyle().Bold(true).Render(p.Name)
+	img := formatProductImageBlock(p.ImageURL)
 	body := fmt.Sprintf(`%s
 SKU: %s  |  %s  |  %.1f%% ABV  |  %d ml
 INVIMA: %s
 Price: %s
 Available: %d
-
+%s
 a — add to cart   b — cart   esc — back
 `,
 		title, p.SKU, p.Brewery, p.ABV, p.VolumeML, p.InvimaReg,
-		formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), d.AvailableQty)
+		formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), d.AvailableQty, img)
 	return body
 }
 

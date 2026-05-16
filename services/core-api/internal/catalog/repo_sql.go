@@ -15,13 +15,13 @@ func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
 func (r *SQLRepository) GetProduct(ctx context.Context, q Querier, id domain.ProductID) (*domain.Product, error) {
 	row := q.QueryRowContext(ctx, `
-select id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at
+select id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, is_active, created_at, updated_at
 from products
 where id = $1
 `, string(id))
 
-	var p domain.Product
-	if err := row.Scan(&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	p, err := scanProduct(row)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
 		}
@@ -32,13 +32,13 @@ where id = $1
 
 func (r *SQLRepository) GetProductBySKU(ctx context.Context, q Querier, sku string) (*domain.Product, error) {
 	row := q.QueryRowContext(ctx, `
-select id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at
+select id, sku, name, brewery, style, abv, volume_ml, invima_reg, image_url, is_active, created_at, updated_at
 from products
 where sku = $1
 `, sku)
 
-	var p domain.Product
-	if err := row.Scan(&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	p, err := scanProduct(row)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
 		}
@@ -103,7 +103,7 @@ func (r *SQLRepository) ListActiveProducts(ctx context.Context, q Querier, filte
 	args = append(args, fetchLimit, offset)
 
 	query := fmt.Sprintf(`
-select p.id, p.sku, p.name, p.brewery, p.style, p.abv, p.volume_ml, p.invima_reg, p.is_active, p.created_at, p.updated_at,
+select %s,
        pr.product_id, pr.currency, pr.amount_minor_units, pr.valid_from, pr.valid_through,
        greatest(0, coalesce(i.on_hand,0) - coalesce(i.reserved,0) - coalesce(i.safety_stock,0)) as available_qty
 from products p
@@ -121,7 +121,7 @@ join lateral (
 where %s
 order by p.sku asc
 limit $%d offset $%d
-`, whereSQL, argN, argN+1)
+`, productSelectCols, whereSQL, argN, argN+1)
 
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -132,15 +132,19 @@ limit $%d offset $%d
 	var out []ProductWithPrice
 	for rows.Next() {
 		var p domain.Product
+		var imageURL sql.NullString
 		var pr domain.Price
 		var validThrough sql.NullTime
 		var available int
 		if err := rows.Scan(
-			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
+			&p.ID, &p.SKU, &p.Name, &p.Brewery, &p.Style, &p.ABV, &p.VolumeML, &p.InvimaReg, &imageURL, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 			&pr.ProductID, &pr.Currency, &pr.AmountMinorUnits, &pr.ValidFrom, &validThrough,
 			&available,
 		); err != nil {
 			return ListCatalogResult{}, err
+		}
+		if imageURL.Valid {
+			p.ImageURL = imageURL.String
 		}
 		if validThrough.Valid {
 			t := validThrough.Time
