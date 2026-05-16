@@ -1,0 +1,53 @@
+# Production overlay: no published database/cache ports; load secrets from env file.
+# Usage:
+#   cp infra/env.prod.example .env.prod   # fill in secrets
+#   docker compose -f infra/compose.yaml -f infra/compose.prod.yaml --env-file .env.prod up -d
+services:
+  postgres:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+
+  redis:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+
+  core-api:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    restart: unless-stopped
+    ports: []
+
+  ssh-gateway:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    environment:
+      SSH_REQUIRE_AUTHORIZED_KEYS: ${SSH_REQUIRE_AUTHORIZED_KEYS:-1}
+    restart: unless-stopped
+
+  order-reaper:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    restart: unless-stopped
+
+  stripe-reconcile:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    restart: unless-stopped
+
+  outbox-dispatch:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    restart: unless-stopped
+
+  nats-consume:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    restart: unless-stopped
+
+  fulfillment-runner:
+    env_file:
+      - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
+    restart: unless-stopped
+
+  caddy:
+    restart: unless-stopped

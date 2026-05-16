@@ -19,6 +19,20 @@ From the repo root:
 bash scripts/dev-up.sh
 ```
 
+Uses `infra/compose.yaml` plus `infra/compose.dev.yaml` (publishes Postgres, Redis, NATS, MinIO, and API ports on localhost).
+
+### Production Compose profile
+
+Base `infra/compose.yaml` keeps databases on the internal Docker network only. For production:
+
+```bash
+cp infra/env.prod.example .env.prod
+# edit secrets, then:
+docker compose -f infra/compose.yaml -f infra/compose.prod.yaml --env-file .env.prod up -d
+```
+
+`compose.prod.yaml` loads secrets via `env_file`, sets `restart: unless-stopped`, disables published `core-api` port (use Caddy), and defaults `SSH_REQUIRE_AUTHORIZED_KEYS=1`.
+
 ### Stripe webhooks (local, signed deliveries)
 
 `STRIPE_MOCK=1` (Compose default when no secret key) skips real Checkout; to exercise **`POST /webhooks/stripe`** end-to-end, use the Stripe CLI forwarder from Compose and set **`STRIPE_WEBHOOK_SECRET`** on `core-api` to the signing secret printed by `listen`.
@@ -36,7 +50,7 @@ Then set `STRIPE_WEBHOOK_SECRET` from the CLI output and `docker compose -f infr
 ### Build
 
 ```bash
-docker compose -f infra/compose.yaml build
+docker compose -f infra/compose.yaml -f infra/compose.dev.yaml build
 ```
 
 ### Start Postgres
@@ -284,6 +298,7 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - **Request IDs**: `ssh-gateway` sends `X-Request-Id` to `core-api` and `core-api` echoes it back on responses.
 - **Metrics**: scrape `GET /metrics`
 - **Readiness**: `GET /readyz` checks DB connectivity
+- **Compose healthchecks**: `core-api` probes `GET /healthz`; `ssh-gateway` TCP-checks the SSH listener (`/app/ssh-gateway healthcheck`)
 
 ## Error responses
 

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,6 +14,7 @@ import (
 	"github.com/charmbracelet/wish/logging"
 
 	"sip-happens/pkg/config"
+	"sip-happens/pkg/healthcheck"
 	"sip-happens/services/ssh-gateway/internal/api"
 	"sip-happens/services/ssh-gateway/internal/security"
 	"sip-happens/services/ssh-gateway/internal/tui"
@@ -21,6 +24,15 @@ func main() {
 	cfg, err := config.LoadSSHGateway()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if len(os.Args) >= 2 && os.Args[1] == "healthcheck" {
+		ctx, cancel := context.WithTimeout(context.Background(), healthcheck.ProbeTimeout)
+		defer cancel()
+		if err := healthcheck.TCPDialOK(ctx, cfg.SSHAddr); err != nil {
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Ensure a persistent host key exists on disk.

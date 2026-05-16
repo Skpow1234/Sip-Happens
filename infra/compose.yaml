@@ -1,10 +1,9 @@
+# Base stack (internal networking). Local dev publishes host ports via compose.dev.yaml.
+# Production: add compose.prod.yaml and --env-file .env.prod (see infra/env.prod.example).
 services:
   nats:
     image: nats:2.10-alpine
     command: ["-js", "-m", "8222"]
-    ports:
-      - "4222:4222"
-      - "8222:8222"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz >/dev/null 2>&1"]
       interval: 5s
@@ -13,8 +12,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -27,8 +24,6 @@ services:
       POSTGRES_DB: beer_shop
       POSTGRES_USER: beer
       POSTGRES_PASSWORD: beer
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U beer -d beer_shop"]
       interval: 5s
@@ -68,8 +63,12 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    ports:
-      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "/app/core-api", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   core-migrate:
     image: infra-core-api
@@ -111,11 +110,18 @@ services:
       CORE_API_HMAC_KEY_ID: ${CORE_API_HMAC_KEY_ID:-dev}
       CORE_API_HMAC_KEYS: ${CORE_API_HMAC_KEYS:-dev:dev-hmac-secret}
     depends_on:
-      - core-api
+      core-api:
+        condition: service_healthy
     ports:
       - "2222:2222"
     volumes:
       - sshkeys:/data
+    healthcheck:
+      test: ["CMD", "/app/ssh-gateway", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   order-reaper:
     image: infra-core-api
@@ -183,8 +189,11 @@ services:
   fulfillment-runner:
     image: infra-core-api
     entrypoint: ["/app/core-jobs"]
+    restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      core-api:
         condition: service_healthy
     environment:
       POSTGRES_DSN: "postgres://beer:beer@postgres:5432/beer_shop?sslmode=disable"
@@ -198,9 +207,6 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-miniosecret}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - miniodata:/data
 

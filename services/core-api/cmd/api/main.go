@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"sip-happens/pkg/config"
+	"sip-happens/pkg/healthcheck"
 	"sip-happens/pkg/redisutil"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
@@ -30,6 +31,12 @@ import (
 )
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "healthcheck" {
+		if err := runHealthcheck(); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) >= 3 && os.Args[1] == "seed" && os.Args[2] == "demo" {
 		if err := runSeedDemo(context.Background()); err != nil {
 			log.Fatal(err)
@@ -179,4 +186,15 @@ func runSeedDemo(ctx context.Context) error {
 		log.Printf("  product_id[%d]=%s", i, pid)
 	}
 	return nil
+}
+
+func runHealthcheck() error {
+	addr := os.Getenv("HTTP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	url := healthcheck.LocalHTTPAddr(addr) + "/healthz"
+	ctx, cancel := context.WithTimeout(context.Background(), healthcheck.ProbeTimeout)
+	defer cancel()
+	return healthcheck.HTTPGetOK(ctx, url)
 }

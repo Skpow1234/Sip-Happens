@@ -83,5 +83,5 @@ jobs:
 
       - name: Docker build (compose)
         run: |
-          docker compose -f infra/compose.yaml build
+          docker compose -f infra/compose.yaml -f infra/compose.dev.yaml build
 

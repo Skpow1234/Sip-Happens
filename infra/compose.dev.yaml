@@ -1,0 +1,24 @@
+# Local developer overlay: publish infra and API ports on the host.
+# Usage: docker compose -f infra/compose.yaml -f infra/compose.dev.yaml up -d
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  nats:
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  core-api:
+    ports:
+      - "8080:8080"
