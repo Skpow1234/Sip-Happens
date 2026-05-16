@@ -148,8 +148,10 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`STRIPE_WEBHOOK_SECRET`**: required to verify incoming `POST /webhooks/stripe`
 - **`STRIPE_WEBHOOK_PATH`**: optional path to mount Stripe webhook handler (defaults to `/webhooks/stripe`)
 - **`STRIPE_MOCK=1`**: enables a local mock Stripe checkout URL when `STRIPE_SECRET_KEY` is not set (prototype only)
-- **`ADMIN_TOKENS`**: comma-separated bearer tokens to access admin endpoints (supports rotation)
+- **`ADMIN_TOKENS`**: comma-separated bearer tokens to access admin endpoints (supports rotation); treated as **ops** (full admin) unless also listed under support/finance envs
 - **`ADMIN_TOKEN`**: legacy single admin token (prefer `ADMIN_TOKENS`)
+- **`ADMIN_SUPPORT_TOKENS`**: comma-separated tokens with **support** role (read admin + cancel pending orders)
+- **`ADMIN_FINANCE_TOKENS`**: comma-separated tokens with **finance** role (read-only admin)
 - **`CORE_API_HMAC_SECRET`**: legacy v1 shared secret for gateway → API signing
 - **`CORE_API_HMAC_KEY_ID`** / **`CORE_API_HMAC_KEYS`**: v2 signing (`kid:secret` pairs; preferred)
 - **`SSH_REQUIRE_AUTHORIZED_KEYS`**: set to `1` in production to require `authorized_keys`
@@ -179,17 +181,23 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `GET /orders` — list caller’s orders (`limit`, default 20, max 100)
 - `GET /orders/{id}` — order detail (scoped to caller’s fingerprint)
 - `GET /customers/me` — profile for prefill
+- `GET /cart`, `PUT /cart` — server-persistent cart
+- `GET /shipping/estimate?city=...` — flat shipping estimate by city
 
 **Webhooks**
 
 - `POST /webhooks/stripe` (when `STRIPE_WEBHOOK_SECRET` is set; path overridable via `STRIPE_WEBHOOK_PATH`)
 
-**Admin** (`Authorization: Bearer` token)
+**Admin** (`Authorization: Bearer` token; optional RBAC via `ADMIN_SUPPORT_TOKENS` / `ADMIN_FINANCE_TOKENS`; optional `X-Admin-Actor` for audit)
 
 - `GET /admin/products` (`limit`, `offset`, `q`, `active`, `currency`)
 - `POST /admin/products`, `PUT /admin/products/{id}`, `PATCH /admin/products/{id}`, `DELETE /admin/products/{id}`
 - `POST /admin/prices`, `PUT /admin/prices`, `DELETE /admin/prices?product_id=...&currency=COP`
 - `POST /admin/inventory`, `PUT /admin/inventory`
+- `GET /admin/orders` — list orders (`status`, `created_from`, `created_to`, `limit`, `offset`)
+- `GET /admin/orders/{id}` — order, items, payments, optional shipment
+- `POST /admin/orders/{id}/cancel` — cancel `PENDING_PAYMENT`, release reservations (`Idempotency-Key` required)
+- `POST /admin/orders/{id}/reconcile-stripe` — poll Stripe PI, mark paid if succeeded (`Idempotency-Key` required)
 - `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`)
 - `GET /docs` — API browser (Redoc)
 

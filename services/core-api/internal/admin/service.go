@@ -28,6 +28,9 @@ type Service interface {
 
 	// ListPaymentsForOrder returns payment rows for an order (oldest first).
 	ListPaymentsForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.Payment, error)
+
+	// RecordAudit appends an audit_events row (admin/support tooling).
+	RecordAudit(ctx context.Context, actor, aggregateType, aggregateID, eventType, payloadJSON string) error
 }
 
 type SQLService struct {
@@ -503,6 +506,13 @@ limit $4 offset $5
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLService) RecordAudit(ctx context.Context, actor, aggregateType, aggregateID, eventType, payloadJSON string) error {
+	if s.DB == nil {
+		return fmt.Errorf("missing db")
+	}
+	return s.insertAudit(ctx, aggregateType, aggregateID, actor, eventType, payloadJSON)
 }
 
 func (s *SQLService) ListPaymentsForOrder(ctx context.Context, orderID domain.OrderID) ([]domain.Payment, error) {

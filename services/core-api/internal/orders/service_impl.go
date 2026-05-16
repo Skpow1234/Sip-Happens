@@ -219,6 +219,43 @@ func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time,
 	return updated, nil
 }
 
+func (s *service) CancelPendingOrder(ctx context.Context, id domain.OrderID) error {
+	return s.db.WithTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(tx *sql.Tx) error {
+		o, err := s.orders.Get(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if o.Status == domain.OrderStatusCancelled {
+			return nil
+		}
+		if o.Status != domain.OrderStatusPendingPayment {
+			return domain.ErrConflict
+		}
+
+		res, err := s.inventory.ListActiveReservations(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		for _, rr := range res {
+			inv, err := s.inventory.LockForUpdate(ctx, tx, rr.ProductID)
+			if err != nil {
+				return err
+			}
+			inv.Reserved -= rr.Qty
+			if inv.Reserved < 0 {
+				inv.Reserved = 0
+			}
+			inv.LastModified = time.Now()
+			if err := s.inventory.Update(ctx, tx, *inv); err != nil {
+				return err
+			}
+			_ = s.inventory.MarkReservationReleased(ctx, tx, id, rr.ProductID)
+		}
+
+		return s.orders.UpdateStatus(ctx, tx, id, domain.OrderStatusCancelled)
+	})
+}
+
 func (s *service) MarkPaid(ctx context.Context, id domain.OrderID, payment domain.Payment) error {
 	return s.db.WithTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(tx *sql.Tx) error {
 		o, err := s.orders.Get(ctx, tx, id)

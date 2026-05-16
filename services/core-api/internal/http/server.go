@@ -2,9 +2,9 @@ package http
 
 import (
 	"context"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -28,6 +28,8 @@ type Server struct {
 	Admin             admin.Service
 	AdminToken        string
 	AdminTokens       []string
+	// AdminTokenRoles maps bearer token string to RBAC tier when using ADMIN_* role envs (optional).
+	AdminTokenRoles map[string]AdminRole
 	DB                *sql.DB
 	Stripe            stripepayments.Service
 	StripeWebhook     *stripepayments.WebhookHandler
@@ -117,6 +119,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
 	mux.Handle("/admin/prices", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminPrices))))
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
+	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))
+	mux.Handle("POST /admin/orders/{id}/reconcile-stripe", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderReconcileStripe))))
 	mux.HandleFunc("/admin/orders", s.handleAdminOrders)
 	mux.HandleFunc("/admin/orders/", s.handleAdminOrderDetail)
 	mux.HandleFunc("/admin/audit-events", s.handleAdminAuditEvents)
@@ -185,49 +189,6 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
-func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if s.AdminToken == "" && len(s.AdminTokens) == 0 {
-		writeAPIError(w, r, http.StatusNotFound, "not_found", "admin not configured")
-		return false
-	}
-	h := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if !strings.HasPrefix(h, prefix) {
-		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
-		return false
-	}
-	provided := strings.TrimSpace(strings.TrimPrefix(h, prefix))
-	if provided == "" {
-		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
-		return false
-	}
-
-	// Allow rotation: ADMIN_TOKENS takes precedence, ADMIN_TOKEN is legacy.
-	if len(s.AdminTokens) > 0 {
-		ok := false
-		for _, tok := range s.AdminTokens {
-			if tok == "" {
-				continue
-			}
-			if subtle.ConstantTimeCompare([]byte(provided), []byte(tok)) == 1 {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
-			return false
-		}
-		return true
-	}
-
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(s.AdminToken)) != 1 {
-		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
-		return false
-	}
-	return true
-}
-
 func (s *Server) wrapWebhook(next http.Handler) http.Handler {
 	// Basic hardening: method + body size limit.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -241,9 +202,6 @@ func (s *Server) wrapWebhook(next http.Handler) http.Handler {
 }
 
 func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	if s.Admin == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
@@ -251,6 +209,9 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		if !s.requireAdminRole(w, r, AdminRoleFinance) {
+			return
+		}
 		currency := r.URL.Query().Get("currency")
 		if currency == "" {
 			currency = "COP"
@@ -278,6 +239,9 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"items": list, "limit": limit, "offset": offset})
 	case http.MethodPost:
+		if !s.requireAdminRole(w, r, AdminRoleOps) {
+			return
+		}
 		var req admin.UpsertProductInput
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
@@ -304,7 +268,7 @@ func (s *Server) handleAdminProducts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleOps) {
 		return
 	}
 	if s.Admin == nil {
@@ -397,7 +361,7 @@ func (s *Server) handleAdminProductDetail(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleOps) {
 		return
 	}
 	if s.Admin == nil {
@@ -466,7 +430,7 @@ func (s *Server) handleAdminPrices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleOps) {
 		return
 	}
 	if s.Admin == nil {
@@ -498,7 +462,7 @@ func (s *Server) handleAdminInventory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleFinance) {
 		return
 	}
 	if s.Admin == nil {
@@ -530,7 +494,7 @@ func (s *Server) handleAdminAuditEvents(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleAdminOrders(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleFinance) {
 		return
 	}
 	if s.Admin == nil {
@@ -577,7 +541,7 @@ func (s *Server) handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminOrderDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleFinance) {
 		return
 	}
 	if s.Admin == nil || s.Orders == nil {
@@ -626,6 +590,102 @@ func (s *Server) handleAdminOrderDetail(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func (s *Server) handleAdminOrderCancel(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdminRole(w, r, AdminRoleSupport) {
+		return
+	}
+	if s.Admin == nil || s.Orders == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
+		return
+	}
+	orderID := domain.OrderID(id)
+
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	reason := strings.TrimSpace(body.Reason)
+	if reason == "" {
+		reason = "admin_cancel"
+	}
+
+	if err := s.Orders.CancelPendingOrder(r.Context(), orderID); err != nil {
+		switch err {
+		case domain.ErrNotFound:
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "not found")
+		case domain.ErrConflict:
+			writeAPIError(w, r, http.StatusConflict, "conflict", "order cannot be cancelled in current status")
+		default:
+			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		}
+		return
+	}
+
+	actor := adminActorFromRequest(r)
+	payload, _ := json.Marshal(map[string]string{"reason": reason})
+	if err := s.Admin.RecordAudit(r.Context(), actor, "order", string(orderID), "order.cancelled", string(payload)); err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+
+	o, items, err := s.Orders.GetOrder(r.Context(), orderID)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"order": o, "items": items})
+}
+
+func (s *Server) handleAdminOrderReconcileStripe(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdminRole(w, r, AdminRoleOps) {
+		return
+	}
+	if s.Orders == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	if s.Stripe == nil {
+		writeAPIError(w, r, http.StatusServiceUnavailable, "misconfigured", "stripe not configured")
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing id")
+		return
+	}
+	orderID := domain.OrderID(id)
+
+	res, err := stripepayments.ManualReconcilePendingOrder(r.Context(), s.Orders, s.Stripe, orderID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "missing stripe_payment_intent_id")
+			return
+		}
+		writeAPIError(w, r, http.StatusBadGateway, "bad_gateway", err.Error())
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) {

@@ -144,18 +144,19 @@ func runServer() error {
 	}
 
 	srv := &httpserver.Server{
-		Orders:        ordersSvc,
-		Catalog:       catalogRepo,
-		Admin:         adminSvc,
-		AdminToken:    cfg.AdminToken,
-		AdminTokens:   cfg.AdminTokens,
-		DB:            sqlDB,
-		Namespace:     cfg.Namespace,
-		FeatureFlags:  cfg.Flags.Enabled,
-		CoreAPIHMACSecret: cfg.CoreAPIHMACSecret,
+		Orders:            ordersSvc,
+		Catalog:           catalogRepo,
+		Admin:             adminSvc,
+		AdminToken:        cfg.AdminToken,
+		AdminTokens:       cfg.AdminTokens,
+		AdminTokenRoles:   httpserver.AdminTokenRolesFromConfig(cfg),
+		DB:                sqlDB,
+		Namespace:         cfg.Namespace,
+		FeatureFlags:      cfg.Flags.Enabled,
+		CoreAPIHMACSecret:  cfg.CoreAPIHMACSecret,
 		CoreAPIHMACKeys:   cfg.CoreAPIHMACKeys,
-		Stripe:        selectStripeClient(cfg),
-		StripeWebhook: stripeWebhook,
+		Stripe:            selectStripeClient(cfg),
+		StripeWebhook:     stripeWebhook,
 		StripeWebhookPath: cfg.StripeWebhookPath,
 	}
 

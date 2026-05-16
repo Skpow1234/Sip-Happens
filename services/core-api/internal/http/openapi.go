@@ -70,7 +70,7 @@ func (s *Server) handleOpenAPIDocs(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if !s.requireAdmin(w, r) {
+	if !s.requireAdminRole(w, r, AdminRoleFinance) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

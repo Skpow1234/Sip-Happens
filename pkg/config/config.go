@@ -27,6 +27,10 @@ type CoreAPI struct {
 
 	AdminToken string
 	AdminTokens []string
+	// AdminSupportTokens / AdminFinanceTokens assign RBAC tiers (roadmap-040).
+	// Tokens listed only in AdminTokens (or legacy AdminToken) default to ops.
+	AdminSupportTokens []string
+	AdminFinanceTokens []string
 
 	// CoreAPIHMACSecret is legacy v1 signing shared secret.
 	CoreAPIHMACSecret string
@@ -63,11 +67,67 @@ func LoadCoreAPI() (CoreAPI, error) {
 			}
 		}
 	}
+	c.AdminSupportTokens = splitCommaEnv("ADMIN_SUPPORT_TOKENS")
+	c.AdminFinanceTokens = splitCommaEnv("ADMIN_FINANCE_TOKENS")
 	c.CoreAPIHMACSecret = os.Getenv("CORE_API_HMAC_SECRET")
 	c.CoreAPIHMACKeyID = strings.TrimSpace(os.Getenv("CORE_API_HMAC_KEY_ID"))
 	c.CoreAPIHMACKeys = parseKeyRing(os.Getenv("CORE_API_HMAC_KEYS"))
 
 	return c, nil
+}
+
+// AdminTokenRoleMap returns bearer token -> coarse role label ("ops", "support", "finance").
+// Highest role wins if a token appears in multiple lists. Used by core-api HTTP layer.
+func (c CoreAPI) AdminTokenRoleMap() map[string]string {
+	out := make(map[string]string)
+	set := func(tok, role string) {
+		if tok == "" {
+			return
+		}
+		cur := out[tok]
+		if roleRank(role) > roleRank(cur) {
+			out[tok] = role
+		}
+	}
+	for _, t := range c.AdminTokens {
+		set(t, "ops")
+	}
+	set(strings.TrimSpace(c.AdminToken), "ops")
+	for _, t := range c.AdminSupportTokens {
+		set(t, "support")
+	}
+	for _, t := range c.AdminFinanceTokens {
+		set(t, "finance")
+	}
+	return out
+}
+
+func roleRank(role string) int {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "ops", "admin":
+		return 3
+	case "support":
+		return 2
+	case "finance":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func splitCommaEnv(key string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 type DBPool struct {

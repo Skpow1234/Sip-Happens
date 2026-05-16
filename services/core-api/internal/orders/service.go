@@ -22,6 +22,9 @@ type Service interface {
 	// MarkPaid transitions an order to PAID and applies the inventory move (reserved -> on_hand decrement).
 	MarkPaid(ctx context.Context, id domain.OrderID, payment domain.Payment) error
 
+	// CancelPendingOrder releases active reservations and sets status CANCELLED (idempotent if already cancelled).
+	CancelPendingOrder(ctx context.Context, id domain.OrderID) error
+
 	// SetStripeRefs stores Stripe references on an existing order.
 	SetStripeRefs(ctx context.Context, id domain.OrderID, checkoutSessionID, paymentIntentID string) error
 }
