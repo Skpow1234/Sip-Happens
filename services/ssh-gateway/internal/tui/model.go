@@ -460,7 +460,7 @@ func (m Model) catalogCartDelta(delta int) (tea.Model, tea.Cmd) {
 		}
 		inCart := m.state.cartQtyForProduct(pid)
 		if it.AvailableQty > 0 && inCart+1 > it.AvailableQty {
-			m.showErr(fmt.Errorf("%s", L.ErrCartStock(it.Product.SKU, it.AvailableQty, inCart)))
+			m.showErr(fmt.Errorf("%s", L.ErrCartStock(it.Product.Name, it.AvailableQty, inCart)))
 			return m, nil
 		}
 		m.state.addToCart(it, 1)
@@ -498,7 +498,7 @@ func (m *Model) bumpCartQty(delta int) {
 	}
 	max := m.state.cart[i].AvailableQty
 	if max > 0 && newQty > max {
-		m.showErr(fmt.Errorf("%s", L.ErrCartLineStock(m.state.cart[i].SKU, max)))
+		m.showErr(fmt.Errorf("%s", L.ErrCartLineStock(m.state.cart[i].Name, max)))
 		return
 	}
 	m.state.cart[i].Qty = newQty
@@ -651,12 +651,8 @@ func (m Model) viewCatalog() string {
 		if i == m.state.catalogCursor {
 			cur = "> "
 		}
-		invima := strings.TrimSpace(it.Product.InvimaReg)
-		if invima == "" {
-			invima = "—"
-		}
-		line := fmt.Sprintf("%s%-14s  %-18s  %s:%-14s  %s  %s:%d",
-			cur, it.Product.SKU, truncate(it.Product.Name, 18), L.ProductInvima, truncate(invima, 14),
+		line := fmt.Sprintf("%s%-28s  %s  %s:%d",
+			cur, truncate(it.Product.Name, 28),
 			formatMoney(it.Price.Currency, it.Price.AmountMinorUnits), L.CatalogAvail, it.AvailableQty)
 		if strings.TrimSpace(it.Product.ImageURL) != "" {
 			line += "  [img]"
@@ -685,15 +681,14 @@ func (m Model) viewProduct() string {
 		ibuBlock = fmt.Sprintf("%s: %d\n", L.ProductIBU, *p.IBU)
 	}
 	body := fmt.Sprintf(`%s
-%s: %s  |  %s  |  %s  |  %s
-%s: %s
+%s  |  %s  |  %s
 %s: %s
 %s: %d
 %s%s%s
 %s
 `,
-		title, L.ProductSKU, p.SKU, p.Brewery, fmt.Sprintf(L.ProductABV, p.ABV), fmt.Sprintf(L.ProductVolume, p.VolumeML),
-		L.ProductInvima, p.InvimaReg, L.ProductPrice, formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), L.ProductAvailable, d.AvailableQty,
+		title, p.Brewery, fmt.Sprintf(L.ProductABV, p.ABV), fmt.Sprintf(L.ProductVolume, p.VolumeML),
+		L.ProductPrice, formatMoney(d.Price.Currency, d.Price.AmountMinorUnits), L.ProductAvailable, d.AvailableQty,
 		descBlock, ibuBlock, img, L.ProductHelp)
 	return body
 }
@@ -714,8 +709,8 @@ func (m Model) viewCart() string {
 		if l.AvailableQty >= 0 {
 			avail = L.CartMaxQty(l.AvailableQty)
 		}
-		b.WriteString(fmt.Sprintf("%s%-14s x%d  %s%s\n",
-			cur, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal()), avail))
+		b.WriteString(fmt.Sprintf("%s%-28s x%d  %s%s\n",
+			cur, truncate(l.Name, 28), l.Qty, formatMoney(l.Currency, l.LineTotal()), avail))
 	}
 	b.WriteString(fmt.Sprintf("\n%s %s\n", L.CartSubtotal, formatMoney("COP", m.state.cartSubtotal())))
 	if c := strings.TrimSpace(m.state.checkout.city); c != "" {

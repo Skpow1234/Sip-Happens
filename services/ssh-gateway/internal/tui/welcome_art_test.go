@@ -16,8 +16,9 @@ func TestViewWelcome_HasLogoAndForm(t *testing.T) {
 	m := NewRootModel(nil, "", "", "", "", "")
 	m.screen = screenWelcome
 	view := m.View()
-	if !strings.Contains(view, "sip-happens") {
-		t.Fatalf("welcome missing wordmark: %q", view)
+	plain := stripANSI(view)
+	if !strings.Contains(plain, "sip") || !strings.Contains(plain, "happens") {
+		t.Fatalf("welcome missing wordmark: %q", plain)
 	}
 	if !strings.Contains(view, "fecha de nacimiento") {
 		t.Fatalf("welcome missing birth prompt: %q", view)

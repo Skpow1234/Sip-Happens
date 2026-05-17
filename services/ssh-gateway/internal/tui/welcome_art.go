@@ -19,11 +19,11 @@ var welcomeLogoASCII = []string{
 var welcomeLogoStyles = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(colorFoam),
 	lipgloss.NewStyle().Foreground(colorBeerMid).Bold(true),
-	lipgloss.NewStyle().Foreground(colorBrand),
+	lipgloss.NewStyle().Foreground(colorBrandGold),
 	lipgloss.NewStyle().Foreground(colorBeerMid).Bold(true),
 	lipgloss.NewStyle().Foreground(colorBeerMid),
 	lipgloss.NewStyle().Foreground(colorBeerDeep),
-	lipgloss.NewStyle().Foreground(colorBrand),
+	lipgloss.NewStyle().Foreground(colorBrandGold),
 }
 
 func renderWelcomeLogo() string {
@@ -42,7 +42,7 @@ func renderWelcomeLogo() string {
 }
 
 func renderWelcomeWordmark() string {
-	return styleWordmark().Render("sip-happens") + styleInputCursor().Render("█")
+	return renderShellBrandWordmark() + styleInputCursor().Render("█")
 }
 
 func renderWelcomeTagline() string {

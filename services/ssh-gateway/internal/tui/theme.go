@@ -6,27 +6,32 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// 16-color ANSI palette (Terminal.shop-compatible). No 256/truecolor codes — renders
-// the same in legacy SSH, Windows Terminal, and modern emulators without setup.
+// 16-color ANSI palette — Terminal.shop-style layout, Sip-Happens colors (cyan + gold, no orange/violet).
 var (
-	colorText     = lipgloss.Color("15") // bright white
-	colorMuted    = lipgloss.Color("8")  // bright black / grey
-	colorDim        = lipgloss.Color("8")
-	colorAccent     = lipgloss.Color("11") // bright yellow (≈ orange highlight)
-	colorOnAccent   = lipgloss.Color("0")  // black on highlight
-	colorBrand      = lipgloss.Color("11") // prices / brand accent
-	colorSpec       = lipgloss.Color("8")
-	colorLink       = lipgloss.Color("14") // bright cyan
-	colorWarn       = lipgloss.Color("9")  // bright red
-	colorDanger     = lipgloss.Color("9")
-	colorBorder     = lipgloss.Color("8")
-	colorFoam       = lipgloss.Color("15")
-	colorBeerMid    = lipgloss.Color("11")
-	colorBeerDeep   = lipgloss.Color("3") // yellow
+	colorText       = lipgloss.Color("15")
+	colorMuted      = lipgloss.Color("8")
+	colorDim          = lipgloss.Color("8")
+	colorAccent       = lipgloss.Color("6")  // cyan — list selection / CTA fill
+	colorOnAccent     = lipgloss.Color("15") // white on cyan
+	colorBrandGold    = lipgloss.Color("11") // prices, accent word
+	colorBrandCyan    = lipgloss.Color("14") // brand word, links
+	colorSpec         = lipgloss.Color("8")
+	colorLink         = lipgloss.Color("14")
+	colorWarn         = lipgloss.Color("9")
+	colorDanger       = lipgloss.Color("9")
+	colorBorder       = lipgloss.Color("8")
+	colorFoam         = lipgloss.Color("15")
+	colorBeerMid      = lipgloss.Color("14")
+	colorBeerDeep     = lipgloss.Color("6")
 )
 
 func styleBrand() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorBrand)
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
+}
+
+func renderShellBrandWordmark() string {
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandCyan).Render("sip") +
+		lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold).Render("-happens")
 }
 
 func styleWordmark() lipgloss.Style {
@@ -50,7 +55,7 @@ func styleText() lipgloss.Style {
 }
 
 func stylePrice() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorBrand)
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
 }
 
 func styleSpec() lipgloss.Style {
@@ -107,7 +112,7 @@ func styleBoxTitle() lipgloss.Style {
 }
 
 func styleCrumbActive() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorBrand)
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
 }
 
 func styleCrumbInactive() lipgloss.Style {

@@ -40,8 +40,8 @@ func (m Model) catalogListPane(width int) string {
 		return b.String()
 	}
 	for i, it := range m.state.catalog {
-		name := truncate(it.Product.Name, width-16)
-		b.WriteString(catalogLine(it.Product.SKU, name, width, i == m.state.catalogCursor))
+		name := it.Product.Name
+		b.WriteString(catalogLine(name, width, i == m.state.catalogCursor))
 	}
 	b.WriteString("\n\n" + styleSection().Render("~ "+L.CatalogAll+" ~") + "\n")
 	page := m.state.catalogQuery.Offset/catalogPageSize + 1
@@ -77,7 +77,6 @@ func (m Model) catalogDetailPane() string {
 	if p.IBU != nil {
 		b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductIBU, *p.IBU)) + "\n")
 	}
-	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %s", L.ProductInvima, p.InvimaReg)) + "\n")
 	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductAvailable, d.AvailableQty)) + "\n\n")
 	b.WriteString(formatProductImageBlock(p.ImageURL))
 	b.WriteString("\n\n" + renderProductCTA() + "\n")
@@ -144,9 +143,6 @@ func (m Model) viewCartV2() string {
 		var lines []string
 		for i, l := range m.state.cart {
 			line := fmt.Sprintf("%s x%d  %s", l.Name, l.Qty, formatMoney(l.Currency, l.LineTotal()))
-			if l.SKU != l.Name {
-				line = fmt.Sprintf("%s (%s) x%d  %s", l.Name, l.SKU, l.Qty, formatMoney(l.Currency, l.LineTotal()))
-			}
 			if i == m.cartCursor() {
 				lines = append(lines, styleRowSelect().Render(line))
 			} else {

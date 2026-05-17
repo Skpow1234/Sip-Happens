@@ -89,7 +89,7 @@ func (m Model) renderTopBar(active shellTab) string {
 		}
 		st := styleTopCell(first).Width(cell).Align(lipgloss.Center)
 		if key == "" {
-			return st.Render(styleWordmark().Render(text))
+			return st.Render(renderShellBrandWordmark())
 		}
 		if activeTab {
 			return st.Render(styleTabLabel(true).Render(text))
@@ -166,8 +166,8 @@ func selectedLine(mark, text string, selected bool) string {
 	return styleMuted().Render("  " + text) + "\n"
 }
 
-func catalogLine(sku, name string, width int, selected bool) string {
-	line := truncate(sku, 14) + "  " + truncate(name, max(8, width-18))
+func catalogLine(name string, width int, selected bool) string {
+	line := truncate(name, max(8, width-2))
 	if selected {
 		return styleRowSelect().Width(width).Render(line) + "\n"
 	}

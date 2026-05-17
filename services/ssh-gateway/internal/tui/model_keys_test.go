@@ -93,7 +93,7 @@ func TestModel_CatalogCursorMoves(t *testing.T) {
 func makeCatalogItem(sku string) api.CatalogItem {
 	var it api.CatalogItem
 	it.Product.SKU = sku
-	it.Product.Name = sku
+	it.Product.Name = "Demo " + sku
 	it.AvailableQty = 5
 	return it
 }
