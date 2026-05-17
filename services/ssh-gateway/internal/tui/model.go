@@ -348,17 +348,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadCatalogCmd()
 		case "enter":
 			return m, m.maybeLoadCatalogDetailCmd()
-		case "a":
-			if len(m.state.catalog) == 0 {
-				return m, nil
-			}
-			it := m.state.catalog[m.state.catalogCursor]
-			if it.AvailableQty <= 0 {
-				m.showErr(fmt.Errorf("%s", L.ErrOutOfStock))
-				return m, nil
-			}
-			m.state.addToCart(it, 1)
-			return m, m.saveServerCartCmd()
+		case "right", "l":
+			return m.catalogCartDelta(1)
+		case "left", "h":
+			return m.catalogCartDelta(-1)
 		}
 
 	case screenCatalogFilters:
@@ -451,6 +444,34 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m Model) catalogCartDelta(delta int) (tea.Model, tea.Cmd) {
+	if len(m.state.catalog) == 0 {
+		return m, nil
+	}
+	it := m.state.catalog[m.state.catalogCursor]
+	pid := it.Product.ID
+
+	if delta > 0 {
+		if it.AvailableQty <= 0 {
+			m.showErr(fmt.Errorf("%s", L.ErrOutOfStock))
+			return m, nil
+		}
+		inCart := m.state.cartQtyForProduct(pid)
+		if it.AvailableQty > 0 && inCart+1 > it.AvailableQty {
+			m.showErr(fmt.Errorf("%s", L.ErrCartStock(it.Product.SKU, it.AvailableQty, inCart)))
+			return m, nil
+		}
+		m.state.addToCart(it, 1)
+		return m, m.saveServerCartCmd()
+	}
+
+	if m.state.cartQtyForProduct(pid) == 0 {
+		return m, nil
+	}
+	m.state.adjustCartQty(pid, -1, it.AvailableQty)
+	return m, m.saveServerCartCmd()
 }
 
 func (m *Model) cartCursor() int {

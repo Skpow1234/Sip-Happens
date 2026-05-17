@@ -80,7 +80,7 @@ func (m Model) catalogDetailPane() string {
 	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %s", L.ProductInvima, p.InvimaReg)) + "\n")
 	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductAvailable, d.AvailableQty)) + "\n\n")
 	b.WriteString(formatProductImageBlock(p.ImageURL))
-	b.WriteString("\n\n" + renderProductCTA("a", "agregar", "enter", "cantidad") + "\n")
+	b.WriteString("\n\n" + renderProductCTA() + "\n")
 	return b.String()
 }
 

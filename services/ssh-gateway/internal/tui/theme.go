@@ -15,7 +15,6 @@ var (
 	colorAccent     = lipgloss.Color("11") // bright yellow (≈ orange highlight)
 	colorOnAccent   = lipgloss.Color("0")  // black on highlight
 	colorBrand      = lipgloss.Color("11") // prices / brand accent
-	colorHint       = lipgloss.Color("13") // bright magenta (enter hints)
 	colorSpec       = lipgloss.Color("8")
 	colorLink       = lipgloss.Color("14") // bright cyan
 	colorWarn       = lipgloss.Color("9")  // bright red
@@ -75,10 +74,6 @@ func styleRowSelect() lipgloss.Style {
 
 func styleCTA() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(colorOnAccent).Background(colorAccent).Padding(0, 1)
-}
-
-func styleHintKey() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorHint)
 }
 
 func styleFooterKey() lipgloss.Style {
@@ -172,9 +167,7 @@ func formatFooterChunk(chunk string) string {
 	return styleFooterKey().Render(key) + " " + styleMuted().Render(label)
 }
 
-func renderProductCTA(addKey, addLabel, enterKey, enterLabel string) string {
-	return styleFooterKey().Render(addKey) + " " +
-		styleCTA().Render(addLabel) + "  " +
-		styleHintKey().Render(enterKey) + " " +
-		styleMuted().Render(enterLabel)
+func renderProductCTA() string {
+	return styleFooterKey().Render("←") + " " + styleMuted().Render("quitar") + "  " +
+		styleFooterKey().Render("→") + " " + styleCTA().Render("agregar")
 }

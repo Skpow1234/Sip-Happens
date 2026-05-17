@@ -36,7 +36,7 @@ func SpanishCO() Messages {
 		CatalogSearchPrompt: "Buscar:",
 		CatalogSearchApply:  "enter aplicar  esc cancelar",
 		CatalogNoMatches:    "(Sin resultados — ajusta filtros o pulsa r)",
-		CatalogHelp:         "↑/↓  enter  a agregar  b carrito  / buscar  f filtros  n/p página  r actualizar  esc menú",
+		CatalogHelp:         "↑/↓  enter  ←/→ cantidad  b carrito  / buscar  f filtros  n/p página  r actualizar  esc menú",
 		CatalogAvail:        "disp",
 		ProductSKU:          "SKU",
 		ProductABV:          "%.1f%% ABV",
@@ -46,7 +46,7 @@ func SpanishCO() Messages {
 		ProductIBU:          "IBU",
 		ProductPrice:        "Precio",
 		ProductAvailable:    "Disponible",
-		ProductHelp:         "a — agregar al carrito   b — carrito   esc — volver",
+		ProductHelp:         "→ agregar   ← quitar   b — carrito   esc — volver",
 		CartTitle:           "Carrito",
 		CartEmpty:           "(Vacío)",
 		CartMaxQty: func(max int) string {
@@ -150,7 +150,7 @@ Menú principal
 Catálogo
   ↑/↓     mover
   enter   detalle
-  a       agregar
+  ← / →   quitar / agregar
   b       carrito
   /       buscar
   f       filtros
@@ -231,8 +231,8 @@ Pedidos
 		CatalogFeatured:   "destacados",
 		CatalogAll:        "catálogo",
 		CatalogSelectHint: "Selecciona una cerveza de la lista.",
-		CatalogFooter:     "↑/↓ productos  a agregar  / buscar  f filtros  n/p página  c carrito  ? ayuda",
-		ProductDetailFooter: "a agregar  enter cantidad",
+		CatalogFooter:     "↑/↓ productos  ←/→ agregar  / buscar  f filtros  n/p página  c carrito  ? ayuda",
+		ProductDetailFooter: "← quitar  → agregar",
 		CrumbCart:     "carrito",
 		CrumbShipping: "envío",
 		CrumbPayment:  "pago",

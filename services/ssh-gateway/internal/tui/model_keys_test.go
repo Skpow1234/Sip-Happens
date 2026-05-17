@@ -104,7 +104,7 @@ func TestModel_CatalogAddOutOfStock_ShowsNotice(t *testing.T) {
 	m.state.catalog = []api.CatalogItem{makeCatalogItem("X")}
 	m.state.catalog[0].AvailableQty = 0
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	nm := modelFromTea(next)
 	if nm.notice == "" {
 		t.Fatalf("expected notice for out of stock")

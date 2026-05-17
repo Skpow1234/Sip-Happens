@@ -111,7 +111,7 @@ The matching public key is in `infra/demo/authorized_keys` (mounted into the gat
 
 Flow: confirm age → split-pane catalog → cart → delivery (breadcrumb steps) → Stripe checkout URL off-terminal (mock when `STRIPE_MOCK=1`).
 
-TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `a` add on catalog · `enter` checkout from cart.
+TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `←`/`→` add/remove on catalog · `enter` checkout from cart.
 
 Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`).
 

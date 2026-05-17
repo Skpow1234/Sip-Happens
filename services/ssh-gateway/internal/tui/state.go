@@ -172,6 +172,32 @@ func (s *AppState) cartSubtotal() int64 {
 	return t
 }
 
+func (s *AppState) cartQtyForProduct(productID string) int {
+	for _, l := range s.cart {
+		if l.ProductID == productID {
+			return l.Qty
+		}
+	}
+	return 0
+}
+
+func (s *AppState) adjustCartQty(productID string, delta int, avail int) {
+	if delta == 0 {
+		return
+	}
+	for i := range s.cart {
+		if s.cart[i].ProductID != productID {
+			continue
+		}
+		s.cart[i].Qty += delta
+		s.cart[i].AvailableQty = avail
+		if s.cart[i].Qty <= 0 {
+			s.cart = append(s.cart[:i], s.cart[i+1:]...)
+		}
+		return
+	}
+}
+
 func (s *AppState) addToCart(item api.CatalogItem, qty int) {
 	if qty <= 0 {
 		qty = 1
