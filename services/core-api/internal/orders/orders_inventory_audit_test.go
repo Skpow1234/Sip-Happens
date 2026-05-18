@@ -2,6 +2,7 @@ package orders
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ func TestCreatePendingOrder_AuditsInventoryReserved(t *testing.T) {
 
 	customerID, _ := ids.UUIDv4()
 	productID, _ := ids.UUIDv4()
+	sku := fmt.Sprintf("AUDIT-SKU-%s", productID)
 	now := time.Now()
 
 	_, err = tdb.DB.ExecContext(ctx, `
@@ -36,15 +38,14 @@ values ($1,'audit:inv',$2,$2) on conflict do nothing
 	}
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
-values ($1,'AUDIT-SKU','Audit Beer','Brew','IPA',5.0,330,'INVIMA-AUDIT',true,$2,$2)
-on conflict (sku) do nothing
-`, productID, now)
+values ($1,$2,'Audit Beer','Brew','IPA',5.0,330,'INVIMA-AUDIT',true,$3,$3)
+`, productID, sku, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = tdb.DB.ExecContext(ctx, `
-insert into prices (product_id, currency, amount_minor_units, valid_from) values ($1,'COP',1000,$2)
-`, productID, now)
+insert into prices (product_id, currency, amount_minor_units, valid_from) values ($1,'COP',1000,now())
+`, productID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +99,7 @@ func TestCancelPendingOrder_AuditsInventoryReleased(t *testing.T) {
 
 	customerID, _ := ids.UUIDv4()
 	productID, _ := ids.UUIDv4()
+	sku := fmt.Sprintf("AUDIT-REL-%s", productID)
 	now := time.Now()
 
 	_, err = tdb.DB.ExecContext(ctx, `
@@ -109,15 +111,14 @@ values ($1,'audit:rel',$2,$2) on conflict do nothing
 	}
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
-values ($1,'AUDIT-REL','Beer','Brew','IPA',5.0,330,'INVIMA-AUDIT',true,$2,$2)
-on conflict (sku) do nothing
-`, productID, now)
+values ($1,$2,'Beer','Brew','IPA',5.0,330,'INVIMA-AUDIT',true,$3,$3)
+`, productID, sku, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = tdb.DB.ExecContext(ctx, `
-insert into prices (product_id, currency, amount_minor_units, valid_from) values ($1,'COP',1000,$2)
-`, productID, now)
+insert into prices (product_id, currency, amount_minor_units, valid_from) values ($1,'COP',1000,now())
+`, productID)
 	if err != nil {
 		t.Fatal(err)
 	}

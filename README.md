@@ -316,7 +316,7 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 
 - `GET /healthz`, `GET /readyz` (DB readiness; 503 until DB is reachable), `GET /metrics`
 - `GET /catalog?currency=COP` — list active products with price and `available_qty` (`limit`, `offset`, `q`, `style`, `brewery`, `abv_min`, `abv_max`)
-- `GET /catalog/{sku}?currency=COP` — product detail with `available_qty`
+- `GET /catalog/{id}?currency=COP` — product detail (`prd_…` public id, UUID, or SKU) with `available_qty`
 - `GET /openapi.yaml` — OpenAPI 3 spec
 
 **Signed** (HMAC v2 + `X-SSH-Fingerprint`; used by `ssh-gateway`)

@@ -208,18 +208,19 @@ values ($1,$2,$3,$4) on conflict do nothing
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sqlDB.ExecContext(ctx, `
+	err = sqlDB.QueryRowContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
 values ($1,$2,$3,'Chaos','IPA',5.0,330,'INVIMA-CHAOS',true,$4,$4)
-on conflict (sku) do nothing
-`, productID, sku, "Chaos "+sku, now)
+on conflict (sku) do update set is_active=true, updated_at=excluded.updated_at
+returning id
+`, productID, sku, "Chaos "+sku, now).Scan(&productID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = sqlDB.ExecContext(ctx, `
 insert into prices (product_id, currency, amount_minor_units, valid_from)
-values ($1,'COP',1000,$2) on conflict do nothing
-`, productID, now)
+values ($1,'COP',1000,now()) on conflict do nothing
+`, productID)
 	if err != nil {
 		t.Fatal(err)
 	}

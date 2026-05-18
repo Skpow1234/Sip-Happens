@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ func TestConcurrentCreatePendingOrder_DoesNotOversell(t *testing.T) {
 
 	customerID, _ := ids.UUIDv4()
 	productID, _ := ids.UUIDv4()
+	sku := fmt.Sprintf("ITEST-SKU-%s", productID)
 	now := time.Now()
 
 	_, err = tdb.DB.ExecContext(ctx, `
@@ -40,16 +42,15 @@ on conflict do nothing
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
 values ($1,$2,$3,$4,$5,$6,$7,$8,true,$9,$10)
-on conflict (sku) do nothing
-`, productID, "ITEST-SKU", "ITest Beer", "ITest", "IPA", 5.0, 330, "INVIMA-ITEST", now, now)
+`, productID, sku, "ITest Beer", "ITest", "IPA", 5.0, 330, "INVIMA-ITEST", now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into prices (product_id, currency, amount_minor_units, valid_from)
-values ($1,'COP',1000,$2)
+values ($1,'COP',1000,now())
 on conflict do nothing
-`, productID, now)
+`, productID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +120,7 @@ func TestMarkPaid_IdempotentOnDuplicateProviderRef(t *testing.T) {
 
 	customerID, _ := ids.UUIDv4()
 	productID, _ := ids.UUIDv4()
+	sku := fmt.Sprintf("ITEST-SKU-PAID-%s", productID)
 	now := time.Now()
 
 	_, err = tdb.DB.ExecContext(ctx, `
@@ -132,16 +134,15 @@ on conflict do nothing
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
 values ($1,$2,$3,$4,$5,$6,$7,$8,true,$9,$10)
-on conflict (sku) do nothing
-`, productID, "ITEST-SKU-PAID", "ITest Paid Beer", "ITest", "IPA", 5.0, 330, "INVIMA-ITEST", now, now)
+`, productID, sku, "ITest Paid Beer", "ITest", "IPA", 5.0, 330, "INVIMA-ITEST", now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into prices (product_id, currency, amount_minor_units, valid_from)
-values ($1,'COP',1000,$2)
+values ($1,'COP',1000,now())
 on conflict do nothing
-`, productID, now)
+`, productID)
 	if err != nil {
 		t.Fatal(err)
 	}
