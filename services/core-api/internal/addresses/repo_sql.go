@@ -3,6 +3,9 @@ package addresses
 import (
 	"context"
 	"database/sql"
+	"strings"
+
+	"github.com/google/uuid"
 
 	"sip-happens/pkg/domain"
 )
@@ -134,8 +137,15 @@ where customer_id = $1 and id = $2
 
 // ResolveAddress looks up by public id, internal UUID, or raw id for a customer.
 func ResolveAddress(ctx context.Context, repo Repository, q Querier, customerID domain.CustomerID, ref string) (*domain.CustomerAddress, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, domain.ErrInvalidInput
+	}
 	if id, ok := AddressIDFromPublicID(ref); ok {
 		return repo.Get(ctx, q, customerID, id)
+	}
+	if _, err := uuid.Parse(ref); err == nil {
+		return repo.Get(ctx, q, customerID, domain.AddressID(ref))
 	}
 	return repo.Get(ctx, q, customerID, domain.AddressID(ref))
 }

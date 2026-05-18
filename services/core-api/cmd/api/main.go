@@ -13,6 +13,7 @@ import (
 	"sip-happens/pkg/config"
 	"sip-happens/pkg/healthcheck"
 	"sip-happens/pkg/redisutil"
+	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/audit"
 	"sip-happens/services/core-api/internal/catalog"
@@ -144,6 +145,7 @@ func runServer() error {
 		Orders:            ordersSvc,
 		Payments:          paymentsRepo,
 		Customers:         customersSvc,
+		Addresses:         addresses.NewSQLRepository(),
 		Catalog:           catalogRepo,
 		Admin:             adminSvc,
 		Invoices:          invoiceSvc,

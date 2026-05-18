@@ -1,6 +1,7 @@
 package http
 
 import (
+	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/admin"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
@@ -32,6 +33,7 @@ func testServer(tdb *testutil.TestDB, stripe stripepayments.Service) *Server {
 		Admin:           &admin.SQLService{DB: tdb.DB},
 		AdminToken:      "test-admin",
 		Customers:       customers.NewService(tdb.DB, customers.NewSQLRepository()),
+		Addresses:       addresses.NewSQLRepository(),
 		Stripe:          stripe,
 		CoreAPIHMACKeys: map[string]string{"dev": "test-secret"},
 	}

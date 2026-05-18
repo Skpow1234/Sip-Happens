@@ -430,10 +430,130 @@ func (c *Client) patchProfileAt(ctx context.Context, method, path string, patch 
 }
 
 func (c *Client) patchProfile(ctx context.Context, method string, patch PatchCustomerRequest) (*CustomerView, error) {
-	if method == http.MethodPut {
-		return c.patchProfileAt(ctx, method, "/profile", patch, "profile")
+	return c.patchProfileAt(ctx, method, "/profile", patch, "profile")
+}
+
+// AddressView mirrors core-api saved address JSON.
+type AddressView struct {
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	FullName     string `json:"full_name"`
+	Phone        string `json:"phone"`
+	LegalID      string `json:"legal_id"`
+	AddressLine1 string `json:"address_line1"`
+	Neighborhood string `json:"neighborhood"`
+	City         string `json:"city"`
+	IsDefault    bool   `json:"is_default"`
+}
+
+type CreateAddressRequest struct {
+	Label        string `json:"label,omitempty"`
+	FullName     string `json:"full_name,omitempty"`
+	Phone        string `json:"phone,omitempty"`
+	LegalID      string `json:"legal_id,omitempty"`
+	AddressLine1 string `json:"address_line1"`
+	Neighborhood string `json:"neighborhood"`
+	City         string `json:"city"`
+	IsDefault    *bool  `json:"is_default,omitempty"`
+}
+
+func (c *Client) ListAddresses(ctx context.Context) ([]AddressView, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/addresses", nil)
+	if err != nil {
+		return nil, err
 	}
-	return c.patchProfileAt(ctx, method, "/customers/me", patch, "customer")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Addresses []AddressView `json:"addresses"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.Addresses, nil
+}
+
+func (c *Client) GetAddress(ctx context.Context, id string) (*AddressView, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing address id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/addresses/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Address AddressView `json:"address"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Address, nil
+}
+
+func (c *Client) CreateAddress(ctx context.Context, in CreateAddressRequest) (*AddressView, error) {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/addresses", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Address AddressView `json:"address"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Address, nil
+}
+
+func (c *Client) DeleteAddress(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("missing address id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/addresses/"+url.PathEscape(id), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	body, _ := io.ReadAll(resp.Body)
+	return parseAPIError(resp.StatusCode, body)
 }
 
 func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {
