@@ -1003,10 +1003,14 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	items := make([]catalog.ItemView, 0, len(page.Items))
+	for _, it := range page.Items {
+		items = append(items, catalog.ItemViewFromProductWithPrice(it))
+	}
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"currency": currency,
-		"items":    page.Items,
+		"items":    items,
 		"limit":    limit,
 		"offset":   offset,
 		"has_more": page.HasMore,
@@ -1026,9 +1030,9 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return
 	}
-	sku := strings.TrimPrefix(r.URL.Path, "/catalog/")
-	if sku == "" {
-		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing sku")
+	ref := strings.TrimPrefix(r.URL.Path, "/catalog/")
+	if ref == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing product id")
 		return
 	}
 
@@ -1037,7 +1041,7 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 		currency = "COP"
 	}
 
-	p, err := s.Catalog.GetProductBySKU(r.Context(), s.DB, sku)
+	p, err := catalog.ResolveProduct(r.Context(), s.Catalog, s.DB, ref)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if err == domain.ErrNotFound {
@@ -1064,11 +1068,17 @@ func (s *Server) handleCatalogDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	item := catalog.ItemView{
+		Product:      catalog.ProductViewFromDomain(*p),
+		Price:        catalog.PriceViewFromDomain(*price),
+		AvailableQty: s.availableQty(r.Context(), p.ID),
+	}
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"product":       p,
-		"price":         price,
-		"available_qty": s.availableQty(r.Context(), p.ID),
+		"currency":      currency,
+		"product":       item.Product,
+		"price":         item.Price,
+		"available_qty": item.AvailableQty,
 	})
 }
 

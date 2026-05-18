@@ -12,8 +12,7 @@ import (
 	"sip-happens/services/core-api/internal/testutil"
 )
 
-// This is a lightweight contract test asserting that `/catalog` returns the JSON
-// shape expected by the ssh-gateway client (Product + Price nested objects).
+// Contract test: /catalog returns snake_case product.id (public) and nested product/price.
 func TestCatalogResponseShape_Contract(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -25,7 +24,7 @@ func TestCatalogResponseShape_Contract(t *testing.T) {
 	}
 	defer func() { _ = tdb.CloseFn() }()
 
-	productID := "p_test_1"
+	productID := "550e8400-e29b-41d4-a716-446655440099"
 	_, err = tdb.DB.ExecContext(ctx, `
 insert into products (id, sku, name, brewery, style, abv, volume_ml, invima_reg, is_active, created_at, updated_at)
 values ($1,'SKU-1','Beer 1','Brewery','Lager',5.0,330,'INVIMA-1',true,now(),now())
@@ -63,19 +62,15 @@ values ($1,'COP',10000,now())
 		Currency string `json:"currency"`
 		Items    []struct {
 			Product struct {
-				ID        string
-				SKU       string
-				Name      string
-				Brewery   string
-				Style     string
-				ABV       float64
-				VolumeML  int
-				InvimaReg string
-			} `json:"Product"`
+				ID   string `json:"id"`
+				SKU  string `json:"sku"`
+				Name string `json:"name"`
+			} `json:"product"`
 			Price struct {
-				Currency         string
-				AmountMinorUnits int64
-			} `json:"Price"`
+				Currency         string `json:"currency"`
+				AmountMinorUnits int64  `json:"amount_minor_units"`
+			} `json:"price"`
+			AvailableQty int `json:"available_qty"`
 		} `json:"items"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -87,10 +82,48 @@ values ($1,'COP',10000,now())
 	if len(out.Items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(out.Items))
 	}
-	if out.Items[0].Product.ID != productID {
-		t.Fatalf("expected product_id=%s, got=%s", productID, out.Items[0].Product.ID)
+	wantPublicID := "prd_550e8400e29b41d4a716446655440099"
+	if out.Items[0].Product.ID != wantPublicID {
+		t.Fatalf("expected public id %s, got=%s", wantPublicID, out.Items[0].Product.ID)
+	}
+	if out.Items[0].Product.SKU != "SKU-1" {
+		t.Fatalf("sku: %q", out.Items[0].Product.SKU)
 	}
 	if out.Items[0].Price.Currency != "COP" || out.Items[0].Price.AmountMinorUnits != 10000 {
 		t.Fatalf("unexpected price: %#v", out.Items[0].Price)
+	}
+
+	// Detail by public id
+	req2, _ := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/catalog/"+wantPublicID, nil)
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("GET detail: %v", err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != 200 {
+		t.Fatalf("detail status: %d", resp2.StatusCode)
+	}
+	var detail struct {
+		Product struct {
+			ID  string `json:"id"`
+			SKU string `json:"sku"`
+		} `json:"product"`
+	}
+	if err := json.NewDecoder(resp2.Body).Decode(&detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if detail.Product.ID != wantPublicID || detail.Product.SKU != "SKU-1" {
+		t.Fatalf("detail product: %#v", detail.Product)
+	}
+
+	// Detail by SKU (legacy)
+	req3, _ := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/catalog/SKU-1", nil)
+	resp3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatalf("GET detail sku: %v", err)
+	}
+	defer resp3.Body.Close()
+	if resp3.StatusCode != 200 {
+		t.Fatalf("detail by sku status: %d", resp3.StatusCode)
 	}
 }

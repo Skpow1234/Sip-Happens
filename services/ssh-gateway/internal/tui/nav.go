@@ -135,13 +135,13 @@ func (m *Model) maybeLoadCatalogDetailCmd() tea.Cmd {
 	if i < 0 || i >= len(m.state.catalog) {
 		i = 0
 	}
-	sku := m.state.catalog[i].Product.SKU
-	if sku == "" || sku == m.state.productSKU {
+	ref := m.state.catalog[i].Product.ID
+	if ref == "" || ref == m.state.productSKU {
 		return nil
 	}
-	m.state.productSKU = sku
+	m.state.productSKU = ref
 	m.busy = true
-	return m.loadDetailCmd(sku)
+	return m.loadDetailCmd(ref)
 }
 
 // accountSection identifiers

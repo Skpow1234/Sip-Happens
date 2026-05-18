@@ -99,7 +99,7 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 				return domain.ErrInvalidInput
 			}
 
-			p, err := s.catalog.GetProduct(ctx, tx, it.ProductID)
+			p, err := catalog.ResolveProduct(ctx, s.catalog, tx, string(it.ProductID))
 			if err != nil {
 				return err
 			}
@@ -107,12 +107,12 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 				return domain.ErrForbidden
 			}
 
-			price, err := s.catalog.GetCurrentPrice(ctx, tx, it.ProductID, in.Currency)
+			price, err := s.catalog.GetCurrentPrice(ctx, tx, p.ID, in.Currency)
 			if err != nil {
 				return err
 			}
 
-			inv, err := s.inventory.LockForUpdate(ctx, tx, it.ProductID)
+			inv, err := s.inventory.LockForUpdate(ctx, tx, p.ID)
 			if err != nil {
 				return err
 			}
@@ -125,7 +125,7 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 			subtotal += line
 
 			items = append(items, domain.OrderItem{
-				ProductID:           it.ProductID,
+				ProductID:           p.ID,
 				SKU:                 p.SKU,
 				Name:                p.Name,
 				Qty:                 it.Qty,
@@ -133,7 +133,7 @@ func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderI
 				Currency:            in.Currency,
 				LineTotalMinorUnits: line,
 			})
-			toReserve = append(toReserve, lineReserve{productID: it.ProductID, qty: it.Qty})
+			toReserve = append(toReserve, lineReserve{productID: p.ID, qty: it.Qty})
 		}
 
 		exp := now.Add(15 * time.Minute)

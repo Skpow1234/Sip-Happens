@@ -62,29 +62,29 @@ func NewSignedClientV2(baseURL string, keyID string, hmacSecret string, sshFinge
 	}
 }
 
-// CatalogProduct mirrors core-api catalog JSON (PascalCase field names).
+// CatalogProduct mirrors core-api catalog JSON (public id + snake_case).
 type CatalogProduct struct {
-	ID          string  `json:"ID"`
-	SKU         string  `json:"SKU"`
-	Name        string  `json:"Name"`
-	Brewery     string  `json:"Brewery"`
-	Style       string  `json:"Style"`
-	ABV         float64 `json:"ABV"`
-	VolumeML    int     `json:"VolumeML"`
-	InvimaReg   string  `json:"InvimaReg"`
-	Description string  `json:"Description"`
-	IBU         *int    `json:"IBU"`
-	ImageURL    string  `json:"ImageURL"`
+	ID          string  `json:"id"`
+	SKU         string  `json:"sku"`
+	Name        string  `json:"name"`
+	Brewery     string  `json:"brewery"`
+	Style       string  `json:"style"`
+	ABV         float64 `json:"abv"`
+	VolumeML    int     `json:"volume_ml"`
+	InvimaReg   string  `json:"invima_reg"`
+	Description string  `json:"description"`
+	IBU         *int    `json:"ibu"`
+	ImageURL    string  `json:"image_url"`
 }
 
 type catalogPrice struct {
-	Currency         string `json:"Currency"`
-	AmountMinorUnits int64  `json:"AmountMinorUnits"`
+	Currency         string `json:"currency"`
+	AmountMinorUnits int64  `json:"amount_minor_units"`
 }
 
 type CatalogItem struct {
-	Product      CatalogProduct `json:"Product"`
-	Price        catalogPrice   `json:"Price"`
+	Product      CatalogProduct `json:"product"`
+	Price        catalogPrice   `json:"price"`
 	AvailableQty int            `json:"available_qty"`
 }
 
@@ -236,12 +236,12 @@ func (c *Client) GetCatalog(ctx context.Context, q CatalogQuery) (*CatalogPage, 
 	}, nil
 }
 
-func (c *Client) GetCatalogDetail(ctx context.Context, sku string) (*CatalogDetail, error) {
-	sku = strings.TrimSpace(sku)
-	if sku == "" {
-		return nil, fmt.Errorf("missing sku")
+func (c *Client) GetCatalogDetail(ctx context.Context, ref string) (*CatalogDetail, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, fmt.Errorf("missing product id")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/catalog/"+sku+"?currency=COP", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/catalog/"+url.PathEscape(ref)+"?currency=COP", nil)
 	if err != nil {
 		return nil, err
 	}

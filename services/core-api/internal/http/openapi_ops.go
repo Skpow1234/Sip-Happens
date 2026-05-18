@@ -21,7 +21,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "GET", Path: "/readyz"},
 	{Method: "GET", Path: "/metrics"},
 	{Method: "GET", Path: "/catalog"},
-	{Method: "GET", Path: "/catalog/{sku}"},
+	{Method: "GET", Path: "/catalog/{id}"},
 	{Method: "GET", Path: "/customers/me"},
 	{Method: "PATCH", Path: "/customers/me"},
 	{Method: "GET", Path: "/cart"},
