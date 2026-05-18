@@ -308,14 +308,15 @@ func (c *Client) Checkout(ctx context.Context, idempotencyKey string, in Checkou
 }
 
 type CustomerView struct {
-	ID           string `json:"ID"`
-	City         string `json:"City"`
-	Neighborhood string `json:"Neighborhood"`
-	AddressLine1 string `json:"AddressLine1"`
-	Phone        string `json:"Phone"`
-	LegalID      string `json:"LegalID"`
-	FullName     string `json:"FullName"`
-	BirthDate    string `json:"BirthDate"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	City         string `json:"city"`
+	Neighborhood string `json:"neighborhood"`
+	AddressLine1 string `json:"address_line1"`
+	Phone        string `json:"phone"`
+	LegalID      string `json:"legal_id"`
+	FullName     string `json:"full_name"`
+	BirthDate    string `json:"birth_date"`
 }
 
 type PatchCustomerRequest struct {
@@ -361,12 +362,45 @@ func (c *Client) GetCustomerMe(ctx context.Context) (*CustomerView, error) {
 	return &out.Customer, nil
 }
 
+// GetProfile is a Terminal.shop alias for GET /profile.
+func (c *Client) GetProfile(ctx context.Context) (*CustomerView, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/profile", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Profile CustomerView `json:"profile"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Profile, nil
+}
+
+// PutProfile is a Terminal.shop alias for PUT /profile (partial update, same as PATCH /customers/me).
+func (c *Client) PutProfile(ctx context.Context, patch PatchCustomerRequest) (*CustomerView, error) {
+	return c.patchProfile(ctx, http.MethodPut, patch)
+}
+
 func (c *Client) PatchCustomerMe(ctx context.Context, patch PatchCustomerRequest) (*CustomerView, error) {
+	return c.patchProfileAt(ctx, http.MethodPatch, "/customers/me", patch, "customer")
+}
+
+func (c *Client) patchProfileAt(ctx context.Context, method, path string, patch PatchCustomerRequest, wrapKey string) (*CustomerView, error) {
 	payload, err := json.Marshal(patch)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+"/customers/me", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -380,13 +414,26 @@ func (c *Client) PatchCustomerMe(ctx context.Context, patch PatchCustomerRequest
 	if resp.StatusCode/100 != 2 {
 		return nil, parseAPIError(resp.StatusCode, body)
 	}
-	var out struct {
-		Customer CustomerView `json:"customer"`
-	}
+	var out map[string]json.RawMessage
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, err
 	}
-	return &out.Customer, nil
+	raw, ok := out[wrapKey]
+	if !ok {
+		return nil, fmt.Errorf("missing %q in response", wrapKey)
+	}
+	var v CustomerView
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (c *Client) patchProfile(ctx context.Context, method string, patch PatchCustomerRequest) (*CustomerView, error) {
+	if method == http.MethodPut {
+		return c.patchProfileAt(ctx, method, "/profile", patch, "profile")
+	}
+	return c.patchProfileAt(ctx, method, "/customers/me", patch, "customer")
 }
 
 func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {

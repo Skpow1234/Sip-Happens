@@ -324,7 +324,8 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `POST /checkout` — pending order, inventory reservation, Stripe Checkout Session (`Idempotency-Key` required)
 - `GET /orders` — list caller’s orders (`limit`, default 20, max 100)
 - `GET /orders/{id}` — order detail (scoped to caller’s fingerprint)
-- `GET /customers/me` — profile for prefill
+- `GET /customers/me`, `PATCH /customers/me` — profile (snake_case JSON)
+- `GET /profile`, `PUT /profile`, `PATCH /profile` — Terminal.shop aliases (`profile` wrapper)
 - `GET /cart`, `PUT /cart` — server-persistent cart
 - `GET /shipping/estimate?city=...` — flat shipping estimate by city
 

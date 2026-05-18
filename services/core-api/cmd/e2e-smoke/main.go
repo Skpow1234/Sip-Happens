@@ -98,14 +98,14 @@ func run() error {
 	if err := checkJSON(ctx, client, base+"/customers/me", http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
 		var out struct {
 			Customer struct {
-				ID string `json:"ID"`
+				ID string `json:"id"`
 			} `json:"customer"`
 		}
 		if err := json.Unmarshal(b, &out); err != nil {
 			return err
 		}
 		if out.Customer.ID == "" {
-			return fmt.Errorf("missing customer.ID")
+			return fmt.Errorf("missing customer.id")
 		}
 		return nil
 	}); err != nil {
