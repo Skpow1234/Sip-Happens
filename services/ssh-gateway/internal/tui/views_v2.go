@@ -96,6 +96,7 @@ func (m Model) accountMenuPane() string {
 		label string
 	}{
 		{accountOrders, L.AccountOrders},
+		{accountAddresses, L.AccountAddresses},
 		{accountFAQ, L.AccountFAQ},
 		{accountAbout, L.AccountAbout},
 	}
@@ -112,9 +113,42 @@ func (m Model) accountContentPane() string {
 		return L.AccountFAQBody + "\n"
 	case accountAbout:
 		return fmt.Sprintf(L.AccountAboutBody, m.privacyPolicyURL, m.consumerRightsURL) + "\n"
+	case accountAddresses:
+		return m.accountAddressesPane()
 	default:
 		return m.accountOrdersPane()
 	}
+}
+
+func (m Model) accountAddressesPane() string {
+	if m.busy && len(m.state.savedAddresses) == 0 {
+		return L.Loading + "\n"
+	}
+	if len(m.state.savedAddresses) == 0 {
+		return L.AccountAddressesEmpty + "\n\n" + L.AccountAddressesHelp + "\n"
+	}
+	var b strings.Builder
+	for _, a := range m.state.savedAddresses {
+		b.WriteString(formatAddressLine(a))
+		b.WriteByte('\n')
+		if detail := strings.TrimSpace(a.AddressLine1); detail != "" {
+			b.WriteString("    ")
+			b.WriteString(detail)
+			b.WriteByte('\n')
+		}
+		if strings.TrimSpace(a.FullName) != "" {
+			b.WriteString("    ")
+			b.WriteString(a.FullName)
+			if strings.TrimSpace(a.Phone) != "" {
+				b.WriteString(" · ")
+				b.WriteString(a.Phone)
+			}
+			b.WriteByte('\n')
+		}
+		b.WriteByte('\n')
+	}
+	b.WriteString(L.AccountAddressesHelp + "\n")
+	return b.String()
 }
 
 func (m Model) accountOrdersPane() string {
@@ -187,7 +221,32 @@ func (m Model) viewCheckoutV2() string {
 		rightCol += fmt.Sprintf("%s%s\n", markR, vals[i])
 	}
 	cols := splitHorizontal(16, leftCol, rightCol)
+	var addrBlock strings.Builder
+	if len(m.state.savedAddresses) > 0 {
+		addrBlock.WriteString(L.CheckoutSavedAddresses)
+		addrBlock.WriteByte('\n')
+		for i, a := range m.state.savedAddresses {
+			line := formatAddressLine(a)
+			if m.state.checkoutPickAddress && i == m.state.addressCursor {
+				addrBlock.WriteString(styleRowSelect().Render(line))
+			} else {
+				addrBlock.WriteString(styleMuted().Render(line))
+			}
+			addrBlock.WriteByte('\n')
+		}
+		if m.state.checkoutPickAddress {
+			addrBlock.WriteString(styleMuted().Render(L.CheckoutAddressPickHelp))
+			addrBlock.WriteByte('\n')
+		} else {
+			addrBlock.WriteString(styleMuted().Render(L.CheckoutAddressRePick))
+			addrBlock.WriteByte('\n')
+		}
+		addrBlock.WriteByte('\n')
+	}
 	var extra strings.Builder
+	if addrBlock.Len() > 0 {
+		extra.WriteString(addrBlock.String())
+	}
 	extra.WriteString("\n" + L.CheckoutCitiesHint + "\n")
 	if m.state.shippingEstimateErr != "" {
 		extra.WriteString(L.CheckoutShippingErr(m.state.shippingEstimateErr) + "\n")

@@ -159,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case customerLoadedMsg:
+	case checkoutBootstrapMsg:
 		m.busy = false
 		if msg.customer != nil {
 			m.prefillCheckout(*msg.customer)
@@ -167,9 +167,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.birthDate = msg.customer.BirthDate
 			}
 		}
+		m.state.savedAddresses = msg.addresses
+		if len(msg.addresses) > 0 {
+			m.state.checkoutPickAddress = true
+			m.state.addressCursor = defaultAddressIndex(msg.addresses)
+			m.state.applyCheckoutAddress(msg.addresses[m.state.addressCursor])
+		} else {
+			m.state.checkoutPickAddress = false
+			m.state.addressCursor = 0
+		}
 		if m.screen == screenCheckout {
 			return m, m.loadShippingEstimateCmd()
 		}
+		return m, nil
+
+	case addressesLoadedMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			return m, nil
+		}
+		m.state.savedAddresses = msg.addresses
 		return m, nil
 
 	case cartLoadedMsg:
@@ -261,10 +279,11 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.state.accountSection = accountOrders
 			}
-			if m.state.accountSection == accountOrders {
+			if cmd := m.accountSectionLoadCmd(); cmd != nil {
 				m.busy = true
-				return m, m.loadOrderHistoryCmd()
+				return m, cmd
 			}
+			return m, nil
 		case "up", "k":
 			if m.state.accountSection == accountOrders && len(m.state.orderHistory) > 0 {
 				if m.state.orderHistoryCursor > 0 {
@@ -280,9 +299,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.state.accountSection < accountAbout {
 				m.state.accountSection++
-				if m.state.accountSection == accountOrders {
+				if cmd := m.accountSectionLoadCmd(); cmd != nil {
 					m.busy = true
-					return m, m.loadOrderHistoryCmd()
+					return m, cmd
 				}
 			}
 		case "enter":
@@ -297,9 +316,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
 			}
 		case "r":
-			if m.state.accountSection == accountOrders {
+			if cmd := m.accountSectionLoadCmd(); cmd != nil {
 				m.busy = true
-				return m, m.loadOrderHistoryCmd()
+				return m, cmd
 			}
 		}
 
@@ -392,8 +411,11 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state.shippingEstimateErr = ""
 			m.screen = screenCheckout
 			m.state.checkout.focus = 0
+			m.state.checkoutPickAddress = false
+			m.state.addressCursor = 0
+			m.state.savedAddresses = nil
 			m.busy = true
-			return m, m.loadCustomerMeCmd()
+			return m, m.loadCheckoutBootstrapCmd()
 		}
 
 	case screenCheckout:
@@ -519,11 +541,21 @@ func (m *Model) removeCartLine() {
 }
 
 func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.state.checkoutPickAddress && len(m.state.savedAddresses) > 0 {
+		if next, cmd, handled := m.updateCheckoutAddressPick(msg); handled {
+			return next, cmd
+		}
+	}
 	f := &m.state.checkout
 	switch msg.String() {
 	case "esc":
 		m.screen = screenCart
 		return m, m.loadShippingEstimateCmd()
+	case "e":
+		if len(m.state.savedAddresses) > 0 {
+			m.state.checkoutPickAddress = true
+			return m, nil
+		}
 	case "tab":
 		f.focus = (f.focus + 1) % len(f.labels())
 	case "shift+tab":
@@ -556,6 +588,35 @@ func (m Model) updateCheckoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, m.loadShippingEstimateCmd()
+}
+
+func (m Model) updateCheckoutAddressPick(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	addrs := m.state.savedAddresses
+	switch msg.String() {
+	case "esc":
+		m.screen = screenCart
+		return m, m.loadShippingEstimateCmd(), true
+	case "up", "k":
+		if m.state.addressCursor > 0 {
+			m.state.addressCursor--
+			m.state.applyCheckoutAddress(addrs[m.state.addressCursor])
+		}
+		return m, m.loadShippingEstimateCmd(), true
+	case "down", "j":
+		if m.state.addressCursor < len(addrs)-1 {
+			m.state.addressCursor++
+			m.state.applyCheckoutAddress(addrs[m.state.addressCursor])
+		}
+		return m, m.loadShippingEstimateCmd(), true
+	case "enter", "tab":
+		m.state.checkoutPickAddress = false
+		return m, m.loadShippingEstimateCmd(), true
+	case "e":
+		m.state.checkoutPickAddress = false
+		return m, nil, true
+	default:
+		return m, nil, false
+	}
 }
 
 func (m Model) checkoutValid() bool {
@@ -928,7 +989,14 @@ type orderLoadedMsg struct {
 }
 type paymentTickMsg struct{ now time.Time }
 type orderHistoryLoadedMsg struct{ orders []api.OrderView }
-type customerLoadedMsg struct{ customer *api.CustomerView }
+type checkoutBootstrapMsg struct {
+	customer  *api.CustomerView
+	addresses []api.AddressView
+}
+type addressesLoadedMsg struct {
+	addresses []api.AddressView
+	err       error
+}
 type cartLoadedMsg struct{ items []api.CartLine }
 type shippingEstimateMsg struct {
 	minor    int64
@@ -1174,14 +1242,37 @@ func (m Model) loadOrderHistoryCmd() tea.Cmd {
 	}
 }
 
-func (m Model) loadCustomerMeCmd() tea.Cmd {
+func (m Model) loadCheckoutBootstrapCmd() tea.Cmd {
 	return func() tea.Msg {
-		c, err := m.api.GetCustomerMe(context.Background())
-		if err != nil {
-			// Non-fatal: checkout still works with manual entry.
-			return customerLoadedMsg{customer: nil}
+		ctx := context.Background()
+		var customer *api.CustomerView
+		c, err := m.api.GetCustomerMe(ctx)
+		if err == nil {
+			customer = c
 		}
-		return customerLoadedMsg{customer: c}
+		addrs, _ := m.api.ListAddresses(ctx)
+		return checkoutBootstrapMsg{customer: customer, addresses: addrs}
+	}
+}
+
+func (m Model) loadAddressesCmd() tea.Cmd {
+	return func() tea.Msg {
+		addrs, err := m.api.ListAddresses(context.Background())
+		if err != nil {
+			return addressesLoadedMsg{err: err}
+		}
+		return addressesLoadedMsg{addresses: addrs}
+	}
+}
+
+func (m Model) accountSectionLoadCmd() tea.Cmd {
+	switch m.state.accountSection {
+	case accountOrders:
+		return m.loadOrderHistoryCmd()
+	case accountAddresses:
+		return m.loadAddressesCmd()
+	default:
+		return nil
 	}
 }
 

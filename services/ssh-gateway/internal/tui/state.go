@@ -127,6 +127,10 @@ type AppState struct {
 	shippingEstimateErr string
 
 	accountSection int
+
+	savedAddresses    []api.AddressView
+	addressCursor     int
+	checkoutPickAddress bool
 }
 
 func (s *AppState) rememberOrderID(id string) {

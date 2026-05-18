@@ -147,6 +147,7 @@ func (m *Model) maybeLoadCatalogDetailCmd() tea.Cmd {
 // accountSection identifiers
 const (
 	accountOrders = iota
+	accountAddresses
 	accountFAQ
 	accountAbout
 )

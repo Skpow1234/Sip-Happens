@@ -129,6 +129,12 @@ type Messages struct {
 	PaymentFooter         string
 	PaymentOffTerminal    string
 	AccountOrders         string
+	AccountAddresses      string
+	AccountAddressesEmpty string
+	AccountAddressesHelp  string
+	CheckoutSavedAddresses string
+	CheckoutAddressPickHelp string
+	CheckoutAddressRePick   string
 	AccountFAQ            string
 	AccountAbout          string
 	AccountFAQBody        string
