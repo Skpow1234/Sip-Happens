@@ -18,9 +18,10 @@ func cartLinesToAPI(lines []CartLine) []api.CartLine {
 	return out
 }
 
-func cartLinesFromAPI(items []api.CartLine) []CartLine {
-	out := make([]CartLine, 0, len(items))
-	for _, it := range items {
+func cartLinesFromAPI(view *api.CartView) []CartLine {
+	lines := api.CartLinesFromView(view)
+	out := make([]CartLine, 0, len(lines))
+	for _, it := range lines {
 		out = append(out, CartLine{
 			ProductID:    it.ProductID,
 			SKU:          it.SKU,

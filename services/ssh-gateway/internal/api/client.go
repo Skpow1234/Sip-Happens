@@ -339,6 +339,30 @@ type CartLine struct {
 	AvailableQty int    `json:"available_qty,omitempty"`
 }
 
+// CartView is the core-api GET/PUT /cart response body.
+type CartView struct {
+	Currency           string `json:"currency"`
+	SubtotalMinorUnits int64  `json:"subtotal_minor_units"`
+	ItemCount          int    `json:"item_count"`
+	Items              []CartItemView `json:"items"`
+}
+
+// CartItemView is one line in cart with nested product and price.
+type CartItemView struct {
+	Qty                 int `json:"qty"`
+	LineTotalMinorUnits int64 `json:"line_total_minor_units"`
+	AvailableQty        int `json:"available_qty"`
+	Product             struct {
+		ID   string `json:"id"`
+		SKU  string `json:"sku"`
+		Name string `json:"name"`
+	} `json:"product"`
+	Price struct {
+		Currency         string `json:"currency"`
+		AmountMinorUnits int64  `json:"amount_minor_units"`
+	} `json:"price"`
+}
+
 func (c *Client) GetCustomerMe(ctx context.Context) (*CustomerView, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/customers/me", nil)
 	if err != nil {
@@ -681,8 +705,16 @@ func (c *Client) DeletePaymentMethod(ctx context.Context, id string) error {
 	return parseAPIError(resp.StatusCode, body)
 }
 
-func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/cart", nil)
+func (c *Client) GetCart(ctx context.Context) (*CartView, error) {
+	return c.GetCartCurrency(ctx, "COP")
+}
+
+func (c *Client) GetCartCurrency(ctx context.Context, currency string) (*CartView, error) {
+	u := c.baseURL + "/cart"
+	if strings.TrimSpace(currency) != "" {
+		u += "?currency=" + url.QueryEscape(strings.TrimSpace(currency))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -696,12 +728,32 @@ func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {
 		return nil, parseAPIError(resp.StatusCode, body)
 	}
 	var out struct {
-		Items []CartLine `json:"items"`
+		Cart CartView `json:"cart"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, err
 	}
-	return out.Items, nil
+	return &out.Cart, nil
+}
+
+// CartLinesFromView flattens a CartView for TUI/state use.
+func CartLinesFromView(v *CartView) []CartLine {
+	if v == nil {
+		return nil
+	}
+	out := make([]CartLine, 0, len(v.Items))
+	for _, it := range v.Items {
+		out = append(out, CartLine{
+			ProductID:    it.Product.ID,
+			SKU:          it.Product.SKU,
+			Name:         it.Product.Name,
+			Currency:     it.Price.Currency,
+			UnitPrice:    it.Price.AmountMinorUnits,
+			Qty:          it.Qty,
+			AvailableQty: it.AvailableQty,
+		})
+	}
+	return out
 }
 
 func (c *Client) PutCart(ctx context.Context, items []CartLine) error {

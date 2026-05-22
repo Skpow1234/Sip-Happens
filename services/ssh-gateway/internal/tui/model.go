@@ -192,7 +192,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case cartLoadedMsg:
 		m.busy = false
-		m.state.cart = cartLinesFromAPI(msg.items)
+		m.state.cart = cartLinesFromAPI(msg.cart)
 		return m, nil
 
 	case shippingEstimateMsg:
@@ -997,7 +997,7 @@ type addressesLoadedMsg struct {
 	addresses []api.AddressView
 	err       error
 }
-type cartLoadedMsg struct{ items []api.CartLine }
+type cartLoadedMsg struct{ cart *api.CartView }
 type shippingEstimateMsg struct {
 	minor    int64
 	currency string
@@ -1178,11 +1178,11 @@ func paymentPollCmd() tea.Cmd {
 func (m Model) loadServerCartCmd() tea.Cmd {
 	client := m.api
 	return func() tea.Msg {
-		items, err := client.GetCart(context.Background())
+		cart, err := client.GetCart(context.Background())
 		if err != nil {
 			return errMsg{err: err}
 		}
-		return cartLoadedMsg{items: items}
+		return cartLoadedMsg{cart: cart}
 	}
 }
 
