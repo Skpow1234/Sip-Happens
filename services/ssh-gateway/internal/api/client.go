@@ -599,6 +599,88 @@ func (c *Client) CollectPaymentMethod(ctx context.Context, in CollectPaymentMeth
 	return &out.Collect, nil
 }
 
+// PaymentMethodCard is saved card metadata from core-api (no PAN).
+type PaymentMethodCard struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Brand     string `json:"brand,omitempty"`
+	Last4     string `json:"last4,omitempty"`
+	ExpMonth  int64  `json:"exp_month,omitempty"`
+	ExpYear   int64  `json:"exp_year,omitempty"`
+	IsDefault bool   `json:"is_default"`
+}
+
+func (c *Client) ListPaymentMethods(ctx context.Context) ([]PaymentMethodCard, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/payment-methods", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		PaymentMethods []PaymentMethodCard `json:"payment_methods"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.PaymentMethods, nil
+}
+
+func (c *Client) GetPaymentMethod(ctx context.Context, id string) (*PaymentMethodCard, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing payment method id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/payment-methods/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		PaymentMethod PaymentMethodCard `json:"payment_method"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.PaymentMethod, nil
+}
+
+func (c *Client) DeletePaymentMethod(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("missing payment method id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/payment-methods/"+url.PathEscape(id), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	body, _ := io.ReadAll(resp.Body)
+	return parseAPIError(resp.StatusCode, body)
+}
+
 func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/cart", nil)
 	if err != nil {

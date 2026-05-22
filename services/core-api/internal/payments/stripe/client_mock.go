@@ -3,10 +3,60 @@ package stripe
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"sip-happens/pkg/ids"
 )
+
+var mockPaymentMethodStore struct {
+	mu         sync.Mutex
+	byCustomer map[string][]PaymentMethodCard
+}
+
+func mockPaymentMethodsForCustomer(stripeCustomerID string) []PaymentMethodCard {
+	stripeCustomerID = strings.TrimSpace(stripeCustomerID)
+	if stripeCustomerID == "" {
+		return nil
+	}
+	mockPaymentMethodStore.mu.Lock()
+	defer mockPaymentMethodStore.mu.Unlock()
+	if mockPaymentMethodStore.byCustomer == nil {
+		mockPaymentMethodStore.byCustomer = make(map[string][]PaymentMethodCard)
+	}
+	if cards, ok := mockPaymentMethodStore.byCustomer[stripeCustomerID]; ok {
+		out := make([]PaymentMethodCard, len(cards))
+		copy(out, cards)
+		return out
+	}
+	seed := []PaymentMethodCard{{
+		ID:        "pm_test_visa4242",
+		Type:      "card",
+		Brand:     "visa",
+		Last4:     "4242",
+		ExpMonth:  12,
+		ExpYear:   2034,
+		IsDefault: true,
+	}}
+	mockPaymentMethodStore.byCustomer[stripeCustomerID] = append([]PaymentMethodCard(nil), seed...)
+	out := make([]PaymentMethodCard, len(seed))
+	copy(out, seed)
+	return out
+}
+
+func mockRemovePaymentMethod(stripeCustomerID, paymentMethodID string) bool {
+	mockPaymentMethodStore.mu.Lock()
+	defer mockPaymentMethodStore.mu.Unlock()
+	cards := mockPaymentMethodStore.byCustomer[stripeCustomerID]
+	for i, c := range cards {
+		if c.ID == paymentMethodID {
+			mockPaymentMethodStore.byCustomer[stripeCustomerID] = append(cards[:i], cards[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
 
 // MockClient is a development-only Stripe client that generates deterministic-looking
 // Checkout Session ids and URLs without contacting Stripe.
@@ -83,6 +133,43 @@ func (c MockClient) CreatePaymentMethodCollect(ctx context.Context, in CreatePay
 		CheckoutSessionID: cs,
 		URL:               fmt.Sprintf("https://checkout.stripe.com/setup/%s", cs),
 	}, nil
+}
+
+func (c MockClient) ListPaymentMethods(ctx context.Context, in ListPaymentMethodsInput) ([]PaymentMethodCard, error) {
+	_ = ctx
+	if in.StripeCustomerID == "" {
+		return nil, fmt.Errorf("missing stripe customer id")
+	}
+	cards := mockPaymentMethodsForCustomer(in.StripeCustomerID)
+	if cards == nil {
+		return []PaymentMethodCard{}, nil
+	}
+	return cards, nil
+}
+
+func (c MockClient) GetPaymentMethod(ctx context.Context, in GetPaymentMethodInput) (*PaymentMethodCard, error) {
+	_ = ctx
+	if in.StripeCustomerID == "" || in.PaymentMethodID == "" {
+		return nil, fmt.Errorf("missing stripe customer or payment method id")
+	}
+	for _, card := range mockPaymentMethodsForCustomer(in.StripeCustomerID) {
+		if card.ID == in.PaymentMethodID {
+			cp := card
+			return &cp, nil
+		}
+	}
+	return nil, ErrPaymentMethodNotFound
+}
+
+func (c MockClient) DetachPaymentMethod(ctx context.Context, in DetachPaymentMethodInput) error {
+	_ = ctx
+	if in.StripeCustomerID == "" || in.PaymentMethodID == "" {
+		return fmt.Errorf("missing stripe customer or payment method id")
+	}
+	if !mockRemovePaymentMethod(in.StripeCustomerID, in.PaymentMethodID) {
+		return ErrPaymentMethodNotFound
+	}
+	return nil
 }
 
 func (c MockClient) PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error) {

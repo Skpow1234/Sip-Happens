@@ -11,7 +11,7 @@ import (
 	checkoutsession "github.com/stripe/stripe-go/v82/checkout/session"
 	stripecustomer "github.com/stripe/stripe-go/v82/customer"
 	paymentintent "github.com/stripe/stripe-go/v82/paymentintent"
-
+	paymentmethod "github.com/stripe/stripe-go/v82/paymentmethod"
 )
 
 type StripeGoClient struct {
@@ -190,6 +190,91 @@ func (c StripeGoClient) CreatePaymentMethodCollect(ctx context.Context, in Creat
 		CheckoutSessionID: s.ID,
 		URL:               s.URL,
 	}, nil
+}
+
+func (c StripeGoClient) ListPaymentMethods(ctx context.Context, in ListPaymentMethodsInput) ([]PaymentMethodCard, error) {
+	if c.SecretKey == "" {
+		return nil, errors.New("missing stripe secret key")
+	}
+	if in.StripeCustomerID == "" {
+		return nil, errors.New("missing stripe customer id")
+	}
+	stripe.Key = c.SecretKey
+
+	cust, err := stripecustomer.Get(in.StripeCustomerID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defaultID := defaultPaymentMethodID(cust)
+
+	params := &stripe.CustomerListPaymentMethodsParams{
+		Customer: stripe.String(in.StripeCustomerID),
+	}
+	params.Type = stripe.String(string(stripe.PaymentMethodTypeCard))
+
+	var out []PaymentMethodCard
+	iter := stripecustomer.ListPaymentMethods(params)
+	for iter.Next() {
+		pm := iter.PaymentMethod()
+		if card := paymentMethodCardFromStripe(pm, defaultID); card != nil {
+			out = append(out, *card)
+		}
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []PaymentMethodCard{}
+	}
+	_ = ctx
+	return out, nil
+}
+
+func (c StripeGoClient) GetPaymentMethod(ctx context.Context, in GetPaymentMethodInput) (*PaymentMethodCard, error) {
+	if c.SecretKey == "" {
+		return nil, errors.New("missing stripe secret key")
+	}
+	if in.StripeCustomerID == "" || in.PaymentMethodID == "" {
+		return nil, errors.New("missing stripe customer or payment method id")
+	}
+	stripe.Key = c.SecretKey
+
+	pm, err := paymentmethod.Get(in.PaymentMethodID, nil)
+	if err != nil {
+		return nil, err
+	}
+	if pm.Customer == nil || pm.Customer.ID != in.StripeCustomerID {
+		return nil, ErrPaymentMethodNotOwned
+	}
+
+	cust, err := stripecustomer.Get(in.StripeCustomerID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defaultID := defaultPaymentMethodID(cust)
+	_ = ctx
+	return paymentMethodCardFromStripe(pm, defaultID), nil
+}
+
+func (c StripeGoClient) DetachPaymentMethod(ctx context.Context, in DetachPaymentMethodInput) error {
+	if c.SecretKey == "" {
+		return errors.New("missing stripe secret key")
+	}
+	if in.StripeCustomerID == "" || in.PaymentMethodID == "" {
+		return errors.New("missing stripe customer or payment method id")
+	}
+	stripe.Key = c.SecretKey
+
+	pm, err := paymentmethod.Get(in.PaymentMethodID, nil)
+	if err != nil {
+		return err
+	}
+	if pm.Customer == nil || pm.Customer.ID != in.StripeCustomerID {
+		return ErrPaymentMethodNotOwned
+	}
+	_, err = paymentmethod.Detach(in.PaymentMethodID, nil)
+	_ = ctx
+	return err
 }
 
 func (c StripeGoClient) PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error) {

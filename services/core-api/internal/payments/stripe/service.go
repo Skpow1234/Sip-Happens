@@ -18,6 +18,15 @@ type Service interface {
 	// CreatePaymentMethodCollect starts a hosted Checkout Session in setup mode (save card off-terminal).
 	CreatePaymentMethodCollect(ctx context.Context, in CreatePaymentMethodCollectInput) (*CreatePaymentMethodCollectOutput, error)
 
+	// ListPaymentMethods returns card payment methods attached to the Stripe customer.
+	ListPaymentMethods(ctx context.Context, in ListPaymentMethodsInput) ([]PaymentMethodCard, error)
+
+	// GetPaymentMethod returns card metadata when the PM belongs to the Stripe customer.
+	GetPaymentMethod(ctx context.Context, in GetPaymentMethodInput) (*PaymentMethodCard, error)
+
+	// DetachPaymentMethod removes a saved card from the Stripe customer.
+	DetachPaymentMethod(ctx context.Context, in DetachPaymentMethodInput) error
+
 	// PaymentIntentStatus returns Stripe payment intent status (e.g. "succeeded", "processing", "requires_payment_method").
 	PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error)
 }
@@ -63,5 +72,19 @@ type CreatePaymentMethodCollectInput struct {
 type CreatePaymentMethodCollectOutput struct {
 	CheckoutSessionID string
 	URL               string
+}
+
+type ListPaymentMethodsInput struct {
+	StripeCustomerID string
+}
+
+type GetPaymentMethodInput struct {
+	StripeCustomerID string
+	PaymentMethodID  string
+}
+
+type DetachPaymentMethodInput struct {
+	StripeCustomerID string
+	PaymentMethodID  string
 }
 
