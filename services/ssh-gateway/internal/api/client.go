@@ -736,6 +736,43 @@ func (c *Client) GetCartCurrency(ctx context.Context, currency string) (*CartVie
 	return &out.Cart, nil
 }
 
+// PutCartItem sets quantity for one product (qty 0 removes). Returns the updated cart.
+func (c *Client) PutCartItem(ctx context.Context, productID string, qty int, currency string) (*CartView, error) {
+	productID = strings.TrimSpace(productID)
+	if productID == "" {
+		return nil, fmt.Errorf("missing product id")
+	}
+	if strings.TrimSpace(currency) == "" {
+		currency = "COP"
+	}
+	payload, err := json.Marshal(map[string]int{"qty": qty})
+	if err != nil {
+		return nil, err
+	}
+	u := c.baseURL + "/cart/items/" + url.PathEscape(productID) + "?currency=" + url.QueryEscape(currency)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Cart CartView `json:"cart"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Cart, nil
+}
+
 // CartLinesFromView flattens a CartView for TUI/state use.
 func CartLinesFromView(v *CartView) []CartLine {
 	if v == nil {

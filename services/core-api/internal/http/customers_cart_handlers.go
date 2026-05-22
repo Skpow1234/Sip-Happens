@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
 )
+
+var errCartLineInvalid = errors.New("invalid cart line")
 
 func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 	if s.Customers == nil {
@@ -38,6 +41,82 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleCartItemByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Customers == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+		return
+	}
+	fp := r.Header.Get("X-SSH-Fingerprint")
+	if fp == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing fingerprint")
+		return
+	}
+	customerID, err := s.Customers.GetOrCreateByFingerprint(r.Context(), fp)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+
+	productRef := strings.TrimPrefix(r.URL.Path, "/cart/items/")
+	if productRef == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "missing product id")
+		return
+	}
+
+	var body struct {
+		Qty int `json:"qty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "bad_request", "invalid json")
+		return
+	}
+	if body.Qty < 0 {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid qty")
+		return
+	}
+
+	stored, err := s.Customers.LoadCart(r.Context(), customerID)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+
+	if body.Qty == 0 {
+		if s.Catalog == nil || s.DB == nil {
+			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+			return
+		}
+		p, err := catalog.ResolveProduct(r.Context(), s.Catalog, s.DB, productRef)
+		if err != nil {
+			if err == domain.ErrNotFound {
+				writeAPIError(w, r, http.StatusNotFound, "not_found", "unknown product")
+				return
+			}
+			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+			return
+		}
+		stored = cart.ApplyItemQty(stored, p, customers.CartLine{}, 0)
+	} else {
+		line, err := s.normalizeCartLine(r, productRef, body.Qty)
+		if err != nil {
+			s.writeCartLineError(w, r, err)
+			return
+		}
+		p, err := catalog.ResolveProduct(r.Context(), s.Catalog, s.DB, productRef)
+		if err != nil {
+			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+			return
+		}
+		stored = cart.ApplyItemQty(stored, p, line, body.Qty)
+	}
+
+	_ = s.saveCartAndWrite(w, r, customerID, stored)
+}
+
 func (s *Server) handleCartGet(w http.ResponseWriter, r *http.Request, customerID domain.CustomerID) {
 	stored, err := s.Customers.LoadCart(r.Context(), customerID)
 	if err != nil {
@@ -63,61 +142,74 @@ func (s *Server) handleCartPut(w http.ResponseWriter, r *http.Request, customerI
 	if body.Items == nil {
 		body.Items = []customers.CartLine{}
 	}
-	if s.Catalog == nil || s.DB == nil {
-		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
-		return
-	}
-	currency := cartCurrencyFromRequest(r)
 	normalized := make([]customers.CartLine, 0, len(body.Items))
 	for _, it := range body.Items {
 		if it.Qty <= 0 {
 			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid cart line")
 			return
 		}
-		ref := strings.TrimSpace(it.ProductID)
-		if ref == "" {
-			writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid cart line")
-			return
-		}
-		p, err := catalog.ResolveProduct(r.Context(), s.Catalog, s.DB, ref)
+		line, err := s.normalizeCartLine(r, strings.TrimSpace(it.ProductID), it.Qty)
 		if err != nil {
-			if err == domain.ErrNotFound {
-				writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "unknown product")
-				return
-			}
-			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+			s.writeCartLineError(w, r, err)
 			return
 		}
-		price, err := s.Catalog.GetCurrentPrice(r.Context(), s.DB, p.ID, currency)
-		if err != nil {
-			if err == domain.ErrNotFound {
-				writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "no price for currency")
-				return
-			}
-			writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
-			return
-		}
-		normalized = append(normalized, customers.CartLine{
-			ProductID:    catalog.PublicID(p.ID),
-			SKU:          p.SKU,
-			Name:         p.Name,
-			Currency:     price.Currency,
-			UnitPrice:    price.AmountMinorUnits,
-			Qty:          it.Qty,
-			AvailableQty: s.availableQty(r.Context(), p.ID),
-		})
+		normalized = append(normalized, line)
 	}
+	_ = s.saveCartAndWrite(w, r, customerID, normalized)
+}
 
-	if err := s.Customers.SaveCart(r.Context(), customerID, normalized); err != nil {
-		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+func (s *Server) normalizeCartLine(r *http.Request, productRef string, qty int) (customers.CartLine, error) {
+	if s.Catalog == nil || s.DB == nil {
+		return customers.CartLine{}, errCartLineInvalid
+	}
+	productRef = strings.TrimSpace(productRef)
+	if productRef == "" || qty <= 0 {
+		return customers.CartLine{}, errCartLineInvalid
+	}
+	currency := cartCurrencyFromRequest(r)
+	p, err := catalog.ResolveProduct(r.Context(), s.Catalog, s.DB, productRef)
+	if err != nil {
+		return customers.CartLine{}, err
+	}
+	price, err := s.Catalog.GetCurrentPrice(r.Context(), s.DB, p.ID, currency)
+	if err != nil {
+		return customers.CartLine{}, err
+	}
+	return customers.CartLine{
+		ProductID:    catalog.PublicID(p.ID),
+		SKU:          p.SKU,
+		Name:         p.Name,
+		Currency:     price.Currency,
+		UnitPrice:    price.AmountMinorUnits,
+		Qty:          qty,
+		AvailableQty: s.availableQty(r.Context(), p.ID),
+	}, nil
+}
+
+func (s *Server) writeCartLineError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errCartLineInvalid) {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "invalid cart line")
 		return
 	}
-	view, err := s.buildCartView(r, normalized)
+	if err == domain.ErrNotFound {
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "unknown product")
+		return
+	}
+	writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+}
+
+func (s *Server) saveCartAndWrite(w http.ResponseWriter, r *http.Request, customerID domain.CustomerID, stored []customers.CartLine) error {
+	if err := s.Customers.SaveCart(r.Context(), customerID, stored); err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return err
+	}
+	view, err := s.buildCartView(r, stored)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
-		return
+		return err
 	}
 	s.writeCartJSON(w, view)
+	return nil
 }
 
 func (s *Server) buildCartView(r *http.Request, stored []customers.CartLine) (cart.View, error) {
