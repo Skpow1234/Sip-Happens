@@ -19,6 +19,9 @@ type Repository interface {
 	SaveCart(ctx context.Context, q Querier, customerID domain.CustomerID, itemsJSON []byte) error
 	RecordConsent(ctx context.Context, q Querier, customerID domain.CustomerID, purpose string) error
 	InsertAgeVerification(ctx context.Context, q Querier, id string, customerID domain.CustomerID, orderID domain.OrderID, birthDate time.Time, affirmedAt time.Time, method string) error
+
+	StripeCustomerID(ctx context.Context, q Querier, id domain.CustomerID) (string, error)
+	SetStripeCustomerID(ctx context.Context, q Querier, id domain.CustomerID, stripeCustomerID string) error
 }
 
 type Querier interface {

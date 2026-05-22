@@ -117,6 +117,20 @@ func (s *service) RecordConsent(ctx context.Context, customerID domain.CustomerI
 	return s.repo.RecordConsent(ctx, s.db, customerID, purpose)
 }
 
+func (s *service) StripeCustomerID(ctx context.Context, id domain.CustomerID) (string, error) {
+	if s.db == nil || id == "" {
+		return "", domain.ErrInvalidInput
+	}
+	return s.repo.StripeCustomerID(ctx, s.db, id)
+}
+
+func (s *service) SetStripeCustomerID(ctx context.Context, id domain.CustomerID, stripeCustomerID string) error {
+	if s.db == nil || id == "" {
+		return domain.ErrInvalidInput
+	}
+	return s.repo.SetStripeCustomerID(ctx, s.db, id, stripeCustomerID)
+}
+
 func parseBirthDate(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

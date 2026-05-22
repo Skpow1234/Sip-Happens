@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/stripe/stripe-go/v82"
 	checkoutsession "github.com/stripe/stripe-go/v82/checkout/session"
+	stripecustomer "github.com/stripe/stripe-go/v82/customer"
 	paymentintent "github.com/stripe/stripe-go/v82/paymentintent"
+
 )
 
 type StripeGoClient struct {
@@ -115,6 +118,78 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 	_ = time.Second
 
 	return out, nil
+}
+
+func (c StripeGoClient) CreateCustomer(ctx context.Context, in CreateCustomerInput) (*CreateCustomerOutput, error) {
+	if c.SecretKey == "" {
+		return nil, errors.New("missing stripe secret key")
+	}
+	if in.CustomerID == "" {
+		return nil, errors.New("missing customer id")
+	}
+	stripe.Key = c.SecretKey
+
+	params := &stripe.CustomerParams{
+		Metadata: map[string]string{
+			"customer_id": string(in.CustomerID),
+		},
+	}
+	if strings.TrimSpace(in.Email) != "" {
+		params.Email = stripe.String(strings.TrimSpace(in.Email))
+	}
+	if strings.TrimSpace(in.Name) != "" {
+		params.Name = stripe.String(strings.TrimSpace(in.Name))
+	}
+	params.SetIdempotencyKey(StripeCustomerIdempotencyKey(in.CustomerID))
+
+	cust, err := stripecustomer.New(params)
+	if err != nil {
+		return nil, err
+	}
+	_ = ctx
+	return &CreateCustomerOutput{StripeCustomerID: cust.ID}, nil
+}
+
+func (c StripeGoClient) CreatePaymentMethodCollect(ctx context.Context, in CreatePaymentMethodCollectInput) (*CreatePaymentMethodCollectOutput, error) {
+	if c.SecretKey == "" {
+		return nil, errors.New("missing stripe secret key")
+	}
+	if in.CustomerID == "" {
+		return nil, errors.New("missing customer id")
+	}
+	if in.StripeCustomerID == "" {
+		return nil, errors.New("missing stripe customer id")
+	}
+	if in.SuccessURL == "" || in.CancelURL == "" {
+		return nil, errors.New("missing success/cancel url")
+	}
+
+	stripe.Key = c.SecretKey
+
+	params := &stripe.CheckoutSessionParams{
+		Mode:       stripe.String(string(stripe.CheckoutSessionModeSetup)),
+		Customer:   stripe.String(in.StripeCustomerID),
+		SuccessURL: stripe.String(in.SuccessURL),
+		CancelURL:  stripe.String(in.CancelURL),
+		PaymentMethodTypes: stripe.StringSlice([]string{
+			string(stripe.PaymentMethodTypeCard),
+		}),
+		Metadata: map[string]string{
+			"customer_id": string(in.CustomerID),
+			"purpose":     "payment_method_collect",
+		},
+	}
+	params.SetIdempotencyKey(PaymentMethodCollectIdempotencyKey(in.CustomerID))
+
+	s, err := checkoutsession.New(params)
+	if err != nil {
+		return nil, err
+	}
+	_ = ctx
+	return &CreatePaymentMethodCollectOutput{
+		CheckoutSessionID: s.ID,
+		URL:               s.URL,
+	}, nil
 }
 
 func (c StripeGoClient) PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error) {

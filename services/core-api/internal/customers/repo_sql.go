@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"sip-happens/pkg/domain"
@@ -107,6 +108,41 @@ select items_json from customer_carts where customer_id=$1
 		}
 	}
 	return items, nil
+}
+
+func (r *SQLRepository) StripeCustomerID(ctx context.Context, q Querier, id domain.CustomerID) (string, error) {
+	row := q.QueryRowContext(ctx, `
+select stripe_customer_id from customers where id=$1
+`, string(id))
+	var stripeID sql.NullString
+	if err := row.Scan(&stripeID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", domain.ErrNotFound
+		}
+		return "", err
+	}
+	return strings.TrimSpace(stripeID.String), nil
+}
+
+func (r *SQLRepository) SetStripeCustomerID(ctx context.Context, q Querier, id domain.CustomerID, stripeCustomerID string) error {
+	stripeCustomerID = strings.TrimSpace(stripeCustomerID)
+	if stripeCustomerID == "" {
+		return domain.ErrInvalidInput
+	}
+	res, err := q.ExecContext(ctx, `
+update customers set stripe_customer_id=$2, updated_at=now() where id=$1
+`, string(id), stripeCustomerID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *SQLRepository) SaveCart(ctx context.Context, q Querier, customerID domain.CustomerID, itemsJSON []byte) error {

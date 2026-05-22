@@ -52,6 +52,39 @@ func (c MockClient) CreateCheckout(ctx context.Context, in CreateCheckoutInput) 
 	}, nil
 }
 
+func (c MockClient) CreateCustomer(ctx context.Context, in CreateCustomerInput) (*CreateCustomerOutput, error) {
+	_ = ctx
+	if in.CustomerID == "" {
+		return nil, fmt.Errorf("missing customer id")
+	}
+	suffix, err := ids.RandomHex(6)
+	if err != nil {
+		return nil, err
+	}
+	return &CreateCustomerOutput{
+		StripeCustomerID: fmt.Sprintf("cus_test_%s", suffix),
+	}, nil
+}
+
+func (c MockClient) CreatePaymentMethodCollect(ctx context.Context, in CreatePaymentMethodCollectInput) (*CreatePaymentMethodCollectOutput, error) {
+	_ = ctx
+	if in.CustomerID == "" {
+		return nil, fmt.Errorf("missing customer id")
+	}
+	if in.StripeCustomerID == "" {
+		return nil, fmt.Errorf("missing stripe customer id")
+	}
+	suffix, err := ids.RandomHex(8)
+	if err != nil {
+		return nil, err
+	}
+	cs := fmt.Sprintf("cs_setup_%s", suffix)
+	return &CreatePaymentMethodCollectOutput{
+		CheckoutSessionID: cs,
+		URL:               fmt.Sprintf("https://checkout.stripe.com/setup/%s", cs),
+	}, nil
+}
+
 func (c MockClient) PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error) {
 	_ = ctx
 	_ = paymentIntentID

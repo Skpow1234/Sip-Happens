@@ -19,6 +19,9 @@ type Service interface {
 	SaveCart(ctx context.Context, customerID domain.CustomerID, items []CartLine) error
 	RecordConsent(ctx context.Context, customerID domain.CustomerID, purpose string) error
 	RecordAgeVerification(ctx context.Context, customerID domain.CustomerID, orderID domain.OrderID, birthDate, method string) error
+
+	StripeCustomerID(ctx context.Context, id domain.CustomerID) (string, error)
+	SetStripeCustomerID(ctx context.Context, id domain.CustomerID, stripeCustomerID string) error
 }
 
 // CheckoutProfile is delivery/contact data submitted at checkout.

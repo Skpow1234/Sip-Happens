@@ -556,6 +556,49 @@ func (c *Client) DeleteAddress(ctx context.Context, id string) error {
 	return parseAPIError(resp.StatusCode, body)
 }
 
+// PaymentMethodCollectResult is the hosted Stripe setup URL from POST /payment-methods/collect.
+type PaymentMethodCollectResult struct {
+	URL               string `json:"url"`
+	CheckoutSessionID string `json:"checkout_session_id"`
+}
+
+type CollectPaymentMethodRequest struct {
+	SuccessURL string `json:"success_url,omitempty"`
+	CancelURL  string `json:"cancel_url,omitempty"`
+}
+
+// CollectPaymentMethod starts off-terminal Stripe Checkout (setup mode) to save a card.
+func (c *Client) CollectPaymentMethod(ctx context.Context, in CollectPaymentMethodRequest) (*PaymentMethodCollectResult, error) {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/payment-methods/collect", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Collect PaymentMethodCollectResult `json:"collect"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	if out.Collect.URL == "" {
+		return nil, fmt.Errorf("missing collect url")
+	}
+	return &out.Collect, nil
+}
+
 func (c *Client) GetCart(ctx context.Context) ([]CartLine, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/cart", nil)
 	if err != nil {

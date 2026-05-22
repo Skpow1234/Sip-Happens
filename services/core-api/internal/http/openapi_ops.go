@@ -31,6 +31,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "POST", Path: "/addresses"},
 	{Method: "GET", Path: "/addresses/{id}"},
 	{Method: "DELETE", Path: "/addresses/{id}"},
+	{Method: "POST", Path: "/payment-methods/collect"},
 	{Method: "GET", Path: "/cart"},
 	{Method: "PUT", Path: "/cart"},
 	{Method: "GET", Path: "/shipping/estimate"},
