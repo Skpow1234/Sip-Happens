@@ -143,7 +143,11 @@ func (s *Server) placeOrderAndRespond(w http.ResponseWriter, r *http.Request, in
 		return
 	}
 	if len(in.Items) == 0 {
-		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", "cart is empty")
+		msg := "items required"
+		if in.AgeVerifyMethod == "cart_convert" {
+			msg = "cart is empty"
+		}
+		writeAPIError(w, r, http.StatusUnprocessableEntity, "invalid_input", msg)
 		return
 	}
 	if !in.Delivery.complete() {

@@ -263,6 +263,67 @@ func (c *Client) GetCatalogDetail(ctx context.Context, ref string) (*CatalogDeta
 	return &out, nil
 }
 
+// OrderCreateRequest is POST /orders (direct checkout without server cart).
+type OrderCreateRequest struct {
+	Currency        string         `json:"currency,omitempty"`
+	AddressID       string         `json:"address_id,omitempty"`
+	City            string         `json:"city,omitempty"`
+	Neighborhood    string         `json:"neighborhood,omitempty"`
+	AddressLine1    string         `json:"address_line1,omitempty"`
+	Phone           string         `json:"phone,omitempty"`
+	LegalID         string         `json:"legal_id,omitempty"`
+	FullName        string         `json:"full_name,omitempty"`
+	BirthDate       string         `json:"birth_date,omitempty"`
+	PrivacyConsent  bool           `json:"privacy_consent"`
+	SuccessURL      string         `json:"success_url,omitempty"`
+	CancelURL       string         `json:"cancel_url,omitempty"`
+	PaymentMethodID string         `json:"payment_method_id,omitempty"`
+	Items           []CheckoutItem `json:"items"`
+}
+
+// CreateOrder starts checkout from inline items and delivery (Terminal.shop POST /order).
+func (c *Client) CreateOrder(ctx context.Context, idempotencyKey string, in OrderCreateRequest) (*CheckoutResult, error) {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		idempotencyKey = randomHex(16)
+	}
+	if in.Currency == "" {
+		in.Currency = "COP"
+	}
+	if in.SuccessURL == "" {
+		in.SuccessURL = "https://sip-happens.local/success"
+	}
+	if in.CancelURL == "" {
+		in.CancelURL = "https://sip-happens.local/cancel"
+	}
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/orders", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerIdempotencyKey, idempotencyKey)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Order  OrderView           `json:"order"`
+		Stripe *StripeCheckoutView `json:"stripe"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &CheckoutResult{Order: out.Order, Stripe: out.Stripe}, nil
+}
+
 func (c *Client) Checkout(ctx context.Context, idempotencyKey string, in CheckoutRequest) (*CheckoutResult, error) {
 	if strings.TrimSpace(idempotencyKey) == "" {
 		idempotencyKey = randomHex(16)

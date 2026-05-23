@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"sip-happens/pkg/domain"
-	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/orders"
 )
@@ -65,7 +64,20 @@ func (s *Server) handleCartConvert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	delivery, err := s.resolveCartConvertDelivery(r, customerID, req)
+	addrID, err := s.Customers.LoadCartAddressID(r.Context(), customerID)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	delivery, err := s.resolveOrderDelivery(r.Context(), customerID, deliveryFieldOverrides{
+		AddressID:    string(addrID),
+		City:         req.City,
+		Neighborhood: req.Neighborhood,
+		AddressLine1: req.AddressLine1,
+		Phone:        req.Phone,
+		LegalID:      req.LegalID,
+		FullName:     req.FullName,
+	})
 	if err != nil {
 		if err == domain.ErrNotFound {
 			writeAPIError(w, r, http.StatusNotFound, "not_found", "unknown address")
@@ -114,41 +126,4 @@ func cartLinesToOrderItems(stored []customers.CartLine) []orders.CreatePendingOr
 		})
 	}
 	return out
-}
-
-func (s *Server) resolveCartConvertDelivery(r *http.Request, customerID domain.CustomerID, req cartConvertRequest) (deliverySnapshot, error) {
-	profile := s.customerDeliveryProfile(r.Context(), customerID)
-
-	var saved deliverySnapshot
-	addrID, err := s.Customers.LoadCartAddressID(r.Context(), customerID)
-	if err != nil {
-		return deliverySnapshot{}, err
-	}
-	if addrID != "" {
-		if s.Addresses == nil || s.DB == nil {
-			return deliverySnapshot{}, domain.ErrNotFound
-		}
-		a, err := addresses.ResolveAddress(r.Context(), s.Addresses, s.DB, customerID, string(addrID))
-		if err != nil {
-			return deliverySnapshot{}, err
-		}
-		av := addresses.AddressViewFromDomain(*a)
-		saved = deliverySnapshot{
-			City:         av.City,
-			Neighborhood: av.Neighborhood,
-			AddressLine1: av.AddressLine1,
-			Phone:        av.Phone,
-			LegalID:      av.LegalID,
-			FullName:     av.FullName,
-		}
-	}
-
-	return deliverySnapshot{
-		City:         pickDeliveryField(req.City, saved.City, profile.City),
-		Neighborhood: pickDeliveryField(req.Neighborhood, saved.Neighborhood, profile.Neighborhood),
-		AddressLine1: pickDeliveryField(req.AddressLine1, saved.AddressLine1, profile.AddressLine1),
-		Phone:        pickDeliveryField(req.Phone, saved.Phone, profile.Phone),
-		LegalID:      pickDeliveryField(req.LegalID, saved.LegalID, profile.LegalID),
-		FullName:     pickDeliveryField(req.FullName, saved.FullName, profile.FullName),
-	}, nil
 }

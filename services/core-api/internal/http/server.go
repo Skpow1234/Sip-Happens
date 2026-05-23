@@ -161,7 +161,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/catalog", s.handleCatalog)
 		mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	}
-	mux.Handle("/orders", s.requireSigned(http.HandlerFunc(s.handleOrders)))
+	mux.Handle("GET /orders", s.requireSigned(http.HandlerFunc(s.handleOrders)))
+	mux.Handle("POST /orders", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleOrderCreate)))))
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/profile", s.requireSigned(http.HandlerFunc(s.handleProfile)))
