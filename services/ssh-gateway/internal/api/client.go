@@ -809,6 +809,34 @@ func (c *Client) GetCartCurrency(ctx context.Context, currency string) (*CartVie
 	return &out.Cart, nil
 }
 
+// DeleteCart clears all cart lines and saved address/payment-method selections.
+func (c *Client) DeleteCart(ctx context.Context, currency string) (*CartView, error) {
+	u := c.baseURL + "/cart"
+	if strings.TrimSpace(currency) != "" {
+		u += "?currency=" + url.QueryEscape(strings.TrimSpace(currency))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Cart CartView `json:"cart"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Cart, nil
+}
+
 // PutCartItem sets quantity for one product (qty 0 removes). Returns the updated cart.
 func (c *Client) PutCartItem(ctx context.Context, productID string, qty int, currency string) (*CartView, error) {
 	productID = strings.TrimSpace(productID)

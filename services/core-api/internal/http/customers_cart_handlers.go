@@ -38,9 +38,19 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request) {
 		s.handleCartGet(w, r, customerID)
 	case http.MethodPut:
 		s.handleCartPut(w, r, customerID)
+	case http.MethodDelete:
+		s.handleCartDelete(w, r, customerID)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleCartDelete(w http.ResponseWriter, r *http.Request, customerID domain.CustomerID) {
+	if err := s.Customers.ClearCart(r.Context(), customerID); err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	s.handleCartGet(w, r, customerID)
 }
 
 func (s *Server) handleCartItemByID(w http.ResponseWriter, r *http.Request) {

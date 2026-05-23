@@ -138,6 +138,13 @@ func (s *service) SaveCart(ctx context.Context, customerID domain.CustomerID, it
 	return s.repo.SaveCart(ctx, s.db, customerID, b)
 }
 
+func (s *service) ClearCart(ctx context.Context, customerID domain.CustomerID) error {
+	if s.db == nil {
+		return nil
+	}
+	return s.repo.ClearCart(ctx, s.db, customerID)
+}
+
 func (s *service) RecordConsent(ctx context.Context, customerID domain.CustomerID, purpose string) error {
 	if s.db == nil || purpose == "" {
 		return nil

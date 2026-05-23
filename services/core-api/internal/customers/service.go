@@ -17,6 +17,7 @@ type Service interface {
 
 	LoadCart(ctx context.Context, customerID domain.CustomerID) ([]CartLine, error)
 	SaveCart(ctx context.Context, customerID domain.CustomerID, items []CartLine) error
+	ClearCart(ctx context.Context, customerID domain.CustomerID) error
 	LoadCartAddressID(ctx context.Context, customerID domain.CustomerID) (domain.AddressID, error)
 	SetCartAddressID(ctx context.Context, customerID domain.CustomerID, addressID domain.AddressID) error
 	LoadCartPaymentMethodID(ctx context.Context, customerID domain.CustomerID) (string, error)

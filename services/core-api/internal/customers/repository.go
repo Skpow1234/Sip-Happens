@@ -17,6 +17,7 @@ type Repository interface {
 
 	LoadCart(ctx context.Context, q Querier, customerID domain.CustomerID) ([]CartLine, error)
 	SaveCart(ctx context.Context, q Querier, customerID domain.CustomerID, itemsJSON []byte) error
+	ClearCart(ctx context.Context, q Querier, customerID domain.CustomerID) error
 	LoadCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID) (domain.AddressID, error)
 	SetCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID, addressID domain.AddressID) error
 	LoadCartPaymentMethodID(ctx context.Context, q Querier, customerID domain.CustomerID) (string, error)

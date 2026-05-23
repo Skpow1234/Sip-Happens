@@ -155,6 +155,16 @@ set items_json = excluded.items_json, updated_at = now()
 	return err
 }
 
+func (r *SQLRepository) ClearCart(ctx context.Context, q Querier, customerID domain.CustomerID) error {
+	_, err := q.ExecContext(ctx, `
+insert into customer_carts (customer_id, items_json, address_id, payment_method_id, updated_at)
+values ($1, '[]'::jsonb, null, null, now())
+on conflict (customer_id) do update
+set items_json = '[]'::jsonb, address_id = null, payment_method_id = null, updated_at = now()
+`, string(customerID))
+	return err
+}
+
 func (r *SQLRepository) LoadCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID) (domain.AddressID, error) {
 	row := q.QueryRowContext(ctx, `
 select address_id from customer_carts where customer_id=$1

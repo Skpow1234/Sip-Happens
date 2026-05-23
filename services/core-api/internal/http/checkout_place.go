@@ -320,12 +320,10 @@ func (s *Server) placeOrderAndRespond(w http.ResponseWriter, r *http.Request, in
 		}
 	}
 
-	if in.ClearCartItems {
-		_ = s.Customers.SaveCart(r.Context(), in.CustomerID, nil)
-	}
 	if in.ClearCartSelections {
-		_ = s.Customers.SetCartAddressID(r.Context(), in.CustomerID, "")
-		_ = s.Customers.SetCartPaymentMethodID(r.Context(), in.CustomerID, "")
+		_ = s.Customers.ClearCart(r.Context(), in.CustomerID)
+	} else if in.ClearCartItems {
+		_ = s.Customers.SaveCart(r.Context(), in.CustomerID, nil)
 	}
 
 	w.Header().Set("content-type", "application/json")
