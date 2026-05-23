@@ -44,6 +44,9 @@ type CreateCheckoutInput struct {
 
 	SuccessURL string
 	CancelURL  string
+
+	// StripeCustomerID pre-fills the hosted Checkout page for saved payment methods.
+	StripeCustomerID string
 }
 
 type CreateCheckoutOutput struct {

@@ -307,6 +307,64 @@ func (c *Client) Checkout(ctx context.Context, idempotencyKey string, in Checkou
 	return &CheckoutResult{Order: out.Order, Stripe: out.Stripe}, nil
 }
 
+// CartConvertRequest converts the server cart to a pending order (Terminal.shop POST /cart/convert).
+type CartConvertRequest struct {
+	BirthDate      string `json:"birth_date,omitempty"`
+	PrivacyConsent bool   `json:"privacy_consent"`
+	SuccessURL     string `json:"success_url,omitempty"`
+	CancelURL      string `json:"cancel_url,omitempty"`
+	City           string `json:"city,omitempty"`
+	Neighborhood   string `json:"neighborhood,omitempty"`
+	AddressLine1   string `json:"address_line1,omitempty"`
+	Phone          string `json:"phone,omitempty"`
+	LegalID        string `json:"legal_id,omitempty"`
+	FullName       string `json:"full_name,omitempty"`
+}
+
+// ConvertCart posts the persisted cart; delivery comes from cart address, overrides, or profile.
+func (c *Client) ConvertCart(ctx context.Context, idempotencyKey string, in CartConvertRequest, currency string) (*CheckoutResult, error) {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		idempotencyKey = randomHex(16)
+	}
+	if strings.TrimSpace(currency) == "" {
+		currency = "COP"
+	}
+	if in.SuccessURL == "" {
+		in.SuccessURL = "https://sip-happens.local/success"
+	}
+	if in.CancelURL == "" {
+		in.CancelURL = "https://sip-happens.local/cancel"
+	}
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	u := c.baseURL + "/cart/convert?currency=" + url.QueryEscape(currency)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerIdempotencyKey, idempotencyKey)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Order  OrderView           `json:"order"`
+		Stripe *StripeCheckoutView `json:"stripe"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &CheckoutResult{Order: out.Order, Stripe: out.Stripe}, nil
+}
+
 type CustomerView struct {
 	ID           string `json:"id"`
 	Email        string `json:"email"`

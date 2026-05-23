@@ -56,6 +56,9 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 			"order_id": string(in.OrderID),
 		},
 	}
+	if strings.TrimSpace(in.StripeCustomerID) != "" {
+		params.Customer = stripe.String(strings.TrimSpace(in.StripeCustomerID))
+	}
 
 	if in.ShippingMinorUnits > 0 && in.SubtotalMinorUnits > 0 {
 		params.LineItems = []*stripe.CheckoutSessionLineItemParams{
