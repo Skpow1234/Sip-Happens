@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
 )
@@ -20,10 +21,12 @@ type ItemView struct {
 
 // View is the public GET/PUT /cart payload (Terminal.shop-style cart summary).
 type View struct {
-	Currency             string     `json:"currency"`
-	Items                []ItemView `json:"items"`
-	SubtotalMinorUnits   int64      `json:"subtotal_minor_units"`
-	ItemCount            int        `json:"item_count"`
+	Currency           string               `json:"currency"`
+	Items              []ItemView           `json:"items"`
+	SubtotalMinorUnits int64                `json:"subtotal_minor_units"`
+	ItemCount          int                  `json:"item_count"`
+	AddressID          string               `json:"address_id,omitempty"`
+	Address            *addresses.AddressView `json:"address,omitempty"`
 }
 
 // AvailableQtyFunc returns sellable quantity for a product.

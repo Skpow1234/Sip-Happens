@@ -171,6 +171,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/payment-methods", s.requireSigned(http.HandlerFunc(s.handlePaymentMethods)))
 	mux.Handle("/payment-methods/", s.requireSigned(http.HandlerFunc(s.handlePaymentMethodByID)))
 	mux.Handle("/cart/items/", s.requireSigned(http.HandlerFunc(s.handleCartItemByID)))
+	mux.Handle("/cart/address", s.requireSigned(http.HandlerFunc(s.handleCartAddress)))
 	mux.Handle("/cart", s.requireSigned(http.HandlerFunc(s.handleCart)))
 	mux.Handle("/shipping/estimate", s.requireSigned(http.HandlerFunc(s.handleShippingEstimate)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))

@@ -341,10 +341,12 @@ type CartLine struct {
 
 // CartView is the core-api GET/PUT /cart response body.
 type CartView struct {
-	Currency           string `json:"currency"`
-	SubtotalMinorUnits int64  `json:"subtotal_minor_units"`
-	ItemCount          int    `json:"item_count"`
+	Currency           string       `json:"currency"`
+	SubtotalMinorUnits int64        `json:"subtotal_minor_units"`
+	ItemCount          int          `json:"item_count"`
 	Items              []CartItemView `json:"items"`
+	AddressID          string       `json:"address_id,omitempty"`
+	Address            *AddressView `json:"address,omitempty"`
 }
 
 // CartItemView is one line in cart with nested product and price.
@@ -750,6 +752,39 @@ func (c *Client) PutCartItem(ctx context.Context, productID string, qty int, cur
 		return nil, err
 	}
 	u := c.baseURL + "/cart/items/" + url.PathEscape(productID) + "?currency=" + url.QueryEscape(currency)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Cart CartView `json:"cart"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Cart, nil
+}
+
+// PutCartAddress sets or clears the saved delivery address on the cart.
+func (c *Client) PutCartAddress(ctx context.Context, addressID string, currency string) (*CartView, error) {
+	if strings.TrimSpace(currency) == "" {
+		currency = "COP"
+	}
+	payload, err := json.Marshal(map[string]string{"address_id": addressID})
+	if err != nil {
+		return nil, err
+	}
+	u := c.baseURL + "/cart/address?currency=" + url.QueryEscape(currency)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err

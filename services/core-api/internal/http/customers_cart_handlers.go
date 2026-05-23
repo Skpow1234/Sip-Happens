@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/cart"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
@@ -123,7 +124,7 @@ func (s *Server) handleCartGet(w http.ResponseWriter, r *http.Request, customerI
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
-	view, err := s.buildCartView(r, stored)
+	view, err := s.buildCartView(r, customerID, stored)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
@@ -203,7 +204,7 @@ func (s *Server) saveCartAndWrite(w http.ResponseWriter, r *http.Request, custom
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return err
 	}
-	view, err := s.buildCartView(r, stored)
+	view, err := s.buildCartView(r, customerID, stored)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return err
@@ -212,14 +213,40 @@ func (s *Server) saveCartAndWrite(w http.ResponseWriter, r *http.Request, custom
 	return nil
 }
 
-func (s *Server) buildCartView(r *http.Request, stored []customers.CartLine) (cart.View, error) {
+func (s *Server) buildCartView(r *http.Request, customerID domain.CustomerID, stored []customers.CartLine) (cart.View, error) {
 	if s.Catalog == nil || s.DB == nil {
-		return cart.View{Currency: cartCurrencyFromRequest(r), Items: []cart.ItemView{}}, nil
+		view := cart.View{Currency: cartCurrencyFromRequest(r), Items: []cart.ItemView{}}
+		return s.attachCartAddress(r, customerID, view)
 	}
 	avail := func(ctx context.Context, productID domain.ProductID) int {
 		return s.availableQty(ctx, productID)
 	}
-	return cart.BuildView(r.Context(), s.Catalog, s.DB, avail, cartCurrencyFromRequest(r), stored)
+	view, err := cart.BuildView(r.Context(), s.Catalog, s.DB, avail, cartCurrencyFromRequest(r), stored)
+	if err != nil {
+		return view, err
+	}
+	return s.attachCartAddress(r, customerID, view)
+}
+
+func (s *Server) attachCartAddress(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {
+	if s.Customers == nil {
+		return view, nil
+	}
+	addrID, err := s.Customers.LoadCartAddressID(r.Context(), customerID)
+	if err != nil || addrID == "" || s.Addresses == nil || s.DB == nil {
+		return view, err
+	}
+	a, err := addresses.ResolveAddress(r.Context(), s.Addresses, s.DB, customerID, string(addrID))
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return view, nil
+		}
+		return view, err
+	}
+	av := addresses.AddressViewFromDomain(*a)
+	view.AddressID = av.ID
+	view.Address = &av
+	return view, nil
 }
 
 func cartCurrencyFromRequest(r *http.Request) string {

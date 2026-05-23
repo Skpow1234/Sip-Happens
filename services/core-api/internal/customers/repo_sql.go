@@ -155,6 +155,37 @@ set items_json = excluded.items_json, updated_at = now()
 	return err
 }
 
+func (r *SQLRepository) LoadCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID) (domain.AddressID, error) {
+	row := q.QueryRowContext(ctx, `
+select address_id from customer_carts where customer_id=$1
+`, string(customerID))
+	var addr sql.NullString
+	if err := row.Scan(&addr); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+	if !addr.Valid || strings.TrimSpace(addr.String) == "" {
+		return "", nil
+	}
+	return domain.AddressID(strings.TrimSpace(addr.String)), nil
+}
+
+func (r *SQLRepository) SetCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID, addressID domain.AddressID) error {
+	var addr any
+	if strings.TrimSpace(string(addressID)) != "" {
+		addr = string(addressID)
+	}
+	_, err := q.ExecContext(ctx, `
+insert into customer_carts (customer_id, items_json, address_id, updated_at)
+values ($1, '[]'::jsonb, $2, now())
+on conflict (customer_id) do update
+set address_id = excluded.address_id, updated_at = now()
+`, string(customerID), addr)
+	return err
+}
+
 func (r *SQLRepository) RecordConsent(ctx context.Context, q Querier, customerID domain.CustomerID, purpose string) error {
 	_, err := q.ExecContext(ctx, `
 insert into customer_consents (customer_id, purpose, granted_at, revoked_at)

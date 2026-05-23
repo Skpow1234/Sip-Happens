@@ -96,6 +96,20 @@ func (s *service) LoadCart(ctx context.Context, customerID domain.CustomerID) ([
 	return s.repo.LoadCart(ctx, s.db, customerID)
 }
 
+func (s *service) LoadCartAddressID(ctx context.Context, customerID domain.CustomerID) (domain.AddressID, error) {
+	if s.db == nil {
+		return "", nil
+	}
+	return s.repo.LoadCartAddressID(ctx, s.db, customerID)
+}
+
+func (s *service) SetCartAddressID(ctx context.Context, customerID domain.CustomerID, addressID domain.AddressID) error {
+	if s.db == nil {
+		return nil
+	}
+	return s.repo.SetCartAddressID(ctx, s.db, customerID, addressID)
+}
+
 func (s *service) SaveCart(ctx context.Context, customerID domain.CustomerID, items []CartLine) error {
 	if s.db == nil {
 		return nil
