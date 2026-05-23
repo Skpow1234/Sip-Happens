@@ -186,6 +186,37 @@ set address_id = excluded.address_id, updated_at = now()
 	return err
 }
 
+func (r *SQLRepository) LoadCartPaymentMethodID(ctx context.Context, q Querier, customerID domain.CustomerID) (string, error) {
+	row := q.QueryRowContext(ctx, `
+select payment_method_id from customer_carts where customer_id=$1
+`, string(customerID))
+	var pm sql.NullString
+	if err := row.Scan(&pm); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+	if !pm.Valid || strings.TrimSpace(pm.String) == "" {
+		return "", nil
+	}
+	return strings.TrimSpace(pm.String), nil
+}
+
+func (r *SQLRepository) SetCartPaymentMethodID(ctx context.Context, q Querier, customerID domain.CustomerID, paymentMethodID string) error {
+	var pm any
+	if ref := strings.TrimSpace(paymentMethodID); ref != "" {
+		pm = ref
+	}
+	_, err := q.ExecContext(ctx, `
+insert into customer_carts (customer_id, items_json, payment_method_id, updated_at)
+values ($1, '[]'::jsonb, $2, now())
+on conflict (customer_id) do update
+set payment_method_id = excluded.payment_method_id, updated_at = now()
+`, string(customerID), pm)
+	return err
+}
+
 func (r *SQLRepository) RecordConsent(ctx context.Context, q Querier, customerID domain.CustomerID, purpose string) error {
 	_, err := q.ExecContext(ctx, `
 insert into customer_consents (customer_id, purpose, granted_at, revoked_at)

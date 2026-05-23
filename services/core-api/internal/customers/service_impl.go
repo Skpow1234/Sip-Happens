@@ -110,6 +110,20 @@ func (s *service) SetCartAddressID(ctx context.Context, customerID domain.Custom
 	return s.repo.SetCartAddressID(ctx, s.db, customerID, addressID)
 }
 
+func (s *service) LoadCartPaymentMethodID(ctx context.Context, customerID domain.CustomerID) (string, error) {
+	if s.db == nil {
+		return "", nil
+	}
+	return s.repo.LoadCartPaymentMethodID(ctx, s.db, customerID)
+}
+
+func (s *service) SetCartPaymentMethodID(ctx context.Context, customerID domain.CustomerID, paymentMethodID string) error {
+	if s.db == nil {
+		return nil
+	}
+	return s.repo.SetCartPaymentMethodID(ctx, s.db, customerID, paymentMethodID)
+}
+
 func (s *service) SaveCart(ctx context.Context, customerID domain.CustomerID, items []CartLine) error {
 	if s.db == nil {
 		return nil

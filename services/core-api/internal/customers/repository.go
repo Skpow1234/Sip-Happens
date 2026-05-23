@@ -19,6 +19,8 @@ type Repository interface {
 	SaveCart(ctx context.Context, q Querier, customerID domain.CustomerID, itemsJSON []byte) error
 	LoadCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID) (domain.AddressID, error)
 	SetCartAddressID(ctx context.Context, q Querier, customerID domain.CustomerID, addressID domain.AddressID) error
+	LoadCartPaymentMethodID(ctx context.Context, q Querier, customerID domain.CustomerID) (string, error)
+	SetCartPaymentMethodID(ctx context.Context, q Querier, customerID domain.CustomerID, paymentMethodID string) error
 	RecordConsent(ctx context.Context, q Querier, customerID domain.CustomerID, purpose string) error
 	InsertAgeVerification(ctx context.Context, q Querier, id string, customerID domain.CustomerID, orderID domain.OrderID, birthDate time.Time, affirmedAt time.Time, method string) error
 

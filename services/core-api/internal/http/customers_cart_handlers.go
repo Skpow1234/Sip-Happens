@@ -12,6 +12,7 @@ import (
 	"sip-happens/services/core-api/internal/cart"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
+	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 )
 
 var errCartLineInvalid = errors.New("invalid cart line")
@@ -216,7 +217,7 @@ func (s *Server) saveCartAndWrite(w http.ResponseWriter, r *http.Request, custom
 func (s *Server) buildCartView(r *http.Request, customerID domain.CustomerID, stored []customers.CartLine) (cart.View, error) {
 	if s.Catalog == nil || s.DB == nil {
 		view := cart.View{Currency: cartCurrencyFromRequest(r), Items: []cart.ItemView{}}
-		return s.attachCartAddress(r, customerID, view)
+		return s.enrichCartView(r, customerID, view)
 	}
 	avail := func(ctx context.Context, productID domain.ProductID) int {
 		return s.availableQty(ctx, productID)
@@ -225,7 +226,15 @@ func (s *Server) buildCartView(r *http.Request, customerID domain.CustomerID, st
 	if err != nil {
 		return view, err
 	}
-	return s.attachCartAddress(r, customerID, view)
+	return s.enrichCartView(r, customerID, view)
+}
+
+func (s *Server) enrichCartView(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {
+	view, err := s.attachCartAddress(r, customerID, view)
+	if err != nil {
+		return view, err
+	}
+	return s.attachCartPaymentMethod(r, customerID, view)
 }
 
 func (s *Server) attachCartAddress(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {
@@ -246,6 +255,39 @@ func (s *Server) attachCartAddress(r *http.Request, customerID domain.CustomerID
 	av := addresses.AddressViewFromDomain(*a)
 	view.AddressID = av.ID
 	view.Address = &av
+	return view, nil
+}
+
+func (s *Server) attachCartPaymentMethod(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {
+	if s.Customers == nil {
+		return view, nil
+	}
+	pmID, err := s.Customers.LoadCartPaymentMethodID(r.Context(), customerID)
+	if err != nil || pmID == "" {
+		return view, err
+	}
+	view.PaymentMethodID = pmID
+	if s.Stripe == nil {
+		return view, nil
+	}
+	stripeCustID, err := s.Customers.StripeCustomerID(r.Context(), customerID)
+	if err != nil && err != domain.ErrNotFound {
+		return view, err
+	}
+	if stripeCustID == "" {
+		return view, nil
+	}
+	card, err := s.Stripe.GetPaymentMethod(r.Context(), stripepayments.GetPaymentMethodInput{
+		StripeCustomerID: stripeCustID,
+		PaymentMethodID:  pmID,
+	})
+	if err != nil {
+		if errors.Is(err, stripepayments.ErrPaymentMethodNotFound) || errors.Is(err, stripepayments.ErrPaymentMethodNotOwned) {
+			return view, nil
+		}
+		return view, err
+	}
+	view.PaymentMethod = card
 	return view, nil
 }
 

@@ -347,6 +347,19 @@ type CartView struct {
 	Items              []CartItemView `json:"items"`
 	AddressID          string       `json:"address_id,omitempty"`
 	Address            *AddressView `json:"address,omitempty"`
+	PaymentMethodID    string       `json:"payment_method_id,omitempty"`
+	PaymentMethod      *PaymentMethodCardView `json:"payment_method,omitempty"`
+}
+
+// PaymentMethodCardView is safe saved-card metadata from core-api (no PAN).
+type PaymentMethodCardView struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Brand     string `json:"brand,omitempty"`
+	Last4     string `json:"last4,omitempty"`
+	ExpMonth  int64  `json:"exp_month,omitempty"`
+	ExpYear   int64  `json:"exp_year,omitempty"`
+	IsDefault bool   `json:"is_default"`
 }
 
 // CartItemView is one line in cart with nested product and price.
@@ -785,6 +798,39 @@ func (c *Client) PutCartAddress(ctx context.Context, addressID string, currency 
 		return nil, err
 	}
 	u := c.baseURL + "/cart/address?currency=" + url.QueryEscape(currency)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Cart CartView `json:"cart"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Cart, nil
+}
+
+// PutCartPaymentMethod sets or clears the saved Stripe payment method on the cart.
+func (c *Client) PutCartPaymentMethod(ctx context.Context, paymentMethodID string, currency string) (*CartView, error) {
+	if strings.TrimSpace(currency) == "" {
+		currency = "COP"
+	}
+	payload, err := json.Marshal(map[string]string{"payment_method_id": paymentMethodID})
+	if err != nil {
+		return nil, err
+	}
+	u := c.baseURL + "/cart/payment-method?currency=" + url.QueryEscape(currency)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err

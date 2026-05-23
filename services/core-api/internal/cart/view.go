@@ -8,6 +8,7 @@ import (
 	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/catalog"
 	"sip-happens/services/core-api/internal/customers"
+	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 )
 
 // ItemView is one cart line with current catalog product/price snapshot.
@@ -27,6 +28,8 @@ type View struct {
 	ItemCount          int                  `json:"item_count"`
 	AddressID          string               `json:"address_id,omitempty"`
 	Address            *addresses.AddressView `json:"address,omitempty"`
+	PaymentMethodID    string               `json:"payment_method_id,omitempty"`
+	PaymentMethod      *stripepayments.PaymentMethodCard `json:"payment_method,omitempty"`
 }
 
 // AvailableQtyFunc returns sellable quantity for a product.
