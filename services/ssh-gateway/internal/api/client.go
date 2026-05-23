@@ -123,15 +123,16 @@ type CheckoutRequest struct {
 }
 
 type OrderView struct {
-	ID                 string     `json:"ID"`
-	DisplayRef         string     `json:"DisplayRef"`
-	Status             string     `json:"Status"`
-	SubtotalMinorUnits int64      `json:"SubtotalMinorUnits"`
-	ShippingMinorUnits int64      `json:"ShippingMinorUnits"`
-	TotalMinorUnits    int64      `json:"TotalMinorUnits"`
-	Currency           string     `json:"Currency"`
-	ExpiresAt          *time.Time `json:"ExpiresAt"`
-	CreatedAt          time.Time  `json:"CreatedAt"`
+	ID                 string     `json:"id"`
+	DisplayRef         string     `json:"display_ref"`
+	Status             string     `json:"status"`
+	SubtotalMinorUnits int64      `json:"subtotal_minor_units"`
+	ShippingMinorUnits int64      `json:"shipping_minor_units"`
+	TotalMinorUnits    int64      `json:"total_minor_units"`
+	Currency           string     `json:"currency"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at,omitempty"`
 }
 
 type StripeCheckoutView struct {
@@ -146,9 +147,9 @@ type CheckoutResult struct {
 }
 
 type ShipmentView struct {
-	Status       string `json:"Status"`
-	Carrier      string `json:"Carrier"`
-	TrackingCode string `json:"TrackingCode"`
+	Status       string `json:"status"`
+	Carrier      string `json:"carrier,omitempty"`
+	TrackingCode string `json:"tracking_code,omitempty"`
 }
 
 type OrderResult struct {
@@ -1019,11 +1020,31 @@ func (c *Client) GetShippingEstimate(ctx context.Context, city, currency string)
 	return &out, nil
 }
 
+// OrdersPage is a paginated GET /orders response.
+type OrdersPage struct {
+	Orders  []OrderView
+	Limit   int
+	Offset  int
+	HasMore bool
+}
+
 func (c *Client) ListOrders(ctx context.Context, limit int) ([]OrderView, error) {
+	page, err := c.ListOrdersPage(ctx, limit, 0)
+	if err != nil {
+		return nil, err
+	}
+	return page.Orders, nil
+}
+
+func (c *Client) ListOrdersPage(ctx context.Context, limit, offset int) (*OrdersPage, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/orders?limit=%d", c.baseURL, limit), nil)
+	if offset < 0 {
+		offset = 0
+	}
+	u := fmt.Sprintf("%s/orders?limit=%d&offset=%d", c.baseURL, limit, offset)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1037,12 +1058,20 @@ func (c *Client) ListOrders(ctx context.Context, limit int) ([]OrderView, error)
 		return nil, parseAPIError(resp.StatusCode, body)
 	}
 	var out struct {
-		Orders []OrderView `json:"orders"`
+		Orders  []OrderView `json:"orders"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		HasMore bool        `json:"has_more"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, err
 	}
-	return out.Orders, nil
+	return &OrdersPage{
+		Orders:  out.Orders,
+		Limit:   out.Limit,
+		Offset:  out.Offset,
+		HasMore: out.HasMore,
+	}, nil
 }
 
 func (c *Client) GetOrder(ctx context.Context, orderID string) (*OrderResult, error) {

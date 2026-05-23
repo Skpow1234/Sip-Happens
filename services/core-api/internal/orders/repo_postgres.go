@@ -51,6 +51,42 @@ where id = $1
 	return &o, nil
 }
 
+func (r *SQLRepository) GetForCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, ref string) (*domain.Order, error) {
+	ref = NormalizeOrderRef(ref)
+	if ref == "" {
+		return nil, domain.ErrNotFound
+	}
+	row := q.QueryRowContext(ctx, `
+select id, display_ref, status, customer_id,
+       subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
+       city, neighborhood, address_line1, phone, legal_id, full_name,
+       stripe_checkout_session_id, stripe_payment_intent_id,
+       expires_at, created_at, updated_at
+from orders
+where customer_id = $1 and (id = $2 or display_ref = $2)
+`, string(customerID), ref)
+
+	var o domain.Order
+	var expiresAt sql.NullTime
+	if err := row.Scan(
+		&o.ID, &o.DisplayRef, &o.Status, &o.CustomerID,
+		&o.SubtotalMinorUnits, &o.ShippingMinorUnits, &o.TotalMinorUnits, &o.Currency,
+		&o.City, &o.Neighborhood, &o.AddressLine1, &o.Phone, &o.LegalID, &o.FullName,
+		&o.StripeCheckoutSessionID, &o.StripePaymentIntentID,
+		&expiresAt, &o.CreatedAt, &o.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	if expiresAt.Valid {
+		t := expiresAt.Time
+		o.ExpiresAt = &t
+	}
+	return &o, nil
+}
+
 func (r *SQLRepository) GetItems(ctx context.Context, q Querier, id domain.OrderID) ([]domain.OrderItem, error) {
 	rows, err := q.QueryContext(ctx, `
 select order_id, product_id, sku, name, qty,
@@ -200,12 +236,15 @@ limit $2
 	return out, rows.Err()
 }
 
-func (r *SQLRepository) ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit int) ([]domain.Order, error) {
+func (r *SQLRepository) ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit, offset int) ([]domain.Order, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	rows, err := q.QueryContext(ctx, `
 select id, display_ref, status, customer_id,
@@ -216,8 +255,8 @@ select id, display_ref, status, customer_id,
 from orders
 where customer_id = $1
 order by created_at desc
-limit $2
-`, string(customerID), limit)
+limit $2 offset $3
+`, string(customerID), limit, offset)
 	if err != nil {
 		return nil, err
 	}

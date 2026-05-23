@@ -55,11 +55,45 @@ func (s *service) GetOrder(ctx context.Context, id domain.OrderID) (*domain.Orde
 	return o, items, nil
 }
 
-func (s *service) ListOrdersByCustomer(ctx context.Context, customerID domain.CustomerID, limit int) ([]domain.Order, error) {
+func (s *service) GetOrderForCustomer(ctx context.Context, customerID domain.CustomerID, ref string) (*domain.Order, []domain.OrderItem, error) {
 	if customerID == "" {
-		return nil, domain.ErrInvalidInput
+		return nil, nil, domain.ErrInvalidInput
 	}
-	return s.orders.ListByCustomer(ctx, s.db.SQL, customerID, limit)
+	o, err := s.orders.GetForCustomer(ctx, s.db.SQL, customerID, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	items, err := s.orders.GetItems(ctx, s.db.SQL, o.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return o, items, nil
+}
+
+func (s *service) ListOrdersByCustomer(ctx context.Context, customerID domain.CustomerID, limit, offset int) (CustomerOrdersPage, error) {
+	if customerID == "" {
+		return CustomerOrdersPage{}, domain.ErrInvalidInput
+	}
+	if limit <= 0 {
+		return CustomerOrdersPage{}, domain.ErrInvalidInput
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	fetch := limit + 1
+	list, err := s.orders.ListByCustomer(ctx, s.db.SQL, customerID, fetch, offset)
+	if err != nil {
+		return CustomerOrdersPage{}, err
+	}
+	page := CustomerOrdersPage{Orders: list}
+	if len(list) > limit {
+		page.HasMore = true
+		page.Orders = list[:limit]
+	}
+	return page, nil
 }
 
 func (s *service) CreatePendingOrder(ctx context.Context, in CreatePendingOrderInput) (*domain.Order, []domain.OrderItem, error) {

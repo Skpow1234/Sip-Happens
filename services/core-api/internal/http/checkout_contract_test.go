@@ -112,8 +112,9 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 
 	var out struct {
 		Order struct {
-			ID     string `json:"ID"`
-			Status string `json:"Status"`
+			ID         string `json:"id"`
+			DisplayRef string `json:"display_ref"`
+			Status     string `json:"status"`
 		} `json:"order"`
 		Stripe struct {
 			URL string `json:"URL"`
@@ -122,8 +123,8 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, reserved=0
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.Order.ID == "" {
-		t.Fatal("expected order.ID")
+	if out.Order.ID == "" || out.Order.DisplayRef == "" {
+		t.Fatal("expected order id and display_ref")
 	}
 	if out.Order.Status != "PENDING_PAYMENT" {
 		t.Fatalf("expected PENDING_PAYMENT, got %q", out.Order.Status)

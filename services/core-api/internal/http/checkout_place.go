@@ -11,7 +11,7 @@ import (
 	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/customers"
-	"sip-happens/services/core-api/internal/orders"
+	orderpkg "sip-happens/services/core-api/internal/orders"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 )
 
@@ -69,7 +69,7 @@ type placeOrderParams struct {
 	PrivacyConsent       bool
 	SuccessURL           string
 	CancelURL            string
-	Items                []orders.CreatePendingOrderItem
+	Items                []orderpkg.CreatePendingOrderItem
 	AgeVerifyMethod      string
 	ClearCartItems       bool
 	ClearCartSelections  bool
@@ -107,9 +107,9 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]orders.CreatePendingOrderItem, 0, len(req.Items))
+	items := make([]orderpkg.CreatePendingOrderItem, 0, len(req.Items))
 	for _, it := range req.Items {
-		items = append(items, orders.CreatePendingOrderItem{
+		items = append(items, orderpkg.CreatePendingOrderItem{
 			ProductID: domain.ProductID(it.ProductID),
 			Qty:       it.Qty,
 		})
@@ -195,7 +195,7 @@ func (s *Server) placeOrderAndRespond(w http.ResponseWriter, r *http.Request, in
 	}
 	_ = s.Customers.RecordConsent(r.Context(), in.CustomerID, "privacy_policy")
 
-	orderIn := orders.CreatePendingOrderInput{
+	orderIn := orderpkg.CreatePendingOrderInput{
 		CustomerID:         in.CustomerID,
 		Currency:           in.Currency,
 		City:               in.Delivery.City,
@@ -326,10 +326,14 @@ func (s *Server) placeOrderAndRespond(w http.ResponseWriter, r *http.Request, in
 		_ = s.Customers.SaveCart(r.Context(), in.CustomerID, nil)
 	}
 
+	itemViews := make([]orderpkg.OrderItemView, 0, len(items))
+	for _, it := range items {
+		itemViews = append(itemViews, orderpkg.OrderItemViewFromDomain(it))
+	}
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"order":  o,
-		"items":  items,
+		"order":  orderpkg.OrderDetailViewFromDomain(*o),
+		"items":  itemViews,
 		"stripe": stripeOut,
 	})
 }

@@ -51,7 +51,7 @@ func TestCheckout_Signed(t *testing.T) {
 			t.Fatal("missing signature")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"order": map[string]any{"ID": "ord_1", "Status": "PENDING_PAYMENT"},
+			"order": map[string]any{"id": "ord_1", "display_ref": "SH-TEST01", "status": "PENDING_PAYMENT"},
 			"stripe": map[string]any{
 				"CheckoutSessionID": "cs_test",
 				"PaymentIntentID":   "pi_test",

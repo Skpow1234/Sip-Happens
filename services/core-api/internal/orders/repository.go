@@ -11,6 +11,7 @@ import (
 // Repository persists order state. All methods must be safe to call inside a transaction.
 type Repository interface {
 	Get(ctx context.Context, q Querier, id domain.OrderID) (*domain.Order, error)
+	GetForCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, ref string) (*domain.Order, error)
 	GetItems(ctx context.Context, q Querier, id domain.OrderID) ([]domain.OrderItem, error)
 
 	Insert(ctx context.Context, tx *sql.Tx, order domain.Order, items []domain.OrderItem) error
@@ -22,7 +23,13 @@ type Repository interface {
 
 	ListExpiredPending(ctx context.Context, q Querier, now time.Time, limit int) ([]domain.OrderID, error)
 
-	ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit int) ([]domain.Order, error)
+	ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit, offset int) ([]domain.Order, error)
+}
+
+// CustomerOrdersPage is a paginated customer order list.
+type CustomerOrdersPage struct {
+	Orders  []domain.Order
+	HasMore bool
 }
 
 // Querier is implemented by *sql.DB and *sql.Tx.
