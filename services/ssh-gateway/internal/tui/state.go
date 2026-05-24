@@ -25,8 +25,27 @@ const (
 	screenHelp
 	screenOrderComplete
 	screenAccount
+	screenSubscriptionConfirm
+	screenSubscriptionStatus
 	screenError
 )
+
+type paymentKind int
+
+const (
+	paymentKindOrder paymentKind = iota
+	paymentKindSubscription
+)
+
+type subscriptionDraft struct {
+	productID   string
+	productName string
+	currency    string
+	unitAmount  int64
+	qty         int
+	interval    string // week | month
+	addressID   string
+}
 
 const catalogPageSize = 15
 
@@ -131,6 +150,13 @@ type AppState struct {
 	savedAddresses    []api.AddressView
 	addressCursor     int
 	checkoutPickAddress bool
+
+	subscriptions          []api.SubscriptionView
+	subscriptionCursor     int
+	subDraft               subscriptionDraft
+	lastSubscriptionID     string
+	lastSubscriptionStatus string
+	paymentKind            paymentKind
 }
 
 func (s *AppState) rememberOrderID(id string) {

@@ -38,11 +38,11 @@ func (m *Model) activeTab() shellTab {
 	switch m.screen {
 	case screenCart, screenCheckout, screenConfirm:
 		return tabCart
-	case screenAccount, screenOrderStatus, screenHelp:
+	case screenAccount, screenOrderStatus, screenSubscriptionStatus, screenHelp:
 		if m.screen == screenHelp && m.helpFromAccount {
 			return tabAccount
 		}
-		if m.screen == screenAccount || m.screen == screenOrderStatus {
+		if m.screen == screenAccount || m.screen == screenOrderStatus || m.screen == screenSubscriptionStatus {
 			return tabAccount
 		}
 		return tabShop
@@ -147,6 +147,7 @@ func (m *Model) maybeLoadCatalogDetailCmd() tea.Cmd {
 // accountSection identifiers
 const (
 	accountOrders = iota
+	accountSubscriptions
 	accountAddresses
 	accountFAQ
 	accountAbout

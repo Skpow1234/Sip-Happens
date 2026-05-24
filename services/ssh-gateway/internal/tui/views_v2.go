@@ -96,6 +96,7 @@ func (m Model) accountMenuPane() string {
 		label string
 	}{
 		{accountOrders, L.AccountOrders},
+		{accountSubscriptions, L.AccountSubscriptions},
 		{accountAddresses, L.AccountAddresses},
 		{accountFAQ, L.AccountFAQ},
 		{accountAbout, L.AccountAbout},
@@ -115,6 +116,8 @@ func (m Model) accountContentPane() string {
 		return fmt.Sprintf(L.AccountAboutBody, m.privacyPolicyURL, m.consumerRightsURL) + "\n"
 	case accountAddresses:
 		return m.accountAddressesPane()
+	case accountSubscriptions:
+		return m.accountSubscriptionsPane()
 	default:
 		return m.accountOrdersPane()
 	}
@@ -166,6 +169,65 @@ func (m Model) accountOrdersPane() string {
 	}
 	b.WriteString("\n" + L.HistoryPaneHelp + "\n")
 	return b.String()
+}
+
+func (m Model) accountSubscriptionsPane() string {
+	if m.busy && len(m.state.subscriptions) == 0 {
+		return L.Loading + "\n"
+	}
+	if len(m.state.subscriptions) == 0 {
+		return L.AccountSubscriptionsEmpty + "\n"
+	}
+	var b strings.Builder
+	for i, sub := range m.state.subscriptions {
+		line := formatSubscriptionLine(sub)
+		b.WriteString(selectedLine("", line, i == m.state.subscriptionCursor))
+	}
+	b.WriteString("\n" + L.AccountSubscriptionsHelp + "\n")
+	return b.String()
+}
+
+func (m Model) viewSubscriptionConfirm() string {
+	d := m.state.subDraft
+	interval := formatSubscriptionInterval(d.interval)
+	price := formatMoney(d.currency, d.unitAmount)
+	body := styleWordmark().Render(L.SubscriptionConfirmTitle) + "\n\n"
+	body += L.SubscriptionConfirmProduct(d.productName, price, interval, d.qty) + "\n\n"
+	if label := subscriptionAddressLabel(m.state.savedAddresses, d.addressID); label != "" {
+		body += L.SubscriptionConfirmAddress(label) + "\n"
+	} else if len(m.state.savedAddresses) > 0 {
+		body += styleMuted().Render(L.SubscriptionConfirmNoAddress) + "\n"
+	} else {
+		body += styleMuted().Render(L.SubscriptionConfirmNoAddress) + "\n"
+	}
+	opts := m.layoutDefaults(tabShop, L.SubscriptionConfirmFooter)
+	return m.composeLayout(body, opts)
+}
+
+func (m Model) viewSubscriptionStatus() string {
+	subID := strings.TrimSpace(m.state.lastSubscriptionID)
+	if subID == "" {
+		return styleMuted().Render(L.Loading) + "\n"
+	}
+	var b strings.Builder
+	b.WriteString(styleWordmark().Render(L.SubscriptionStatusTitle) + "\n\n")
+	b.WriteString("ID: ")
+	b.WriteString(subID)
+	b.WriteByte('\n')
+	if st := strings.TrimSpace(m.state.lastSubscriptionStatus); st != "" {
+		b.WriteString("Estado: ")
+		b.WriteString(st)
+		b.WriteByte('\n')
+	}
+	for _, sub := range m.state.subscriptions {
+		if sub.ID == subID {
+			b.WriteString(formatSubscriptionLine(sub))
+			b.WriteByte('\n')
+			break
+		}
+	}
+	opts := m.layoutDefaults(tabAccount, L.SubscriptionStatusHelp)
+	return m.composeLayout(b.String(), opts)
 }
 
 func (m Model) viewCartV2() string {
@@ -310,14 +372,31 @@ func (m Model) viewPaymentV2() string {
 		}
 		reservation = L.PaymentReservationTTL(formatExpiryAt(m.state.orderExpiresAt, now))
 	}
-	inner := fmt.Sprintf("%s %s\n%s %s\n%s%s\n\n%s\n\n%s\n\n%s\n\n%s\n",
-		L.PaymentOrder, m.state.orderLabel(),
-		L.PaymentStatus, m.state.orderStatus,
-		expiry, reservation,
-		L.PaymentOffTerminal,
-		L.PaymentQRHint+"\n"+qr,
-		formatSelectableURL(m.state.stripeURL, m.width),
-		L.PaymentCopyTip)
+	orderLabel := L.PaymentOrder
+	var inner string
+	if m.state.paymentKind == paymentKindSubscription {
+		orderLabel = L.SubscriptionPaymentOrder
+		status := m.state.lastSubscriptionStatus
+		if status == "" {
+			status = "PENDING"
+		}
+		inner = fmt.Sprintf("%s %s\n%s %s\n\n%s\n\n%s\n\n%s\n\n%s\n",
+			orderLabel, m.state.lastSubscriptionID,
+			L.PaymentStatus, status,
+			L.PaymentOffTerminal,
+			L.PaymentQRHint+"\n"+qr,
+			formatSelectableURL(m.state.stripeURL, m.width),
+			L.PaymentCopyTip)
+	} else {
+		inner = fmt.Sprintf("%s %s\n%s %s\n%s%s\n\n%s\n\n%s\n\n%s\n\n%s\n",
+			orderLabel, m.state.orderLabel(),
+			L.PaymentStatus, m.state.orderStatus,
+			expiry, reservation,
+			L.PaymentOffTerminal,
+			L.PaymentQRHint+"\n"+qr,
+			formatSelectableURL(m.state.stripeURL, m.width),
+			L.PaymentCopyTip)
+	}
 	opts := layoutOpts{
 		tab:       tabCart,
 		checkout:  &step,

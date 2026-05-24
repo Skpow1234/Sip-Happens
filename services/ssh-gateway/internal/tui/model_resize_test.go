@@ -19,7 +19,8 @@ func TestModel_WindowSize_AllScreens_ViewDoesNotPanic(t *testing.T) {
 	screens := []screen{
 		screenWelcome, screenCatalog, screenCart,
 		screenCheckout, screenConfirm, screenPayment, screenOrderStatus,
-		screenAccount, screenCatalogFilters, screenHelp, screenOrderComplete, screenError,
+		screenAccount, screenSubscriptionConfirm, screenSubscriptionStatus,
+		screenCatalogFilters, screenHelp, screenOrderComplete, screenError,
 	}
 	for _, sc := range screens {
 		for _, sz := range sizes {
@@ -51,6 +52,8 @@ func seedModelForScreen(sc screen) Model {
 	m.state.orderStatus = "PENDING_PAYMENT"
 	m.state.lastOrderID = "order-1"
 	m.state.lastOrderDisplayRef = "SH-TEST"
+	m.state.lastSubscriptionID = "sub_test"
+	m.state.lastSubscriptionStatus = "PENDING"
 	m.err = errForScreen(sc)
 	return m
 }

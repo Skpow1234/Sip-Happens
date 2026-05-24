@@ -34,4 +34,7 @@ func TestSpanishCO_AccountMenuSpanish(t *testing.T) {
 	if !strings.Contains(m.View(), "historial de pedidos") {
 		t.Fatalf("expected Spanish account menu")
 	}
+	if !strings.Contains(m.View(), "mis suscripciones") {
+		t.Fatalf("expected subscriptions in account menu")
+	}
 }

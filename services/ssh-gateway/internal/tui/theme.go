@@ -174,5 +174,6 @@ func formatFooterChunk(chunk string) string {
 
 func renderProductCTA() string {
 	return styleFooterKey().Render("←") + " " + styleMuted().Render("quitar") + "  " +
-		styleFooterKey().Render("→") + " " + styleCTA().Render("agregar")
+		styleFooterKey().Render("→") + " " + styleCTA().Render("agregar") + "  " +
+		styleFooterKey().Render("b") + " " + styleCTA().Render("suscribirse")
 }

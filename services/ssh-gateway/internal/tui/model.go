@@ -109,6 +109,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenConfirm
 			return m, nil
 		}
+		m.state.paymentKind = paymentKindOrder
 		m.state.lastOrderID = msg.result.Order.ID
 		m.state.lastOrderDisplayRef = msg.result.Order.DisplayRef
 		m.state.rememberOrderID(msg.result.Order.ID)
@@ -120,6 +121,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state.clock = time.Now()
 		m.screen = screenPayment
 		return m, tea.Batch(paymentTickCmd(), paymentPollCmd())
+
+	case subscriptionDoneMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			m.screen = screenSubscriptionConfirm
+			return m, nil
+		}
+		m.state.paymentKind = paymentKindSubscription
+		m.state.lastSubscriptionID = msg.result.Subscription.ID
+		m.state.lastSubscriptionStatus = msg.result.Subscription.Status
+		m.state.stripeURL = msg.result.Stripe.URL
+		m.state.clock = time.Now()
+		m.screen = screenPayment
+		return m, tea.Batch(paymentTickCmd(), paymentPollCmd())
+
+	case subscriptionsLoadedMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			return m, nil
+		}
+		m.state.subscriptions = msg.subscriptions
+		if m.state.subscriptionCursor >= len(m.state.subscriptions) {
+			m.state.subscriptionCursor = 0
+		}
+		return m, nil
+
+	case subscriptionLoadedMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			return m, nil
+		}
+		if msg.subscription != nil {
+			m.state.lastSubscriptionStatus = msg.subscription.Status
+			if m.screen == screenPayment && msg.subscription.Status == "ACTIVE" {
+				m.screen = screenAccount
+				m.state.accountSection = accountSubscriptions
+				m.busy = true
+				return m, m.loadSubscriptionsCmd()
+			}
+		}
+		return m, nil
+
+	case subscriptionCancelledMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			return m, nil
+		}
+		if msg.subscription != nil {
+			m.state.lastSubscriptionStatus = msg.subscription.Status
+			for i, sub := range m.state.subscriptions {
+				if sub.ID == msg.subscription.ID {
+					m.state.subscriptions[i] = *msg.subscription
+					break
+				}
+			}
+		}
+		m.setNotice(fmt.Errorf("%s", L.SubscriptionStatusCancel))
+		return m, nil
 
 	case orderLoadedMsg:
 		m.busy = false
@@ -188,6 +251,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state.savedAddresses = msg.addresses
+		if m.screen == screenSubscriptionConfirm && len(msg.addresses) > 0 {
+			m.state.addressCursor = defaultAddressIndex(msg.addresses)
+			m.state.subDraft.addressID = msg.addresses[m.state.addressCursor].ID
+		}
 		return m, nil
 
 	case cartLoadedMsg:
@@ -211,8 +278,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.screen == screenOrderStatus && m.state.lastOrderID != "" {
 			return m, m.fetchOrderCmd()
 		}
-		if m.screen == screenPayment && m.state.lastOrderID != "" {
-			return m, m.fetchOrderCmd()
+		if m.screen == screenPayment {
+			if m.state.paymentKind == paymentKindSubscription && m.state.lastSubscriptionID != "" {
+				return m, m.fetchSubscriptionCmd()
+			}
+			if m.state.lastOrderID != "" {
+				return m, m.fetchOrderCmd()
+			}
 		}
 		return m, nil
 
@@ -289,13 +361,25 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.state.orderHistoryCursor > 0 {
 					m.state.orderHistoryCursor--
 				}
+			} else if m.state.accountSection == accountSubscriptions && len(m.state.subscriptions) > 0 {
+				if m.state.subscriptionCursor > 0 {
+					m.state.subscriptionCursor--
+				}
 			} else if m.state.accountSection > accountOrders {
 				m.state.accountSection--
+				if cmd := m.accountSectionLoadCmd(); cmd != nil {
+					m.busy = true
+					return m, cmd
+				}
 			}
 		case "down", "j":
 			if m.state.accountSection == accountOrders && len(m.state.orderHistory) > 0 {
 				if m.state.orderHistoryCursor < len(m.state.orderHistory)-1 {
 					m.state.orderHistoryCursor++
+				}
+			} else if m.state.accountSection == accountSubscriptions && len(m.state.subscriptions) > 0 {
+				if m.state.subscriptionCursor < len(m.state.subscriptions)-1 {
+					m.state.subscriptionCursor++
 				}
 			} else if m.state.accountSection < accountAbout {
 				m.state.accountSection++
@@ -315,10 +399,73 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.busy = true
 				return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
 			}
+			if m.state.accountSection == accountSubscriptions && len(m.state.subscriptions) > 0 {
+				sub := m.state.subscriptions[m.state.subscriptionCursor]
+				m.state.lastSubscriptionID = sub.ID
+				m.state.lastSubscriptionStatus = sub.Status
+				m.screen = screenSubscriptionStatus
+				m.busy = true
+				return m, m.fetchSubscriptionCmd()
+			}
+		case "x":
+			if m.state.accountSection == accountSubscriptions && len(m.state.subscriptions) > 0 {
+				sub := m.state.subscriptions[m.state.subscriptionCursor]
+				if sub.Status == "CANCELLED" {
+					return m, nil
+				}
+				m.busy = true
+				return m, m.cancelSubscriptionCmd(sub.ID)
+			}
 		case "r":
 			if cmd := m.accountSectionLoadCmd(); cmd != nil {
 				m.busy = true
 				return m, cmd
+			}
+		}
+
+	case screenSubscriptionConfirm:
+		switch msg.String() {
+		case "esc":
+			m.screen = screenCatalog
+		case "w":
+			m.state.subDraft.interval = "week"
+		case "m":
+			m.state.subDraft.interval = "month"
+		case "+", "=":
+			if m.state.subDraft.qty < 99 {
+				m.state.subDraft.qty++
+			}
+		case "-", "_":
+			if m.state.subDraft.qty > 1 {
+				m.state.subDraft.qty--
+			}
+		case "up", "k":
+			if len(m.state.savedAddresses) > 0 && m.state.addressCursor > 0 {
+				m.state.addressCursor--
+				m.state.subDraft.addressID = m.state.savedAddresses[m.state.addressCursor].ID
+			}
+		case "down", "j":
+			if len(m.state.savedAddresses) > 0 && m.state.addressCursor < len(m.state.savedAddresses)-1 {
+				m.state.addressCursor++
+				m.state.subDraft.addressID = m.state.savedAddresses[m.state.addressCursor].ID
+			}
+		case "y":
+			m.busy = true
+			return m, m.submitSubscriptionCmd()
+		}
+
+	case screenSubscriptionStatus:
+		switch msg.String() {
+		case "esc":
+			m.screen = screenAccount
+			m.state.accountSection = accountSubscriptions
+		case "r":
+			m.busy = true
+			return m, m.fetchSubscriptionCmd()
+		case "x":
+			if id := strings.TrimSpace(m.state.lastSubscriptionID); id != "" {
+				m.busy = true
+				return m, m.cancelSubscriptionCmd(id)
 			}
 		}
 
@@ -371,6 +518,8 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.catalogCartDelta(1)
 		case "left", "h":
 			return m.catalogCartDelta(-1)
+		case "b":
+			return m.beginSubscriptionFlow()
 		}
 
 	case screenCatalogFilters:
@@ -663,6 +812,10 @@ func (m Model) View() string {
 			body = m.composeLayout(m.viewOrderStatus(), m.layoutDefaults(tabAccount, L.StatusHelp))
 		case screenAccount:
 			body = m.viewAccountShell()
+		case screenSubscriptionConfirm:
+			body = m.viewSubscriptionConfirm()
+		case screenSubscriptionStatus:
+			body = m.viewSubscriptionStatus()
 		case screenHelp:
 			body = m.composeLayout(m.viewHelp(), m.layoutDefaults(m.activeTab(), L.HelpBack))
 		case screenOrderComplete:
@@ -989,6 +1142,22 @@ type orderLoadedMsg struct {
 }
 type paymentTickMsg struct{ now time.Time }
 type orderHistoryLoadedMsg struct{ orders []api.OrderView }
+type subscriptionsLoadedMsg struct {
+	subscriptions []api.SubscriptionView
+	err           error
+}
+type subscriptionDoneMsg struct {
+	result *api.SubscriptionCreateResult
+	err    error
+}
+type subscriptionLoadedMsg struct {
+	subscription *api.SubscriptionView
+	err          error
+}
+type subscriptionCancelledMsg struct {
+	subscription *api.SubscriptionView
+	err          error
+}
 type checkoutBootstrapMsg struct {
 	customer  *api.CustomerView
 	addresses []api.AddressView
@@ -1269,10 +1438,102 @@ func (m Model) accountSectionLoadCmd() tea.Cmd {
 	switch m.state.accountSection {
 	case accountOrders:
 		return m.loadOrderHistoryCmd()
+	case accountSubscriptions:
+		return m.loadSubscriptionsCmd()
 	case accountAddresses:
 		return m.loadAddressesCmd()
 	default:
 		return nil
+	}
+}
+
+func (m Model) beginSubscriptionFlow() (tea.Model, tea.Cmd) {
+	d := m.state.productDetail
+	if d == nil {
+		m.showErr(fmt.Errorf("%s", L.CatalogSelectHint))
+		return m, nil
+	}
+	if d.AvailableQty <= 0 {
+		m.showErr(fmt.Errorf("%s", L.ErrOutOfStock))
+		return m, nil
+	}
+	m.state.subDraft = subscriptionDraft{
+		productID:   d.Product.ID,
+		productName: d.Product.Name,
+		currency:    d.Price.Currency,
+		unitAmount:  d.Price.AmountMinorUnits,
+		qty:         1,
+		interval:    "month",
+	}
+	m.state.addressCursor = 0
+	m.state.savedAddresses = nil
+	m.screen = screenSubscriptionConfirm
+	m.busy = true
+	return m, m.loadSubscriptionBootstrapCmd()
+}
+
+func (m Model) loadSubscriptionBootstrapCmd() tea.Cmd {
+	return func() tea.Msg {
+		addrs, err := m.api.ListAddresses(context.Background())
+		if err != nil {
+			return addressesLoadedMsg{err: err}
+		}
+		return addressesLoadedMsg{addresses: addrs}
+	}
+}
+
+func (m Model) loadSubscriptionsCmd() tea.Cmd {
+	return func() tea.Msg {
+		page, err := m.api.ListSubscriptionsPage(context.Background(), 20, 0)
+		if err != nil {
+			return subscriptionsLoadedMsg{err: err}
+		}
+		if page == nil {
+			return subscriptionsLoadedMsg{subscriptions: nil}
+		}
+		return subscriptionsLoadedMsg{subscriptions: page.Subscriptions}
+	}
+}
+
+func (m Model) submitSubscriptionCmd() tea.Cmd {
+	draft := m.state.subDraft
+	idem := m.state.idempotencyKey
+	if idem == "" {
+		idem = randomHex(16)
+	}
+	client := m.api
+	return func() tea.Msg {
+		req := api.SubscriptionCreateRequest{
+			ProductID: draft.productID,
+			Qty:       draft.qty,
+			Interval:  draft.interval,
+			Currency:  draft.currency,
+			AddressID: draft.addressID,
+		}
+		res, err := client.CreateSubscription(context.Background(), idem, req)
+		return subscriptionDoneMsg{result: res, err: err}
+	}
+}
+
+func (m Model) fetchSubscriptionCmd() tea.Cmd {
+	id := strings.TrimSpace(m.state.lastSubscriptionID)
+	return func() tea.Msg {
+		if id == "" {
+			return subscriptionLoadedMsg{err: fmt.Errorf("%s", L.ErrNoRecentOrder)}
+		}
+		sub, err := m.api.GetSubscription(context.Background(), id)
+		if err != nil {
+			return subscriptionLoadedMsg{err: err}
+		}
+		return subscriptionLoadedMsg{subscription: sub}
+	}
+}
+
+func (m Model) cancelSubscriptionCmd(id string) tea.Cmd {
+	client := m.api
+	return func() tea.Msg {
+		sub, err := client.CancelSubscription(context.Background(), id)
+		return subscriptionCancelledMsg{subscription: sub, err: err}
 	}
 }
 

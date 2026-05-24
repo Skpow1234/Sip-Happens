@@ -129,6 +129,20 @@ type Messages struct {
 	PaymentFooter         string
 	PaymentOffTerminal    string
 	AccountOrders         string
+	AccountSubscriptions  string
+	AccountSubscriptionsEmpty string
+	AccountSubscriptionsHelp  string
+	SubscriptionConfirmTitle  string
+	SubscriptionConfirmProduct func(name, price, interval string, qty int) string
+	SubscriptionConfirmAddress func(label string) string
+	SubscriptionConfirmNoAddress string
+	SubscriptionConfirmFooter    string
+	SubscriptionStatusTitle      string
+	SubscriptionStatusHelp       string
+	SubscriptionStatusCancel     string
+	SubscriptionPaymentOrder     string
+	SubscriptionIntervalWeek     string
+	SubscriptionIntervalMonth    string
 	AccountAddresses      string
 	AccountAddressesEmpty string
 	AccountAddressesHelp  string
