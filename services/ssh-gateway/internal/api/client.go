@@ -1163,3 +1163,204 @@ func (c *Client) GetOrder(ctx context.Context, orderID string) (*OrderResult, er
 	}
 	return &OrderResult{Order: out.Order, Shipment: out.Shipment}, nil
 }
+
+// SubscriptionView mirrors core-api GET /subscriptions JSON.
+type SubscriptionView struct {
+	ID                   string     `json:"id"`
+	ProductID            string     `json:"product_id"`
+	Qty                  int        `json:"qty"`
+	Currency             string     `json:"currency"`
+	Interval             string     `json:"interval"`
+	UnitAmountMinorUnits int64      `json:"unit_amount_minor_units"`
+	Status               string     `json:"status"`
+	AddressID            string     `json:"address_id,omitempty"`
+	CurrentPeriodStart   *time.Time `json:"current_period_start,omitempty"`
+	CurrentPeriodEnd     *time.Time `json:"current_period_end,omitempty"`
+	CancelledAt          *time.Time `json:"cancelled_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+}
+
+type SubscriptionsPage struct {
+	Subscriptions []SubscriptionView
+	Limit         int
+	Offset        int
+	HasMore       bool
+}
+
+type SubscriptionCreateRequest struct {
+	ProductID       string `json:"product_id"`
+	Qty             int    `json:"qty"`
+	Interval        string `json:"interval"`
+	AddressID       string `json:"address_id,omitempty"`
+	PaymentMethodID string `json:"payment_method_id,omitempty"`
+	Currency        string `json:"currency,omitempty"`
+	SuccessURL      string `json:"success_url,omitempty"`
+	CancelURL       string `json:"cancel_url,omitempty"`
+}
+
+type SubscriptionCreateResult struct {
+	Subscription SubscriptionView `json:"subscription"`
+	Stripe       struct {
+		URL               string `json:"url"`
+		CheckoutSessionID string `json:"checkout_session_id"`
+	} `json:"stripe"`
+}
+
+type SubscriptionUpdateRequest struct {
+	Qty       *int    `json:"qty,omitempty"`
+	AddressID *string `json:"address_id,omitempty"`
+}
+
+func (c *Client) ListSubscriptionsPage(ctx context.Context, limit, offset int) (*SubscriptionsPage, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	u := fmt.Sprintf("%s/subscriptions?limit=%d&offset=%d", c.baseURL, limit, offset)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Subscriptions []SubscriptionView `json:"subscriptions"`
+		Limit         int                `json:"limit"`
+		Offset        int                `json:"offset"`
+		HasMore       bool               `json:"has_more"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &SubscriptionsPage{
+		Subscriptions: out.Subscriptions,
+		Limit:         out.Limit,
+		Offset:        out.Offset,
+		HasMore:       out.HasMore,
+	}, nil
+}
+
+func (c *Client) GetSubscription(ctx context.Context, id string) (*SubscriptionView, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing subscription id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/subscriptions/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Subscription SubscriptionView `json:"subscription"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Subscription, nil
+}
+
+func (c *Client) CreateSubscription(ctx context.Context, idempotencyKey string, in SubscriptionCreateRequest) (*SubscriptionCreateResult, error) {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/subscriptions", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if idempotencyKey != "" {
+		req.Header.Set(headerIdempotencyKey, idempotencyKey)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out SubscriptionCreateResult
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) UpdateSubscription(ctx context.Context, id string, in SubscriptionUpdateRequest) (*SubscriptionView, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing subscription id")
+	}
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/subscriptions/"+id, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Subscription SubscriptionView `json:"subscription"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Subscription, nil
+}
+
+func (c *Client) CancelSubscription(ctx context.Context, id string) (*SubscriptionView, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing subscription id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/subscriptions/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		Subscription SubscriptionView `json:"subscription"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.Subscription, nil
+}

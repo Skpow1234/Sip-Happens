@@ -12,6 +12,9 @@ import (
 	stripecustomer "github.com/stripe/stripe-go/v82/customer"
 	paymentintent "github.com/stripe/stripe-go/v82/paymentintent"
 	paymentmethod "github.com/stripe/stripe-go/v82/paymentmethod"
+	stripesubscription "github.com/stripe/stripe-go/v82/subscription"
+
+	"sip-happens/pkg/domain"
 )
 
 type StripeGoClient struct {
@@ -295,5 +298,94 @@ func (c StripeGoClient) PaymentIntentStatus(ctx context.Context, paymentIntentID
 	}
 	_ = ctx
 	return string(pi.Status), nil
+}
+
+func (c StripeGoClient) CreateSubscriptionCheckout(ctx context.Context, in CreateSubscriptionCheckoutInput) (*CreateSubscriptionCheckoutOutput, error) {
+	if c.SecretKey == "" {
+		return nil, errors.New("missing stripe secret key")
+	}
+	if in.SubscriptionID == "" {
+		return nil, errors.New("missing subscription id")
+	}
+	if in.Currency == "" {
+		return nil, errors.New("missing currency")
+	}
+	if in.Qty <= 0 || in.UnitAmountMinorUnits <= 0 {
+		return nil, errors.New("invalid subscription amounts")
+	}
+	if in.SuccessURL == "" || in.CancelURL == "" {
+		return nil, errors.New("missing success/cancel url")
+	}
+	interval, err := stripeRecurringInterval(in.Interval)
+	if err != nil {
+		return nil, err
+	}
+
+	stripe.Key = c.SecretKey
+
+	params := &stripe.CheckoutSessionParams{
+		Mode:       stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		SuccessURL: stripe.String(in.SuccessURL),
+		CancelURL:  stripe.String(in.CancelURL),
+		Metadata: map[string]string{
+			"subscription_id": string(in.SubscriptionID),
+		},
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				Quantity: stripe.Int64(int64(in.Qty)),
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency: stripe.String(in.Currency),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String(in.ProductName),
+					},
+					UnitAmount: stripe.Int64(in.UnitAmountMinorUnits),
+					Recurring:  interval,
+				},
+			},
+		},
+	}
+	if strings.TrimSpace(in.StripeCustomerID) != "" {
+		params.Customer = stripe.String(strings.TrimSpace(in.StripeCustomerID))
+	}
+	params.SetIdempotencyKey(SubscriptionCheckoutIdempotencyKey(in.SubscriptionID))
+
+	s, err := checkoutsession.New(params)
+	if err != nil {
+		return nil, err
+	}
+	_ = ctx
+	return &CreateSubscriptionCheckoutOutput{
+		CheckoutSessionID: s.ID,
+		URL:               s.URL,
+	}, nil
+}
+
+func (c StripeGoClient) CancelSubscription(ctx context.Context, stripeSubscriptionID string) error {
+	if c.SecretKey == "" {
+		return errors.New("missing stripe secret key")
+	}
+	stripeSubscriptionID = strings.TrimSpace(stripeSubscriptionID)
+	if stripeSubscriptionID == "" {
+		return nil
+	}
+	stripe.Key = c.SecretKey
+	_, err := stripesubscription.Cancel(stripeSubscriptionID, nil)
+	_ = ctx
+	return err
+}
+
+func stripeRecurringInterval(in domain.SubscriptionInterval) (*stripe.CheckoutSessionLineItemPriceDataRecurringParams, error) {
+	switch in {
+	case domain.SubscriptionIntervalWeek:
+		return &stripe.CheckoutSessionLineItemPriceDataRecurringParams{
+			Interval: stripe.String(string(stripe.PriceRecurringIntervalWeek)),
+		}, nil
+	case domain.SubscriptionIntervalMonth:
+		return &stripe.CheckoutSessionLineItemPriceDataRecurringParams{
+			Interval: stripe.String(string(stripe.PriceRecurringIntervalMonth)),
+		}, nil
+	default:
+		return nil, errors.New("invalid subscription interval")
+	}
 }
 

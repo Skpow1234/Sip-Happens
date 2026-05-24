@@ -179,3 +179,31 @@ func (c MockClient) PaymentIntentStatus(ctx context.Context, paymentIntentID str
 	return "succeeded", nil
 }
 
+func (c MockClient) CreateSubscriptionCheckout(ctx context.Context, in CreateSubscriptionCheckoutInput) (*CreateSubscriptionCheckoutOutput, error) {
+	_ = ctx
+	if in.SubscriptionID == "" {
+		return nil, fmt.Errorf("missing subscription id")
+	}
+	if in.Currency == "" {
+		return nil, fmt.Errorf("missing currency")
+	}
+	if in.Qty <= 0 || in.UnitAmountMinorUnits <= 0 {
+		return nil, fmt.Errorf("invalid subscription amounts")
+	}
+	suffix, err := ids.RandomHex(8)
+	if err != nil {
+		return nil, err
+	}
+	cs := fmt.Sprintf("cs_sub_%s", suffix)
+	return &CreateSubscriptionCheckoutOutput{
+		CheckoutSessionID: cs,
+		URL:               fmt.Sprintf("https://checkout.stripe.com/subscribe/%s", cs),
+	}, nil
+}
+
+func (c MockClient) CancelSubscription(ctx context.Context, stripeSubscriptionID string) error {
+	_ = ctx
+	_ = stripeSubscriptionID
+	return nil
+}
+

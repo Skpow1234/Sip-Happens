@@ -29,6 +29,12 @@ type Service interface {
 
 	// PaymentIntentStatus returns Stripe payment intent status (e.g. "succeeded", "processing", "requires_payment_method").
 	PaymentIntentStatus(ctx context.Context, paymentIntentID string) (string, error)
+
+	// CreateSubscriptionCheckout starts hosted Checkout in subscription mode.
+	CreateSubscriptionCheckout(ctx context.Context, in CreateSubscriptionCheckoutInput) (*CreateSubscriptionCheckoutOutput, error)
+
+	// CancelSubscription cancels an active Stripe subscription at period end or immediately.
+	CancelSubscription(ctx context.Context, stripeSubscriptionID string) error
 }
 
 type CreateCheckoutInput struct {
@@ -89,5 +95,22 @@ type GetPaymentMethodInput struct {
 type DetachPaymentMethodInput struct {
 	StripeCustomerID string
 	PaymentMethodID  string
+}
+
+type CreateSubscriptionCheckoutInput struct {
+	SubscriptionID       domain.SubscriptionID
+	Currency             string
+	ProductName          string
+	Qty                  int
+	UnitAmountMinorUnits int64
+	Interval             domain.SubscriptionInterval
+	SuccessURL           string
+	CancelURL            string
+	StripeCustomerID     string
+}
+
+type CreateSubscriptionCheckoutOutput struct {
+	CheckoutSessionID string
+	URL               string
 }
 

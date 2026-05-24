@@ -10,6 +10,7 @@ import (
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/testutil"
 )
 
@@ -34,6 +35,7 @@ func testServer(tdb *testutil.TestDB, stripe stripepayments.Service) *Server {
 		AdminToken:      "test-admin",
 		Customers:       customers.NewService(tdb.DB, customers.NewSQLRepository()),
 		Addresses:       addresses.NewSQLRepository(),
+		Subscriptions:   subscriptions.NewSQLRepository(),
 		Stripe:          stripe,
 		CoreAPIHMACKeys: map[string]string{"dev": "test-secret"},
 	}
