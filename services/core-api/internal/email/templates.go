@@ -71,14 +71,26 @@ func renderSubscribeConfirm(data SubscribeConfirmData) (text, html string, err e
 	return text, html, err
 }
 
+// renderTemplate parses the named template AND the matching footer
+// partial (`templates/_footer.{html,txt}`) so every template can invoke
+// `{{template "footer" .}}` without each call site re-wiring partials.
+// The partial defines a single `footer` block; mixing extra partials in
+// the future is fine — add them to the parse list below.
 func renderTemplate(name string, data any) (string, error) {
 	raw, err := templateFS.ReadFile(name)
 	if err != nil {
 		return "", err
 	}
 	if strings.HasSuffix(name, ".html") {
+		footer, err := templateFS.ReadFile("templates/_footer.html")
+		if err != nil {
+			return "", err
+		}
 		t, err := template.New(name).Parse(string(raw))
 		if err != nil {
+			return "", err
+		}
+		if _, err := t.Parse(string(footer)); err != nil {
 			return "", err
 		}
 		var buf bytes.Buffer
@@ -87,8 +99,15 @@ func renderTemplate(name string, data any) (string, error) {
 		}
 		return buf.String(), nil
 	}
+	footer, err := templateFS.ReadFile("templates/_footer.txt")
+	if err != nil {
+		return "", err
+	}
 	t, err := texttemplate.New(name).Parse(string(raw))
 	if err != nil {
+		return "", err
+	}
+	if _, err := t.Parse(string(footer)); err != nil {
 		return "", err
 	}
 	var buf bytes.Buffer

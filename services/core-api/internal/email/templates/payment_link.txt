@@ -10,8 +10,4 @@ Completa el pago aquí:
 
 — Sip-Happens
 
----
-{{.MinorAlcoholWarning}}
-Privacidad: {{.PrivacyPolicyURL}}
-Tratamiento de datos personales: {{.DataProcessingPolicyURL}}
-Derechos del consumidor (SIC): {{.ConsumerRightsURL}}
+{{template "footer" .}}

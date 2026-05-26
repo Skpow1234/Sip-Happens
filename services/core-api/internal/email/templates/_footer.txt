@@ -1,0 +1,8 @@
+{{define "footer" -}}
+---
+{{.MinorAlcoholWarning}}
+Privacidad: {{.PrivacyPolicyURL}}
+Tratamiento de datos personales: {{.DataProcessingPolicyURL}}
+Derechos del consumidor (SIC): {{.ConsumerRightsURL}}
+Si no deseas recibir más correos comerciales, escríbenos a {{.UnsubscribeContact}}.
+{{- end}}

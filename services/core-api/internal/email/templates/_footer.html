@@ -1,0 +1,13 @@
+{{define "footer" -}}
+<hr style="border:none;border-top:1px solid #e5e5e5;margin-top:24px"/>
+<p style="font-size:0.8em;color:#666;line-height:1.5">{{.MinorAlcoholWarning}}</p>
+<p style="font-size:0.8em;color:#666;line-height:1.5">
+  <a href="{{.PrivacyPolicyURL}}">Política de privacidad</a> ·
+  <a href="{{.DataProcessingPolicyURL}}">Tratamiento de datos</a> ·
+  <a href="{{.ConsumerRightsURL}}">Derechos del consumidor (SIC)</a>
+</p>
+<p style="font-size:0.75em;color:#888">
+  Si no deseas recibir más correos comerciales, escríbenos a
+  <a href="mailto:{{.UnsubscribeContact}}">{{.UnsubscribeContact}}</a>.
+</p>
+{{- end}}

@@ -17,12 +17,6 @@
     Este enlace vence en {{.TTLHours}} horas. Si no fuiste tú, puedes ignorar este mensaje — no haremos nada con tu correo sin tu confirmación explícita.
   </p>
   <p>— Sip-Happens</p>
-  <hr style="border:none;border-top:1px solid #e5e5e5;margin-top:24px">
-  <p style="color:#888;font-size:80%">
-    {{.MinorAlcoholWarning}}<br>
-    Privacidad: <a href="{{.PrivacyPolicyURL}}">{{.PrivacyPolicyURL}}</a><br>
-    Tratamiento de datos personales: <a href="{{.DataProcessingPolicyURL}}">{{.DataProcessingPolicyURL}}</a><br>
-    Derechos del consumidor (SIC): <a href="{{.ConsumerRightsURL}}">{{.ConsumerRightsURL}}</a>
-  </p>
+  {{template "footer" .}}
 </body>
 </html>

@@ -65,6 +65,12 @@ type CoreAPI struct {
 	// Defaults to "http://localhost:8080" for dev; prod must override to
 	// the real https://api.sip-happens.co or similar.
 	PublicBaseURL string
+
+	// SupportContactEmail is the address printed in the unified email
+	// compliance footer (Ley 1581 + SIC: consumers must have a clear
+	// channel to revoke marketing consent or escalate complaints).
+	// Defaults to "soporte@sip-happens.local" for dev.
+	SupportContactEmail string
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -117,6 +123,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.ConsumerRightsURL = getenvDefault("CONSUMER_RIGHTS_URL", "https://www.sic.gov.co/proteccion-del-consumidor")
 	c.DataProcessingPolicyURL = getenvDefault("DATA_PROCESSING_POLICY_URL", "https://sip-happens.local/legal/data-processing")
 	c.PublicBaseURL = strings.TrimRight(getenvDefault("PUBLIC_BASE_URL", "http://localhost:8080"), "/")
+	c.SupportContactEmail = getenvDefault("SUPPORT_CONTACT_EMAIL", "soporte@sip-happens.local")
 
 	return c, nil
 }

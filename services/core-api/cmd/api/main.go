@@ -134,6 +134,7 @@ func runServer() error {
 		PrivacyPolicyURL:        cfg.PrivacyPolicyURL,
 		ConsumerRightsURL:       cfg.ConsumerRightsURL,
 		DataProcessingPolicyURL: cfg.DataProcessingPolicyURL,
+		UnsubscribeContact:      cfg.SupportContactEmail,
 	})
 
 	productImages, err := objectstore.NewProductImagesFromEnv()

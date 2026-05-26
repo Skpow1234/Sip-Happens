@@ -12,8 +12,4 @@ este mensaje — no haremos nada con tu correo sin tu confirmación explícita.
 
 — Sip-Happens
 
----
-{{.MinorAlcoholWarning}}
-Privacidad: {{.PrivacyPolicyURL}}
-Tratamiento de datos personales: {{.DataProcessingPolicyURL}}
-Derechos del consumidor (SIC): {{.ConsumerRightsURL}}
+{{template "footer" .}}
