@@ -24,6 +24,7 @@ import (
 	"sip-happens/services/core-api/internal/consumers"
 	"sip-happens/services/core-api/internal/db"
 	"sip-happens/services/core-api/internal/email"
+	"sip-happens/services/core-api/internal/emailsubscribe"
 	"sip-happens/services/core-api/internal/fulfillment"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/invoicing"
@@ -36,7 +37,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|nats-consume|inventory-reconcile|fulfillment-runner>")
+		log.Fatal("usage: core-jobs <cancel-expired|stripe-reconcile|outbox-dispatch|outbox-replay|nats-consume|inventory-reconcile|fulfillment-runner|email-subscribe-reap>")
 	}
 	cmd := os.Args[1]
 
@@ -70,6 +71,10 @@ func main() {
 		}
 	case "fulfillment-runner":
 		if err := runFulfillmentRunner(ctx); err != nil {
+			log.Fatal(err)
+		}
+	case "email-subscribe-reap":
+		if err := runEmailSubscribeReapJob(ctx); err != nil {
 			log.Fatal(err)
 		}
 	default:
@@ -523,6 +528,69 @@ func runFulfillmentRunner(ctx context.Context) error {
 			return nil
 		}
 		idle = updateIdle(idle, n > 0)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(nextPollDelay(jobCfg.Interval, idle)):
+		}
+	}
+}
+
+// runEmailSubscribeReapJob clears stale email_confirmation_tokens and
+// transitions PENDING_CONFIRMATION subscribers whose only token has
+// expired to EXPIRED. Tunables via env:
+//
+//   - JOB_INTERVAL              poll interval (default 1m)
+//   - JOB_BATCH_LIMIT           max rows per pass (default 500)
+//   - JOB_RUN_ONCE              "true" → run a single pass and exit
+//   - EMAIL_TOKEN_RETENTION     duration (Go format) for which dead
+//                               tokens are retained before deletion
+//                               (default 720h = 30d)
+//
+// Uses the same DB-pool defaults as cancel-expired.
+func runEmailSubscribeReapJob(ctx context.Context) error {
+	jobCfg, err := config.LoadCancelExpiredJob()
+	if err != nil {
+		return err
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, jobCfg.DBPool.PingTimeout)
+	defer cancel()
+	sqlDB, err := openDB(pingCtx, jobCfg.PostgresDSN)
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(jobCfg.DBPool.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(jobCfg.DBPool.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(jobCfg.DBPool.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(jobCfg.DBPool.ConnMaxIdleTime)
+
+	retention := 30 * 24 * time.Hour
+	if v := os.Getenv("EMAIL_TOKEN_RETENTION"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("EMAIL_TOKEN_RETENTION: %w", err)
+		}
+		retention = d
+	}
+
+	svc := emailsubscribe.NewService(sqlDB)
+	log.Printf("job email-subscribe-reap starting (interval=%s, limit=%d, once=%v, retention=%s)",
+		jobCfg.Interval, jobCfg.BatchLimit, jobCfg.RunOnce, retention)
+
+	idle := 0
+	for {
+		exp, del, err := svc.ReapExpired(ctx, time.Now(), retention, jobCfg.BatchLimit)
+		if err != nil {
+			return err
+		}
+		if exp > 0 || del > 0 {
+			log.Printf("job email-subscribe-reap: subscribers_expired=%d tokens_deleted=%d", exp, del)
+		}
+		if jobCfg.RunOnce {
+			return nil
+		}
+		idle = updateIdle(idle, exp > 0 || del > 0)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

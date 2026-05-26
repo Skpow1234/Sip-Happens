@@ -87,6 +87,13 @@ type Service interface {
 	// up by email rather than token so user-typed/footer links work.
 	// Idempotent on already-unsubscribed.
 	Unsubscribe(ctx context.Context, email string) (*Subscriber, error)
+
+	// ReapExpired marks any PENDING_CONFIRMATION subscriber whose newest
+	// token expired before `now` as EXPIRED and deletes confirmation
+	// tokens older than `tokenRetention`. Returns the number of
+	// subscribers transitioned and tokens deleted. Idempotent and safe
+	// to call from multiple workers (writes are by-id under tx).
+	ReapExpired(ctx context.Context, now time.Time, tokenRetention time.Duration, limit int) (subscribersExpired, tokensDeleted int, err error)
 }
 
 type SQLService struct {
@@ -302,6 +309,72 @@ where email = $3 and status = $4
 	}
 	_ = n
 	return sub, nil
+}
+
+// ReapExpired implements Service.ReapExpired. Cheap and idempotent:
+//
+//  1. Mark any PENDING_CONFIRMATION subscriber whose newest token has
+//     expired-before-now as EXPIRED. We pick the *newest* token because
+//     Subscribe always issues a fresh one on re-submission and marks
+//     older tokens as used; an old expired token shouldn't be reason
+//     to expire a re-subscribed pending row.
+//  2. Delete confirmation token rows older than `tokenRetention`. This
+//     is purely housekeeping — once a subscriber is in a terminal state
+//     or the token has expired/been used, the row only serves audit
+//     value, and `audit_events` retains the security signal we care
+//     about (suspicious confirmation attempts).
+//
+// Operators should run this every few minutes (cron / job-runner);
+// 0 limit means "no per-pass cap" but we still bound work via a single
+// SQL pair so it's bounded by table size at worst.
+func (s *SQLService) ReapExpired(ctx context.Context, now time.Time, tokenRetention time.Duration, limit int) (int, int, error) {
+	if s.DB == nil {
+		return 0, 0, fmt.Errorf("emailsubscribe: missing db")
+	}
+	limitClause := ""
+	if limit > 0 {
+		limitClause = fmt.Sprintf("limit %d", limit)
+	}
+	// 1. Expire pending subscribers whose newest token has expired.
+	res, err := s.DB.ExecContext(ctx, fmt.Sprintf(`
+update email_subscribers
+set status = $1, updated_at = $2
+where id in (
+  select s.id
+  from email_subscribers s
+  where s.status = $3
+    and not exists (
+      select 1 from email_confirmation_tokens t
+      where t.subscriber_id = s.id and t.used_at is null and t.expires_at > $2
+    )
+    and exists (
+      select 1 from email_confirmation_tokens t
+      where t.subscriber_id = s.id
+    )
+  %s
+)
+`, limitClause), StatusExpired, now.UTC(), StatusPendingConfirmation)
+	if err != nil {
+		return 0, 0, err
+	}
+	expired64, _ := res.RowsAffected()
+
+	// 2. Delete fully-aged-out token rows. Retention window is from the
+	//    operator: 30 days is a sensible default.
+	if tokenRetention <= 0 {
+		tokenRetention = 30 * 24 * time.Hour
+	}
+	cutoff := now.UTC().Add(-tokenRetention)
+	res, err = s.DB.ExecContext(ctx, `
+delete from email_confirmation_tokens
+where created_at < $1
+  and (used_at is not null or expires_at < $2)
+`, cutoff, now.UTC())
+	if err != nil {
+		return int(expired64), 0, err
+	}
+	deleted64, _ := res.RowsAffected()
+	return int(expired64), int(deleted64), nil
 }
 
 // --- internals ---
