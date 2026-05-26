@@ -326,3 +326,50 @@ type stripePaymentIntent struct {
 		OrderID string `json:"order_id"`
 	} `json:"metadata"`
 }
+
+// stripeRefund is the minimal subset of a Stripe refund object we care
+// about for status reconciliation. The `failure_reason` field is only
+// populated when status == "failed".
+type stripeRefund struct {
+	ID            string `json:"id"`
+	Status        string `json:"status"`
+	FailureReason string `json:"failure_reason"`
+}
+
+// AsRefundObjects extracts the refund objects from a Stripe event.
+//
+//   - `refund.created` / `refund.updated` carry the refund object directly
+//     in data.object.
+//   - `charge.refunded` carries a Charge object whose `refunds.data[]` is
+//     the list of refunds against that charge — we surface the most recent
+//     refund (which is the one Stripe just acted on).
+//
+// Returns at least one entry on success.
+func (e stripeEvent) AsRefundObjects() ([]stripeRefund, error) {
+	if len(e.Data.Object) == 0 {
+		return nil, errors.New("missing object")
+	}
+	if e.Type == "refund.created" || e.Type == "refund.updated" {
+		var r stripeRefund
+		if err := json.Unmarshal(e.Data.Object, &r); err != nil {
+			return nil, err
+		}
+		if r.ID == "" {
+			return nil, errors.New("missing refund id")
+		}
+		return []stripeRefund{r}, nil
+	}
+	// charge.refunded
+	var ch struct {
+		Refunds struct {
+			Data []stripeRefund `json:"data"`
+		} `json:"refunds"`
+	}
+	if err := json.Unmarshal(e.Data.Object, &ch); err != nil {
+		return nil, err
+	}
+	if len(ch.Refunds.Data) == 0 {
+		return nil, errors.New("charge.refunded has no refunds.data")
+	}
+	return ch.Refunds.Data, nil
+}

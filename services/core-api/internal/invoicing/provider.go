@@ -31,10 +31,20 @@ type IssueLineItem struct {
 }
 
 // IssueResult is returned by an authorized invoicing provider (or stub).
+// All DIAN-specific fields are optional — the stub leaves them empty and
+// only sets ExternalID / Status / PayloadJSON. A real authorized provider
+// SHOULD populate CUFE, ResolutionNumber/Prefix, SequenceNumber, and
+// XMLURL/PDFURL so the columns added in migration 030 are usable.
 type IssueResult struct {
-	ExternalID  string
-	Status      domain.InvoiceStatus
-	PayloadJSON string
+	ExternalID       string
+	Status           domain.InvoiceStatus
+	PayloadJSON      string
+	CUFE             string
+	ResolutionNumber string
+	ResolutionPrefix string
+	SequenceNumber   int64
+	XMLURL           string
+	PDFURL           string
 }
 
 // Provider issues or simulates a DIAN electronic invoice.
@@ -43,12 +53,33 @@ type Provider interface {
 	Issue(ctx context.Context, req IssueRequest) (IssueResult, error)
 }
 
-// NewProviderFromEnv selects INVOICE_PROVIDER (default stub).
+// NewProviderFromEnv selects INVOICE_PROVIDER and assembles a provider
+// from the relevant env vars.
+//
+// Supported values:
+//
+//   - ""       / "stub"  – StubProvider (default, dev-only).
+//   - "http"             – HTTPProvider, a generic JSON-over-HTTPS adapter.
+//     Required env: INVOICE_HTTP_URL, INVOICE_HTTP_API_KEY,
+//     INVOICE_HTTP_TIMEOUT_SECONDS (optional, default 15s).
+//     This is intentionally generic so the same code talks to Factura1,
+//     Alegra, Carvajal, Siigo, etc. — wire the actual endpoint and key
+//     for your contracted provider via env. The expected JSON request/
+//     response shape is documented on HTTPProvider.Issue.
+//
+// Unknown values fall through to StubProvider with a startup log line,
+// so a typo in INVOICE_PROVIDER doesn't silently send real invoices to
+// the stub.
 func NewProviderFromEnv() Provider {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("INVOICE_PROVIDER"))) {
 	case "stub", "":
 		return StubProvider{}
+	case "http":
+		return NewHTTPProviderFromEnv()
 	default:
+		// Fall through to the stub so a mistyped env doesn't take down
+		// the API. The caller (cmd/api/main.go) logs the active
+		// provider via NewProviderFromEnv().Name().
 		return StubProvider{}
 	}
 }

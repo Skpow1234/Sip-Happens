@@ -30,7 +30,12 @@ func (s *Service) GetByOrderID(ctx context.Context, orderID domain.OrderID) (*do
 		return nil, domain.ErrInvalidInput
 	}
 	row := s.DB.QueryRowContext(ctx, `
-select id, order_id, provider, coalesce(external_id,''), status, coalesce(payload_json::text,''), created_at, updated_at
+select id, order_id, provider, coalesce(external_id,''), status,
+       coalesce(payload_json::text,''),
+       coalesce(cufe,''), coalesce(resolution_number,''),
+       coalesce(resolution_prefix,''), coalesce(sequence_number, 0),
+       coalesce(xml_url,''), coalesce(pdf_url,''), issued_at,
+       created_at, updated_at
 from invoices where order_id=$1
 `, string(orderID))
 	return scanInvoice(row)
@@ -100,11 +105,38 @@ values ($1,$2,$3,'', $4, '{}'::jsonb, $5, $5)
 	}
 
 	now := time.Now().UTC()
+	var issuedAt any
+	if status == domain.InvoiceStatusIssued {
+		issuedAt = now
+	}
 	_, err = s.DB.ExecContext(ctx, `
 update invoices
-set external_id=$1, status=$2, payload_json=$3::jsonb, updated_at=$4
-where order_id=$5
-`, nullIfEmpty(result.ExternalID), string(status), payload, now, string(orderID))
+set external_id=$1,
+    status=$2,
+    payload_json=$3::jsonb,
+    cufe=$4,
+    resolution_number=$5,
+    resolution_prefix=$6,
+    sequence_number=$7,
+    xml_url=$8,
+    pdf_url=$9,
+    issued_at=coalesce(issued_at,$10),
+    updated_at=$11
+where order_id=$12
+`,
+		nullIfEmpty(result.ExternalID),
+		string(status),
+		payload,
+		nullIfEmpty(result.CUFE),
+		nullIfEmpty(result.ResolutionNumber),
+		nullIfEmpty(result.ResolutionPrefix),
+		nullIfZero(result.SequenceNumber),
+		nullIfEmpty(result.XMLURL),
+		nullIfEmpty(result.PDFURL),
+		issuedAt,
+		now,
+		string(orderID),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -154,8 +186,23 @@ func buildIssueRequest(o *domain.Order, items []domain.OrderItem) IssueRequest {
 
 func scanInvoice(row *sql.Row) (*domain.Invoice, error) {
 	var inv domain.Invoice
-	var payload sql.NullString
-	err := row.Scan(&inv.ID, &inv.OrderID, &inv.Provider, &inv.ExternalID, &inv.Status, &payload, &inv.CreatedAt, &inv.UpdatedAt)
+	var (
+		payload    sql.NullString
+		issuedAt   sql.NullTime
+		seqNumber  int64
+		cufe       string
+		resNumber  string
+		resPrefix  string
+		xmlURL     string
+		pdfURL     string
+	)
+	err := row.Scan(
+		&inv.ID, &inv.OrderID, &inv.Provider, &inv.ExternalID, &inv.Status,
+		&payload,
+		&cufe, &resNumber, &resPrefix, &seqNumber,
+		&xmlURL, &pdfURL, &issuedAt,
+		&inv.CreatedAt, &inv.UpdatedAt,
+	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
@@ -165,6 +212,16 @@ func scanInvoice(row *sql.Row) (*domain.Invoice, error) {
 	if payload.Valid {
 		inv.PayloadJSON = payload.String
 	}
+	inv.CUFE = cufe
+	inv.ResolutionNumber = resNumber
+	inv.ResolutionPrefix = resPrefix
+	inv.SequenceNumber = seqNumber
+	inv.XMLURL = xmlURL
+	inv.PDFURL = pdfURL
+	if issuedAt.Valid {
+		t := issuedAt.Time
+		inv.IssuedAt = &t
+	}
 	return &inv, nil
 }
 
@@ -173,4 +230,11 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+func nullIfZero(v int64) any {
+	if v == 0 {
+		return nil
+	}
+	return v
 }
