@@ -1364,3 +1364,161 @@ func (c *Client) CancelSubscription(ctx context.Context, id string) (*Subscripti
 	}
 	return &out.Subscription, nil
 }
+
+// PersonalAccessTokenView mirrors core-api JSON. The raw secret is NEVER
+// included on list/get responses — it only appears on PersonalAccessTokenCreateResult.Token.
+type PersonalAccessTokenView struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	TokenPrefix string     `json:"token_prefix"`
+	Scopes      []string   `json:"scopes"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// IsActive mirrors the server-side check so the TUI can dim revoked/expired rows.
+func (t PersonalAccessTokenView) IsActive(now time.Time) bool {
+	if t.RevokedAt != nil {
+		return false
+	}
+	if t.ExpiresAt != nil && !t.ExpiresAt.After(now) {
+		return false
+	}
+	return true
+}
+
+type PersonalAccessTokensPage struct {
+	Tokens  []PersonalAccessTokenView
+	Limit   int
+	Offset  int
+	HasMore bool
+}
+
+type PersonalAccessTokenCreateRequest struct {
+	Name      string     `json:"name"`
+	Scopes    []string   `json:"scopes"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+type PersonalAccessTokenCreateResult struct {
+	PersonalAccessToken PersonalAccessTokenView `json:"personal_access_token"`
+	Token               string                  `json:"token"`
+}
+
+func (c *Client) ListPersonalAccessTokensPage(ctx context.Context, limit, offset int) (*PersonalAccessTokensPage, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	u := fmt.Sprintf("%s/tokens?limit=%d&offset=%d", c.baseURL, limit, offset)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		PersonalAccessTokens []PersonalAccessTokenView `json:"personal_access_tokens"`
+		Limit                int                       `json:"limit"`
+		Offset               int                       `json:"offset"`
+		HasMore              bool                      `json:"has_more"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &PersonalAccessTokensPage{
+		Tokens:  out.PersonalAccessTokens,
+		Limit:   out.Limit,
+		Offset:  out.Offset,
+		HasMore: out.HasMore,
+	}, nil
+}
+
+func (c *Client) GetPersonalAccessToken(ctx context.Context, id string) (*PersonalAccessTokenView, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing token id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/tokens/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		PersonalAccessToken PersonalAccessTokenView `json:"personal_access_token"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.PersonalAccessToken, nil
+}
+
+func (c *Client) CreatePersonalAccessToken(ctx context.Context, in PersonalAccessTokenCreateRequest) (*PersonalAccessTokenCreateResult, error) {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/tokens", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out PersonalAccessTokenCreateResult
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) RevokePersonalAccessToken(ctx context.Context, id string) (*PersonalAccessTokenView, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("missing token id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/tokens/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var out struct {
+		PersonalAccessToken PersonalAccessTokenView `json:"personal_access_token"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out.PersonalAccessToken, nil
+}

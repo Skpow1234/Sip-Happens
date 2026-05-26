@@ -32,6 +32,7 @@ import (
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/seed"
 	"sip-happens/services/core-api/internal/subscriptions"
+	"sip-happens/services/core-api/internal/tokens"
 )
 
 func main() {
@@ -145,6 +146,7 @@ func runServer() error {
 	srv := &httpserver.Server{
 		Orders:            ordersSvc,
 		Subscriptions:     subscriptions.NewSQLRepository(),
+		Tokens:            tokens.NewSQLRepository(),
 		Payments:          paymentsRepo,
 		Customers:         customersSvc,
 		Addresses:         addresses.NewSQLRepository(),

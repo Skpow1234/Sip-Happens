@@ -27,6 +27,7 @@ import (
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/subscriptions"
+	"sip-happens/services/core-api/internal/tokens"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
@@ -35,6 +36,7 @@ import (
 type Server struct {
 	Orders      orders.Service
 	Subscriptions subscriptions.Repository
+	Tokens      tokens.Repository
 	Payments    payments.Repository
 	Customers   customers.Service
 	Addresses   addresses.Repository
@@ -169,6 +171,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /subscriptions", s.requireSigned(http.HandlerFunc(s.handleSubscriptions)))
 	mux.Handle("POST /subscriptions", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleSubscriptionCreate)))))
 	mux.Handle("/subscriptions/", s.requireSigned(http.HandlerFunc(s.handleSubscriptionByID)))
+	mux.Handle("/tokens", s.requireSigned(http.HandlerFunc(s.handleTokens)))
+	mux.Handle("/tokens/", s.requireSigned(http.HandlerFunc(s.handleTokenByID)))
 	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/profile", s.requireSigned(http.HandlerFunc(s.handleProfile)))
 	mux.Handle("/addresses", s.requireSigned(http.HandlerFunc(s.handleAddresses)))
