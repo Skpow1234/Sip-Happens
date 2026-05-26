@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"sip-happens/pkg/domain"
@@ -296,9 +297,13 @@ func (s *service) CancelExpiredPendingOrders(ctx context.Context, now time.Time,
 	return updated, nil
 }
 
-func (s *service) CancelPendingOrder(ctx context.Context, id domain.OrderID) error {
+func (s *service) CancelPendingOrder(ctx context.Context, id domain.OrderID, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "cancelled"
+	}
 	return s.db.WithTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(tx *sql.Tx) error {
-		return s.cancelPendingInTx(ctx, tx, id, "cancelled")
+		return s.cancelPendingInTx(ctx, tx, id, reason)
 	})
 }
 

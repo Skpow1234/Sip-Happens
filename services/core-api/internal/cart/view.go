@@ -21,10 +21,19 @@ type ItemView struct {
 }
 
 // View is the public GET/PUT /cart payload (Terminal.shop-style cart summary).
+//
+// ShippingMinorUnits and TotalMinorUnits are populated by the HTTP layer only
+// when an address has been attached to the cart AND its city resolves to a
+// known shipping rate — without an address we can't price shipping, so both
+// fields stay at zero (and TotalMinorUnits matches SubtotalMinorUnits). This
+// lets clients preview the full grand total before /cart/convert without
+// running a parallel /shipping/estimate call.
 type View struct {
 	Currency           string                            `json:"currency"`
 	Items              []ItemView                        `json:"items"`
 	SubtotalMinorUnits int64                             `json:"subtotal_minor_units"`
+	ShippingMinorUnits int64                             `json:"shipping_minor_units"`
+	TotalMinorUnits    int64                             `json:"total_minor_units"`
 	ItemCount          int                               `json:"item_count"`
 	AddressID          string                            `json:"address_id,omitempty"`
 	Address            *addresses.AddressView            `json:"address,omitempty"`
@@ -96,5 +105,10 @@ func BuildView(
 		out.SubtotalMinorUnits += lineTotal
 		out.ItemCount += line.Qty
 	}
+	// Default Total == Subtotal until the HTTP layer attaches an address and
+	// computes shipping. Doing it here keeps the field non-zero for empty
+	// carts (subtotal=0, total=0) and avoids a separate "did we compute totals
+	// yet" sentinel.
+	out.TotalMinorUnits = out.SubtotalMinorUnits
 	return out, nil
 }

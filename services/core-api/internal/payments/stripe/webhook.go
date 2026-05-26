@@ -160,7 +160,7 @@ func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error 
 		if err != nil {
 			return err
 		}
-		err = h.Orders.CancelPendingOrder(ctx, orderID)
+		err = h.Orders.CancelPendingOrder(ctx, orderID, "stripe_session_expired")
 		if errors.Is(err, domain.ErrConflict) {
 			// Order already paid or otherwise not cancellable; treat as handled.
 			return nil

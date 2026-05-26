@@ -40,6 +40,14 @@ type Service interface {
 	// RecordAudit appends an audit_events row (admin/support tooling).
 	RecordAudit(ctx context.Context, actor, aggregateType, aggregateID, eventType, payloadJSON string) error
 
+	// ListPriceHistory returns every (currency, valid_from) row in the prices
+	// ledger for a product (newest valid_from first), joined with the
+	// matching audit_events (price.set / price.ended) so callers can render
+	// "who changed what when" without two round-trips. Cross-currency rows
+	// are interleaved by time; consumers that need a per-currency timeline
+	// can group client-side.
+	ListPriceHistory(ctx context.Context, productID domain.ProductID) ([]PriceHistoryEntry, error)
+
 	SetProductImageURL(ctx context.Context, actor string, productID domain.ProductID, imageURL string) error
 
 	// ProductUpdatedAt returns the row version used for If-Match / ETag optimistic locking.
@@ -89,6 +97,28 @@ type PatchProductInput struct {
 	IBU         *int     `json:"ibu"`
 	ImageURL    *string  `json:"image_url"`
 	IsActive    *bool    `json:"is_active"`
+}
+
+// PriceHistoryEntry is a single row in the per-product price ledger,
+// augmented with the most recent matching audit metadata.
+//
+// `ValidThrough` is nil for the currently-active period; otherwise it is
+// the timestamp at which `EndCurrentPrice` (or a subsequent `SetPrice`)
+// ended this slice. `SetBy` / `SetAt` come from the `price.set` audit row
+// inserted alongside the price write. `EndedBy` / `EndedReason` are only
+// populated for closed slices and come from the matching `price.ended`
+// audit row (if any) — older slices that were superseded by a SetPrice
+// rather than EndCurrentPrice will have a `ValidThrough` but no
+// `EndedBy`/`EndedReason`.
+type PriceHistoryEntry struct {
+	Currency         string     `json:"currency"`
+	AmountMinorUnits int64      `json:"amount_minor_units"`
+	ValidFrom        time.Time  `json:"valid_from"`
+	ValidThrough     *time.Time `json:"valid_through,omitempty"`
+	SetBy            string     `json:"set_by,omitempty"`
+	SetAt            *time.Time `json:"set_at,omitempty"`
+	EndedBy          string     `json:"ended_by,omitempty"`
+	EndedReason      string     `json:"ended_reason,omitempty"`
 }
 
 type SetPriceInput struct {
@@ -488,6 +518,155 @@ where product_id=$1
 	}
 	_ = s.insertAudit(ctx, "product", string(productID), actor, "price.ended", fmt.Sprintf(`{"currency":%q,"reason":%q}`, currency, reason))
 	return nil
+}
+
+// ListPriceHistory aggregates the bi-temporal `prices` ledger with the
+// matching audit rows. We do this in two queries (prices, then audit)
+// rather than a big SQL join because audit payload is a redacted JSON
+// blob — the audit timestamps line up with the price `valid_from` /
+// `valid_through` ±1 ms in practice (same Go `time.Now()` value, just
+// re-marshalled), so we match in Go by (event_type, JSON.currency,
+// JSON.amount_minor_units, nearest-prior created_at).
+func (s *SQLService) ListPriceHistory(ctx context.Context, productID domain.ProductID) ([]PriceHistoryEntry, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("missing db")
+	}
+	if productID == "" {
+		return nil, domain.ErrInvalidInput
+	}
+
+	rows, err := s.DB.QueryContext(ctx, `
+select currency, amount_minor_units, valid_from, valid_through
+from prices
+where product_id = $1
+order by valid_from desc, currency asc
+`, string(productID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]PriceHistoryEntry, 0, 8)
+	for rows.Next() {
+		var e PriceHistoryEntry
+		var vt sql.NullTime
+		if err := rows.Scan(&e.Currency, &e.AmountMinorUnits, &e.ValidFrom, &vt); err != nil {
+			return nil, err
+		}
+		if vt.Valid {
+			t := vt.Time
+			e.ValidThrough = &t
+		}
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return out, nil
+	}
+
+	auditRows, err := s.DB.QueryContext(ctx, `
+select actor, event_type, payload_json, created_at
+from audit_events
+where aggregate_type = 'product'
+  and aggregate_id = $1
+  and event_type in ('price.set','price.ended')
+order by created_at asc
+`, string(productID))
+	if err != nil {
+		return out, nil // best-effort: return prices without audit metadata
+	}
+	defer auditRows.Close()
+
+	type auditRow struct {
+		actor     string
+		eventType string
+		payload   string
+		createdAt time.Time
+	}
+	var audits []auditRow
+	for auditRows.Next() {
+		var a auditRow
+		if err := auditRows.Scan(&a.actor, &a.eventType, &a.payload, &a.createdAt); err != nil {
+			return out, nil
+		}
+		audits = append(audits, a)
+	}
+
+	matchPayload := func(payload, currency string, amount int64) bool {
+		// Loose substring match — price.set/price.ended payloads use a
+		// small predictable format `{"currency":"COP","amount_minor_units":1000}`
+		// (see SetPrice). We avoid JSON-unmarshalling here to stay tolerant
+		// of post-redaction shape changes.
+		if !strings.Contains(payload, fmt.Sprintf(`"currency":%q`, currency)) {
+			return false
+		}
+		if amount > 0 && !strings.Contains(payload, fmt.Sprintf(`"amount_minor_units":%d`, amount)) {
+			return false
+		}
+		return true
+	}
+
+	for i := range out {
+		e := &out[i]
+		// price.set: pick the row whose created_at is closest at-or-after valid_from.
+		var bestSet *auditRow
+		for j := range audits {
+			a := &audits[j]
+			if a.eventType != "price.set" {
+				continue
+			}
+			if !matchPayload(a.payload, e.Currency, e.AmountMinorUnits) {
+				continue
+			}
+			if a.createdAt.Before(e.ValidFrom.Add(-1 * time.Second)) {
+				continue
+			}
+			if bestSet == nil || a.createdAt.Before(bestSet.createdAt) {
+				cp := *a
+				bestSet = &cp
+			}
+		}
+		if bestSet != nil {
+			e.SetBy = bestSet.actor
+			t := bestSet.createdAt
+			e.SetAt = &t
+		}
+
+		if e.ValidThrough != nil {
+			vt := *e.ValidThrough
+			var bestEnd *auditRow
+			for j := range audits {
+				a := &audits[j]
+				if a.eventType != "price.ended" {
+					continue
+				}
+				if !strings.Contains(a.payload, fmt.Sprintf(`"currency":%q`, e.Currency)) {
+					continue
+				}
+				if a.createdAt.Before(vt.Add(-1 * time.Second)) {
+					continue
+				}
+				if bestEnd == nil || a.createdAt.Before(bestEnd.createdAt) {
+					cp := *a
+					bestEnd = &cp
+				}
+			}
+			if bestEnd != nil {
+				e.EndedBy = bestEnd.actor
+				// Extract reason from payload: format `{"currency":"COP","reason":"foo"}`.
+				if idx := strings.Index(bestEnd.payload, `"reason":"`); idx >= 0 {
+					rest := bestEnd.payload[idx+len(`"reason":"`):]
+					if end := strings.IndexByte(rest, '"'); end >= 0 {
+						e.EndedReason = rest[:end]
+					}
+				}
+			}
+		}
+	}
+
+	return out, nil
 }
 
 func (s *SQLService) UpsertInventory(ctx context.Context, actor string, in UpsertInventoryInput) error {

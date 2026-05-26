@@ -150,7 +150,7 @@ values ($1,5,0,0,now()) on conflict (product_id) do update set on_hand=5, reserv
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.CancelPendingOrder(ctx, o.ID); err != nil {
+	if err := svc.CancelPendingOrder(ctx, o.ID, "test_cancel"); err != nil {
 		t.Fatal(err)
 	}
 

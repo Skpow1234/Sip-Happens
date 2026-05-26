@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"sip-happens/pkg/domain"
+	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/cart"
 	"sip-happens/services/core-api/internal/catalog"
@@ -244,7 +245,37 @@ func (s *Server) enrichCartView(r *http.Request, customerID domain.CustomerID, v
 	if err != nil {
 		return view, err
 	}
-	return s.attachCartPaymentMethod(r, customerID, view)
+	view, err = s.attachCartPaymentMethod(r, customerID, view)
+	if err != nil {
+		return view, err
+	}
+	return s.attachCartShipping(r.Context(), view), nil
+}
+
+// attachCartShipping populates ShippingMinorUnits and TotalMinorUnits using
+// the same rate lookup as /checkout and /cart/convert, so the cart preview
+// shows the same grand total the customer will actually pay. Without an
+// attached address (or with an unknown city / missing rate row) we leave
+// shipping at zero and total == subtotal — clients that need shipping
+// before they have an address should call /shipping/estimate directly.
+func (s *Server) attachCartShipping(ctx context.Context, view cart.View) cart.View {
+	if s.DB == nil || view.Address == nil {
+		view.TotalMinorUnits = view.SubtotalMinorUnits
+		return view
+	}
+	canon, err := shipping.CanonicalCity(view.Address.City)
+	if err != nil {
+		view.TotalMinorUnits = view.SubtotalMinorUnits
+		return view
+	}
+	amount, err := shipping.LookupAmountMinor(ctx, s.DB, shipping.CityKey(canon), view.Currency)
+	if err != nil {
+		view.TotalMinorUnits = view.SubtotalMinorUnits
+		return view
+	}
+	view.ShippingMinorUnits = amount
+	view.TotalMinorUnits = view.SubtotalMinorUnits + amount
+	return view
 }
 
 func (s *Server) attachCartAddress(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {

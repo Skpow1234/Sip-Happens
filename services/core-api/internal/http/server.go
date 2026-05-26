@@ -176,6 +176,10 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.Handle("GET /orders", s.requireSigned(http.HandlerFunc(s.handleOrders)))
 	mux.Handle("POST /orders", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleOrderCreate)))))
+	// More specific than /orders/ — Go 1.22 mux picks the longest method+pattern
+	// match. Customer-self-cancel of own PENDING_PAYMENT order. Rate-limited
+	// (checkoutRL) and idem-wrapped to deduplicate noisy retries.
+	mux.Handle("POST /orders/{ref}/cancel", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCustomerCancelOrder)))))
 	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
 	mux.Handle("GET /subscriptions", s.requireSigned(http.HandlerFunc(s.handleSubscriptions)))
 	mux.Handle("POST /subscriptions", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleSubscriptionCreate)))))
@@ -817,7 +821,7 @@ func (s *Server) handleAdminOrderCancel(w http.ResponseWriter, r *http.Request) 
 		reason = "admin_cancel"
 	}
 
-	if err := s.Orders.CancelPendingOrder(r.Context(), orderID); err != nil {
+	if err := s.Orders.CancelPendingOrder(r.Context(), orderID, reason); err != nil {
 		switch err {
 		case domain.ErrNotFound:
 			writeAPIError(w, r, http.StatusNotFound, "not_found", "not found")
