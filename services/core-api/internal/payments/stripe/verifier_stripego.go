@@ -24,4 +24,3 @@ func (v StripeGoVerifier) Verify(payload []byte, stripeSignatureHeader string) e
 	}
 	return stripewebhook.ValidatePayload(payload, stripeSignatureHeader, v.SigningSecret)
 }
-

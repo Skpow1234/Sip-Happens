@@ -33,4 +33,3 @@ func (f Flags) Has(name string) bool {
 	_, ok := f.Enabled[strings.ToLower(strings.TrimSpace(name))]
 	return ok
 }
-

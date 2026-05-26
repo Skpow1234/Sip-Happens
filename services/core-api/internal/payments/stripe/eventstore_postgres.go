@@ -34,4 +34,3 @@ on conflict (event_id) do nothing
 `, eventID, processedAt)
 	return err
 }
-

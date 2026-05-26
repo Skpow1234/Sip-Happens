@@ -9,8 +9,8 @@ import (
 )
 
 type ReconcileCandidate struct {
-	OrderID          domain.OrderID
-	PaymentIntentID  string
+	OrderID           domain.OrderID
+	PaymentIntentID   string
 	CheckoutSessionID string
 }
 
@@ -69,4 +69,3 @@ func (q *SQLReconcileQueue) Delete(ctx context.Context, orderID domain.OrderID) 
 	_, err := q.DB.ExecContext(ctx, `delete from stripe_reconcile_queue where order_id=$1`, string(orderID))
 	return err
 }
-

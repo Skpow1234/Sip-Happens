@@ -8,4 +8,3 @@ func TestInventoryAvailable(t *testing.T) {
 		t.Fatalf("expected available=5, got=%d", got)
 	}
 }
-

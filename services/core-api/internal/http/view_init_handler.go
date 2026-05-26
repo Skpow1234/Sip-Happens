@@ -94,10 +94,10 @@ func (s *Server) handleViewInit(w http.ResponseWriter, r *http.Request) {
 		mu       sync.Mutex
 		warnings []viewInitWarning
 
-		profile      *customers.ProfileView
-		catalogPage  *viewInitCatalog
-		cartView     *cart.View
-		ordersPage   *viewInitOrders
+		profile     *customers.ProfileView
+		catalogPage *viewInitCatalog
+		cartView    *cart.View
+		ordersPage  *viewInitOrders
 	)
 	recordWarning := func(section string, err error) {
 		mu.Lock()

@@ -17,4 +17,3 @@ type Repository interface {
 	RecordStatus(ctx context.Context, exec ExecContext, e domain.PaymentStatusHistoryEntry) error
 	ListStatusHistoryForOrder(ctx context.Context, db *sql.DB, orderID domain.OrderID) ([]domain.PaymentStatusHistoryEntry, error)
 }
-

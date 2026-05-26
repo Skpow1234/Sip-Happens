@@ -8,20 +8,20 @@ import (
 
 // 16-color ANSI palette — Terminal.shop-style layout, Sip-Happens colors (cyan + gold, no orange/violet).
 var (
-	colorText       = lipgloss.Color("15")
-	colorMuted      = lipgloss.Color("8")
-	colorDim          = lipgloss.Color("8")
-	colorAccent       = lipgloss.Color("6")  // cyan — list selection / CTA fill
-	colorOnAccent     = lipgloss.Color("15") // white on cyan
-	colorBrandGold    = lipgloss.Color("11") // prices, accent word
-	colorBrandCyan    = lipgloss.Color("14") // brand word, links
-	colorLink         = lipgloss.Color("14")
-	colorWarn         = lipgloss.Color("9")
-	colorDanger       = lipgloss.Color("9")
-	colorBorder       = lipgloss.Color("8")
-	colorFoam         = lipgloss.Color("15")
-	colorBeerMid      = lipgloss.Color("14")
-	colorBeerDeep     = lipgloss.Color("6")
+	colorText      = lipgloss.Color("15")
+	colorMuted     = lipgloss.Color("8")
+	colorDim       = lipgloss.Color("8")
+	colorAccent    = lipgloss.Color("6")  // cyan — list selection / CTA fill
+	colorOnAccent  = lipgloss.Color("15") // white on cyan
+	colorBrandGold = lipgloss.Color("11") // prices, accent word
+	colorBrandCyan = lipgloss.Color("14") // brand word, links
+	colorLink      = lipgloss.Color("14")
+	colorWarn      = lipgloss.Color("9")
+	colorDanger    = lipgloss.Color("9")
+	colorBorder    = lipgloss.Color("8")
+	colorFoam      = lipgloss.Color("15")
+	colorBeerMid   = lipgloss.Color("14")
+	colorBeerDeep  = lipgloss.Color("6")
 )
 
 func styleBrand() lipgloss.Style {

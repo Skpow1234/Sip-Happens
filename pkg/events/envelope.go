@@ -45,4 +45,3 @@ func JSON(v any) (json.RawMessage, error) {
 	}
 	return json.RawMessage(b), nil
 }
-

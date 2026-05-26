@@ -13,22 +13,22 @@ import (
 
 // ItemView is one cart line with current catalog product/price snapshot.
 type ItemView struct {
-	Qty                  int                `json:"qty"`
-	Product              catalog.ProductView `json:"product"`
-	Price                catalog.PriceView   `json:"price"`
-	LineTotalMinorUnits  int64              `json:"line_total_minor_units"`
-	AvailableQty         int                `json:"available_qty"`
+	Qty                 int                 `json:"qty"`
+	Product             catalog.ProductView `json:"product"`
+	Price               catalog.PriceView   `json:"price"`
+	LineTotalMinorUnits int64               `json:"line_total_minor_units"`
+	AvailableQty        int                 `json:"available_qty"`
 }
 
 // View is the public GET/PUT /cart payload (Terminal.shop-style cart summary).
 type View struct {
-	Currency           string               `json:"currency"`
-	Items              []ItemView           `json:"items"`
-	SubtotalMinorUnits int64                `json:"subtotal_minor_units"`
-	ItemCount          int                  `json:"item_count"`
-	AddressID          string               `json:"address_id,omitempty"`
-	Address            *addresses.AddressView `json:"address,omitempty"`
-	PaymentMethodID    string               `json:"payment_method_id,omitempty"`
+	Currency           string                            `json:"currency"`
+	Items              []ItemView                        `json:"items"`
+	SubtotalMinorUnits int64                             `json:"subtotal_minor_units"`
+	ItemCount          int                               `json:"item_count"`
+	AddressID          string                            `json:"address_id,omitempty"`
+	Address            *addresses.AddressView            `json:"address,omitempty"`
+	PaymentMethodID    string                            `json:"payment_method_id,omitempty"`
 	PaymentMethod      *stripepayments.PaymentMethodCard `json:"payment_method,omitempty"`
 }
 

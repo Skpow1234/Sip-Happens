@@ -78,11 +78,11 @@ func (j *ReconcileJob) RunOnce(ctx context.Context, now time.Time) (fixed int, f
 }
 
 type leakedReservation struct {
-	OrderID    domain.OrderID
-	ProductID  domain.ProductID
-	Qty        int
-	Reason     string
-	ExpiresAt  *time.Time
+	OrderID   domain.OrderID
+	ProductID domain.ProductID
+	Qty       int
+	Reason    string
+	ExpiresAt *time.Time
 }
 
 func (j *ReconcileJob) listLeakedReservations(ctx context.Context, now time.Time, limit int) ([]leakedReservation, error) {
@@ -250,4 +250,3 @@ func withTxSerializable(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) err
 	}
 	return tx.Commit()
 }
-

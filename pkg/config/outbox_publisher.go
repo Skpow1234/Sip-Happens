@@ -20,10 +20,10 @@ const (
 type OutboxPublisherConfig struct {
 	Kind OutboxPublisherKind
 
-	NATSURL         string
-	NATSStream      string
-	Namespace       string
-	SubjectPrefix   string
+	NATSURL       string
+	NATSStream    string
+	Namespace     string
+	SubjectPrefix string
 }
 
 // LoadOutboxPublisher reads OUTBOX_PUBLISHER (default log when unset).

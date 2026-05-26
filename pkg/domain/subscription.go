@@ -36,7 +36,7 @@ type Subscription struct {
 	UnitAmountMinorUnits     int64
 	Status                   SubscriptionStatus
 	StripeSubscriptionID     string
-	StripeSubscriptionItemID   string
+	StripeSubscriptionItemID string
 	AddressID                AddressID
 	CurrentPeriodStart       *time.Time
 	CurrentPeriodEnd         *time.Time

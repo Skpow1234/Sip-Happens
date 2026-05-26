@@ -215,8 +215,8 @@ type AppState struct {
 
 	accountSection int
 
-	savedAddresses    []api.AddressView
-	addressCursor     int
+	savedAddresses      []api.AddressView
+	addressCursor       int
 	checkoutPickAddress bool
 
 	subscriptions          []api.SubscriptionView
@@ -226,13 +226,13 @@ type AppState struct {
 	lastSubscriptionStatus string
 	paymentKind            paymentKind
 
-	tokens         []api.PersonalAccessTokenView
-	tokenCursor    int
-	tokenDraft     tokenDraft
+	tokens      []api.PersonalAccessTokenView
+	tokenCursor int
+	tokenDraft  tokenDraft
 	// lastTokenRaw is the freshly minted PAT secret. Cleared as soon as the
 	// user leaves screenTokenShow so it never lingers in memory.
-	lastTokenRaw   string
-	lastTokenView  *api.PersonalAccessTokenView
+	lastTokenRaw  string
+	lastTokenView *api.PersonalAccessTokenView
 }
 
 func (s *AppState) rememberOrderID(id string) {
@@ -450,4 +450,3 @@ func (s *AppState) productDetailFromCache(ref string) *api.CatalogDetail {
 	}
 	return s.productDetailCache[strings.TrimSpace(ref)]
 }
-

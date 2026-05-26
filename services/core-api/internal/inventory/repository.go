@@ -27,4 +27,3 @@ type Reservation struct {
 	Qty       int
 	Status    string
 }
-

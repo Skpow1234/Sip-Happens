@@ -10,4 +10,3 @@ type AuditEvent struct {
 	PayloadJSON   string
 	CreatedAt     time.Time
 }
-

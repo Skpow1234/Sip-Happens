@@ -104,4 +104,3 @@ where order_id=$1 and product_id=$2 and status='ACTIVE'
 `, string(orderID), string(productID))
 	return err
 }
-

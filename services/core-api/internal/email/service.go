@@ -13,10 +13,10 @@ import (
 
 // Service sends transactional emails when feature flags allow.
 type Service struct {
-	Mailer Mailer
-	DB     *sql.DB
-	From   string
-	Flags  featureflags.Flags
+	Mailer     Mailer
+	DB         *sql.DB
+	From       string
+	Flags      featureflags.Flags
 	Compliance ComplianceData
 }
 

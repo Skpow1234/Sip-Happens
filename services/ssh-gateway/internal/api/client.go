@@ -466,13 +466,13 @@ type CartLine struct {
 
 // CartView is the core-api GET/PUT /cart response body.
 type CartView struct {
-	Currency           string       `json:"currency"`
-	SubtotalMinorUnits int64        `json:"subtotal_minor_units"`
-	ItemCount          int          `json:"item_count"`
-	Items              []CartItemView `json:"items"`
-	AddressID          string       `json:"address_id,omitempty"`
-	Address            *AddressView `json:"address,omitempty"`
-	PaymentMethodID    string       `json:"payment_method_id,omitempty"`
+	Currency           string                 `json:"currency"`
+	SubtotalMinorUnits int64                  `json:"subtotal_minor_units"`
+	ItemCount          int                    `json:"item_count"`
+	Items              []CartItemView         `json:"items"`
+	AddressID          string                 `json:"address_id,omitempty"`
+	Address            *AddressView           `json:"address,omitempty"`
+	PaymentMethodID    string                 `json:"payment_method_id,omitempty"`
 	PaymentMethod      *PaymentMethodCardView `json:"payment_method,omitempty"`
 }
 
@@ -489,9 +489,9 @@ type PaymentMethodCardView struct {
 
 // CartItemView is one line in cart with nested product and price.
 type CartItemView struct {
-	Qty                 int `json:"qty"`
+	Qty                 int   `json:"qty"`
 	LineTotalMinorUnits int64 `json:"line_total_minor_units"`
-	AvailableQty        int `json:"available_qty"`
+	AvailableQty        int   `json:"available_qty"`
 	Product             struct {
 		ID   string `json:"id"`
 		SKU  string `json:"sku"`
@@ -507,11 +507,11 @@ type CartItemView struct {
 // upstream dependency was slow or failed; ViewInitResult.Warnings carries
 // the diagnostic and lets the TUI render whatever did load.
 type ViewInit struct {
-	Profile  *CustomerView      `json:"profile"`
-	Catalog  *CatalogPage       `json:"catalog,omitempty"`
-	Cart     *CartView          `json:"cart,omitempty"`
-	Orders   *OrderListPage     `json:"orders,omitempty"`
-	Warnings []ViewInitWarning  `json:"warnings,omitempty"`
+	Profile  *CustomerView     `json:"profile"`
+	Catalog  *CatalogPage      `json:"catalog,omitempty"`
+	Cart     *CartView         `json:"cart,omitempty"`
+	Orders   *OrderListPage    `json:"orders,omitempty"`
+	Warnings []ViewInitWarning `json:"warnings,omitempty"`
 }
 
 // OrderListPage mirrors GET /orders so /view/init's `orders` section can be
@@ -541,9 +541,9 @@ type rawViewInit struct {
 		Offset   int           `json:"offset"`
 		HasMore  bool          `json:"has_more"`
 	} `json:"catalog,omitempty"`
-	Cart     *CartView          `json:"cart,omitempty"`
-	Orders   *OrderListPage     `json:"orders,omitempty"`
-	Warnings []ViewInitWarning  `json:"warnings,omitempty"`
+	Cart     *CartView         `json:"cart,omitempty"`
+	Orders   *OrderListPage    `json:"orders,omitempty"`
+	Warnings []ViewInitWarning `json:"warnings,omitempty"`
 }
 
 // GetViewInit fetches the bootstrap envelope used right after the age gate.

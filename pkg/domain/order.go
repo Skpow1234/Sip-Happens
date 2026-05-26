@@ -53,4 +53,3 @@ type OrderItem struct {
 	Currency            string
 	LineTotalMinorUnits int64
 }
-

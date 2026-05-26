@@ -65,9 +65,9 @@ values ('order-list-1', 'SH-ORDLIST1', 'PAID', 'cust-orders-contract', 5000, 800
 			DisplayRef string `json:"display_ref"`
 			Status     string `json:"status"`
 		} `json:"orders"`
-		Limit    int  `json:"limit"`
-		Offset   int  `json:"offset"`
-		HasMore  bool `json:"has_more"`
+		Limit   int  `json:"limit"`
+		Offset  int  `json:"offset"`
+		HasMore bool `json:"has_more"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode: %v", err)

@@ -92,16 +92,16 @@ on conflict (product_id) do update set on_hand=excluded.on_hand
 	defer ts.Close()
 
 	body, _ := json.Marshal(map[string]any{
-		"currency":         "COP",
-		"privacy_consent":  true,
-		"birth_date":       "1992-03-10",
-		"city":             "Bogota",
-		"neighborhood":     "Chapinero",
-		"address_line1":    "Calle 20",
-		"phone":            "3001112233",
-		"legal_id":         "123456",
-		"full_name":        "Direct Buyer",
-		"items":            []map[string]any{{"product_id": productID, "qty": 1}},
+		"currency":        "COP",
+		"privacy_consent": true,
+		"birth_date":      "1992-03-10",
+		"city":            "Bogota",
+		"neighborhood":    "Chapinero",
+		"address_line1":   "Calle 20",
+		"phone":           "3001112233",
+		"legal_id":        "123456",
+		"full_name":       "Direct Buyer",
+		"items":           []map[string]any{{"product_id": productID, "qty": 1}},
 	})
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/orders", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

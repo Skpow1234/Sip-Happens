@@ -64,10 +64,10 @@ type ListProductsInput struct {
 }
 
 type UpsertProductInput struct {
-	SKU       string
-	Name      string
-	Brewery   string
-	Style     string
+	SKU         string
+	Name        string
+	Brewery     string
+	Style       string
 	ABV         float64
 	VolumeML    int
 	InvimaReg   string

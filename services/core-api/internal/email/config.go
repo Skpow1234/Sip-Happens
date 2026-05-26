@@ -20,10 +20,10 @@ type Config struct {
 
 func LoadConfigFromEnv() (Config, error) {
 	c := Config{
-		Provider: strings.ToLower(strings.TrimSpace(os.Getenv("EMAIL_PROVIDER"))),
-		From:     strings.TrimSpace(os.Getenv("EMAIL_FROM")),
-		SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")),
-		SMTPUser: strings.TrimSpace(os.Getenv("SMTP_USER")),
+		Provider:     strings.ToLower(strings.TrimSpace(os.Getenv("EMAIL_PROVIDER"))),
+		From:         strings.TrimSpace(os.Getenv("EMAIL_FROM")),
+		SMTPHost:     strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPUser:     strings.TrimSpace(os.Getenv("SMTP_USER")),
 		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
 	}
 	if c.Provider == "" {

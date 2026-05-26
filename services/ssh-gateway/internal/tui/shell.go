@@ -25,11 +25,11 @@ const (
 )
 
 type layoutOpts struct {
-	tab          shellTab
-	checkout     *checkoutCrumb
-	footer       string
-	showTabs     bool
-	showPromo    bool
+	tab       shellTab
+	checkout  *checkoutCrumb
+	footer    string
+	showTabs  bool
+	showPromo bool
 }
 
 func (m Model) usesShell() bool {
@@ -181,7 +181,7 @@ func selectedLine(mark, text string, selected bool) string {
 		}
 		return styleRowSelect().Render(prefix+text) + "\n"
 	}
-	return styleMuted().Render("  " + text) + "\n"
+	return styleMuted().Render("  "+text) + "\n"
 }
 
 func catalogLine(name string, width int, selected bool) string {
@@ -189,7 +189,7 @@ func catalogLine(name string, width int, selected bool) string {
 	if selected {
 		return styleRowSelect().Width(width).Render(line) + "\n"
 	}
-	return styleMuted().Render("  " + line) + "\n"
+	return styleMuted().Render("  "+line) + "\n"
 }
 
 func splitHorizontal(leftWidth int, left, right string) string {

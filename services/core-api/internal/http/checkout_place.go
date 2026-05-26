@@ -116,8 +116,8 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.placeOrderAndRespond(w, r, placeOrderParams{
-		CustomerID:     customerID,
-		Currency:       req.Currency,
+		CustomerID: customerID,
+		Currency:   req.Currency,
 		Delivery: deliverySnapshot{
 			City:         req.City,
 			Neighborhood: req.Neighborhood,

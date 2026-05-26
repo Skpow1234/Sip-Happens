@@ -128,4 +128,3 @@ func (j *ReconcileJob) reconcileOne(ctx context.Context, now time.Time, id domai
 		return fmt.Errorf("unhandled stripe payment intent status: %s", st)
 	}
 }
-

@@ -182,9 +182,9 @@ func TestWebhook_CheckoutSessionExpired_CancelsPending_E2E(t *testing.T) {
 	_ = ordersSvc.SetStripeRefs(ctx, o.ID, sessionID, "pi_test_e2e_exp")
 
 	handler := &WebhookHandler{
-		Verifier: StripeGoVerifier{SigningSecret: testWebhookSecret},
-		Orders:   ordersSvc,
-		OrderRepo: orders.NewSQLRepository(),
+		Verifier:   StripeGoVerifier{SigningSecret: testWebhookSecret},
+		Orders:     ordersSvc,
+		OrderRepo:  orders.NewSQLRepository(),
 		OrderQuery: tdb.DB,
 	}
 	ts := httptest.NewServer(handler)

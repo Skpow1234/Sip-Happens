@@ -113,4 +113,3 @@ type CreateSubscriptionCheckoutOutput struct {
 	CheckoutSessionID string
 	URL               string
 }
-

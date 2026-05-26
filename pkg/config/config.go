@@ -12,7 +12,7 @@ import (
 )
 
 type CoreAPI struct {
-	HTTPAddr string
+	HTTPAddr  string
 	Namespace string
 	Flags     featureflags.Flags
 
@@ -25,7 +25,7 @@ type CoreAPI struct {
 	StripeWebhookPath   string
 	StripeMock          bool
 
-	AdminToken string
+	AdminToken  string
 	AdminTokens []string
 	// AdminSupportTokens / AdminFinanceTokens assign RBAC tiers (roadmap-040).
 	// Tokens listed only in AdminTokens (or legacy AdminToken) default to ops.
@@ -44,9 +44,9 @@ type CoreAPI struct {
 	MinIO MinIO
 
 	// Legal URLs for emails and admin console (DESIGN §5.3–§5.4).
-	PrivacyPolicyURL         string
-	ConsumerRightsURL        string
-	DataProcessingPolicyURL  string
+	PrivacyPolicyURL        string
+	ConsumerRightsURL       string
+	DataProcessingPolicyURL string
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -159,7 +159,7 @@ func loadDBPool() DBPool {
 		MaxOpenConns:    getenvIntDefault("DB_MAX_OPEN_CONNS", 10),
 		MaxIdleConns:    getenvIntDefault("DB_MAX_IDLE_CONNS", 10),
 		ConnMaxLifetime: time.Duration(getenvIntDefault("DB_CONN_MAX_LIFETIME_SECONDS", 1800)) * time.Second, // 30m
-		ConnMaxIdleTime: time.Duration(getenvIntDefault("DB_CONN_MAX_IDLE_SECONDS", 300)) * time.Second,        // 5m
+		ConnMaxIdleTime: time.Duration(getenvIntDefault("DB_CONN_MAX_IDLE_SECONDS", 300)) * time.Second,      // 5m
 		PingTimeout:     time.Duration(getenvIntDefault("DB_PING_TIMEOUT_SECONDS", 2)) * time.Second,
 	}
 }
@@ -235,7 +235,7 @@ type OutboxDispatchJob struct {
 	RunOnce     bool
 	DBPool      DBPool
 
-	LockedBy string
+	LockedBy    string
 	MaxAttempts int
 	BaseBackoff time.Duration
 }
@@ -450,4 +450,3 @@ func getenvBoolDefault(k string, def bool) bool {
 		return def
 	}
 }
-

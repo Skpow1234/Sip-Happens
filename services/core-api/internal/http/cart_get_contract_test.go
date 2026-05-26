@@ -104,7 +104,7 @@ on conflict (ssh_fingerprint) do nothing
 			SubtotalMinorUnits int64  `json:"subtotal_minor_units"`
 			ItemCount          int    `json:"item_count"`
 			Items              []struct {
-				Qty                 int `json:"qty"`
+				Qty                 int   `json:"qty"`
 				LineTotalMinorUnits int64 `json:"line_total_minor_units"`
 				Product             struct {
 					ID string `json:"id"`

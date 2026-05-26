@@ -16,7 +16,6 @@ type SQLRepository struct{}
 
 func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
-
 func (r *SQLRepository) Insert(ctx context.Context, tx *sql.Tx, p domain.Payment) error {
 	raw := p.RawPayload
 	if raw != "" {

@@ -2,9 +2,9 @@ package email
 
 // ComplianceData is appended to all transactional email templates (minors, SIC, privacy).
 type ComplianceData struct {
-	MinorAlcoholWarning   string
-	PrivacyPolicyURL      string
-	ConsumerRightsURL     string
+	MinorAlcoholWarning     string
+	PrivacyPolicyURL        string
+	ConsumerRightsURL       string
 	DataProcessingPolicyURL string
 }
 

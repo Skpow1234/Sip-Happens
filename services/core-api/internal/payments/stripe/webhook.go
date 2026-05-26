@@ -289,4 +289,3 @@ type stripePaymentIntent struct {
 		OrderID string `json:"order_id"`
 	} `json:"metadata"`
 }
-

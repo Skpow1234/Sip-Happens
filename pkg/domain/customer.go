@@ -35,4 +35,3 @@ type AgeVerification struct {
 	VerifiedAt time.Time
 	Source     string
 }
-

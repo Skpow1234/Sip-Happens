@@ -95,17 +95,17 @@ func (s *Server) handleCartConvert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.placeOrderAndRespond(w, r, placeOrderParams{
-		CustomerID: customerID,
-		Currency:   cartCurrencyFromRequest(r),
-		Delivery:   delivery,
-		BirthDate:  req.BirthDate,
-		PrivacyConsent: req.PrivacyConsent,
-		SuccessURL:     req.SuccessURL,
-		CancelURL:      req.CancelURL,
-		Items:          items,
-		AgeVerifyMethod:     "cart_convert",
-		ClearCartItems:      true,
-		ClearCartSelections: true,
+		CustomerID:           customerID,
+		Currency:             cartCurrencyFromRequest(r),
+		Delivery:             delivery,
+		BirthDate:            req.BirthDate,
+		PrivacyConsent:       req.PrivacyConsent,
+		SuccessURL:           req.SuccessURL,
+		CancelURL:            req.CancelURL,
+		Items:                items,
+		AgeVerifyMethod:      "cart_convert",
+		ClearCartItems:       true,
+		ClearCartSelections:  true,
 		StripeCustomerIDHint: stripeCustID,
 	})
 }

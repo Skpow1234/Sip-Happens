@@ -9,9 +9,9 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"sip-happens/pkg/domain"
-	"sip-happens/pkg/obslog"
 	"sip-happens/pkg/events"
 	"sip-happens/pkg/featureflags"
+	"sip-happens/pkg/obslog"
 	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/invoicing"
 	"sip-happens/services/core-api/internal/outbox"

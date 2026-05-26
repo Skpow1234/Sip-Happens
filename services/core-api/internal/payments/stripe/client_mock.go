@@ -206,4 +206,3 @@ func (c MockClient) CancelSubscription(ctx context.Context, stripeSubscriptionID
 	_ = stripeSubscriptionID
 	return nil
 }
-

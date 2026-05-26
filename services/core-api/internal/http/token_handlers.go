@@ -14,14 +14,14 @@ import (
 // allowedTokenScopes mirrors pkg/domain.PATScope* and rejects anything else.
 // Kept here so the HTTP layer can return a 422 before touching the DB.
 var allowedTokenScopes = map[domain.PersonalAccessTokenScope]struct{}{
-	domain.PATScopeCatalogRead:          {},
-	domain.PATScopeCartWrite:            {},
-	domain.PATScopeOrdersRead:           {},
-	domain.PATScopeOrdersWrite:          {},
-	domain.PATScopeSubscriptionsRead:    {},
-	domain.PATScopeSubscriptionsWrite:   {},
-	domain.PATScopeProfileRead:          {},
-	domain.PATScopeProfileWrite:         {},
+	domain.PATScopeCatalogRead:        {},
+	domain.PATScopeCartWrite:          {},
+	domain.PATScopeOrdersRead:         {},
+	domain.PATScopeOrdersWrite:        {},
+	domain.PATScopeSubscriptionsRead:  {},
+	domain.PATScopeSubscriptionsWrite: {},
+	domain.PATScopeProfileRead:        {},
+	domain.PATScopeProfileWrite:       {},
 }
 
 const (

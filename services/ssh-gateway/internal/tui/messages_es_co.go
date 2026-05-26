@@ -5,12 +5,12 @@ import "fmt"
 // SpanishCO returns Colombia-first Spanish copy for all TUI screens.
 func SpanishCO() Messages {
 	return Messages{
-		AppName:             "Sip-Happens",
-		Loading:             "Cargando…",
-		LoadingProduct:      "Cargando producto…",
-		MinorAlcoholWarning: "Prohibida la venta de alcohol a menores de edad.",
-		WelcomeBirthPrompt:  "Ingresa tu fecha de nacimiento (AAAA-MM-DD):",
-		WelcomeContinue:     "enter — continuar   n — salir",
+		AppName:                    "Sip-Happens",
+		Loading:                    "Cargando…",
+		LoadingProduct:             "Cargando producto…",
+		MinorAlcoholWarning:        "Prohibida la venta de alcohol a menores de edad.",
+		WelcomeBirthPrompt:         "Ingresa tu fecha de nacimiento (AAAA-MM-DD):",
+		WelcomeContinue:            "enter — continuar   n — salir",
 		WelcomePrivacyLabel:        "Política de privacidad:",
 		WelcomeConsumerRightsLabel: "Derechos del consumidor (SIC):",
 		MenuTitle:                  "Menú principal",
@@ -77,7 +77,7 @@ func SpanishCO() Messages {
 		CheckoutConsumerRightsLine: func(url string) string {
 			return fmt.Sprintf("Derechos del consumidor (SIC): %s", url)
 		},
-		ConfirmTitle: "Confirmar pedido",
+		ConfirmTitle:    "Confirmar pedido",
 		ConfirmSubtotal: "Subtotal:",
 		ConfirmShipping: "Envío (est.):",
 		ConfirmTotal:    "Total:",
@@ -95,7 +95,7 @@ func SpanishCO() Messages {
 		ConfirmDataProcessingLine: func(url string) string {
 			return fmt.Sprintf("Tratamiento de datos personales (Ley 1581): %s", url)
 		},
-		ConfirmHelp: "p — política de privacidad   y — confirmar pedido   n — volver",
+		ConfirmHelp:   "p — política de privacidad   y — confirmar pedido   n — volver",
 		PaymentTitle:  "Pago fuera de la terminal",
 		PaymentOrder:  "Pedido:",
 		PaymentStatus: "Estado:",
@@ -105,9 +105,9 @@ func SpanishCO() Messages {
 		PaymentReservationTTL: func(until string) string {
 			return fmt.Sprintf("Reserva de inventario hasta: %s (si no pagas a tiempo, el pedido se cancela y el stock se libera).\n\n", until)
 		},
-		PaymentQRHint: "Escanea el código QR o abre esta URL en tu navegador (no ingreses tarjetas por SSH):",
-		PaymentCopyTip: "Consejo: selecciona las líneas de la URL (ratón o copiar del terminal) y pégala en el navegador.",
-		PaymentHelp:    "o — actualizar estado   esc — menú",
+		PaymentQRHint:      "Escanea el código QR o abre esta URL en tu navegador (no ingreses tarjetas por SSH):",
+		PaymentCopyTip:     "Consejo: selecciona las líneas de la URL (ratón o copiar del terminal) y pégala en el navegador.",
+		PaymentHelp:        "o — actualizar estado   esc — menú",
 		OrderCompleteTitle: "Pago recibido",
 		OrderCompleteBody: func(order, total, status, eta, support string) string {
 			return fmt.Sprintf(`¡Gracias! Tu pedido está confirmado.
@@ -173,7 +173,7 @@ Pedidos
 		FilterFieldLabels: []string{
 			"Estilo", "Cervecería", "ABV mín %", "ABV máx %",
 		},
-		FiltersHelp: "tab / enter — siguiente  esc — volver sin guardar  y — aplicar",
+		FiltersHelp:  "tab / enter — siguiente  esc — volver sin guardar  y — aplicar",
 		HistoryTitle: "Historial de pedidos",
 		HistoryEmpty: "(Aún no hay pedidos)",
 		HistoryHelp:  "↑/↓ mover  enter ver  r actualizar  esc menú",
@@ -182,24 +182,24 @@ Pedidos
 		StatusPaymentExpires: func(cd string) string {
 			return fmt.Sprintf("El pago vence en: %s\n\n", cd)
 		},
-		StatusHelp:        "r actualizar  esc menú",
-		StatusCancelled:   "El pedido fue cancelado o venció.",
-		ErrorTitle:        "Error",
-		ErrorBack:         "esc — menú   q — salir",
-		StatusBarLoading:  "cargando…",
+		StatusHelp:       "r actualizar  esc menú",
+		StatusCancelled:  "El pedido fue cancelado o venció.",
+		ErrorTitle:       "Error",
+		ErrorBack:        "esc — menú   q — salir",
+		StatusBarLoading: "cargando…",
 		StatusBarCart: func(n int) string {
 			return fmt.Sprintf("carrito %d", n)
 		},
 		StatusBarOrder: func(label string) string {
 			return "pedido " + label
 		},
-		ShipmentLabel:     "Envío:",
-		ShipmentCarrier:   "Transportadora:",
-		ShipmentTracking:  "Guía:",
-		ShipmentTrackHint: "Rastrea tu paquete con el código anterior.",
-		ShipmentPaid:      "Comenzaremos el despacho en breve.",
+		ShipmentLabel:      "Envío:",
+		ShipmentCarrier:    "Transportadora:",
+		ShipmentTracking:   "Guía:",
+		ShipmentTrackHint:  "Rastrea tu paquete con el código anterior.",
+		ShipmentPaid:       "Comenzaremos el despacho en breve.",
 		ShipmentFulfilling: "Tu pedido se está preparando para envío.",
-		ShipmentShipped:   "Tu pedido fue enviado. La guía aparecerá cuando el transportador escanee.",
+		ShipmentShipped:    "Tu pedido fue enviado. La guía aparecerá cuando el transportador escanee.",
 		ShipmentPacked:     "Pedido empacado y listo para entregar al transportador.",
 		ShipmentHandedOver: "Entregado al transportador; en ruta a tu dirección.",
 		ShipmentFailed:     "El envío falló. Soporte se pondrá en contacto contigo.",
@@ -221,11 +221,11 @@ Pedidos
 				return status
 			}
 		},
-		Expired:           "vencido",
-		ErrBirthRequired:  "ingresa tu fecha de nacimiento (AAAA-MM-DD)",
-		ErrBirthFormat:    "usa el formato AAAA-MM-DD (ej. 1995-06-15)",
-		ErrBirthMinor:     "debes ser mayor de 18 años para usar Sip-Happens",
-		ErrCartEmpty:      "el carrito está vacío",
+		Expired:          "vencido",
+		ErrBirthRequired: "ingresa tu fecha de nacimiento (AAAA-MM-DD)",
+		ErrBirthFormat:   "usa el formato AAAA-MM-DD (ej. 1995-06-15)",
+		ErrBirthMinor:    "debes ser mayor de 18 años para usar Sip-Happens",
+		ErrCartEmpty:     "el carrito está vacío",
 		ErrCartInvalidQty: func(sku string) string {
 			return fmt.Sprintf("%s: cantidad inválida", sku)
 		},
@@ -244,30 +244,30 @@ Pedidos
 			return fmt.Sprintf("ABV inválido %q", s)
 		},
 
-		ShellBrand:   "Sip-Happens",
-		ShellShop:    "tienda",
-		ShellAccount: "cuenta",
-		ShellCart:    "carrito",
-		ShellPromo:   "Envío gratis en pedidos mayores a $160.000 COP (ciudades piloto).",
-		CatalogFeatured:   "destacados",
-		CatalogAll:        "catálogo",
-		CatalogSelectHint: "Selecciona una cerveza de la lista.",
-		CatalogFooter:     "↑/↓ productos  ←/→ agregar  b suscribirse  / buscar  f filtros  n/p página  c carrito  ? ayuda",
-		ProductDetailFooter: "← quitar  → agregar  b suscribirse",
-		CrumbCart:     "carrito",
-		CrumbShipping: "envío",
-		CrumbPayment:  "pago",
-		CrumbConfirm:  "confirmación",
-		CartFooter:    "esc atrás  ↑/↓ artículos  +/- cantidad  x quitar  enter pagar",
-		CheckoutFooter: "esc carrito  ↑/↓ dirección  enter/tab campos  enter confirmar",
-		ConfirmFooter:  "esc envío  p privacidad  y confirmar pedido",
-		PaymentFooter:  "o estado  esc tienda",
-		PaymentOffTerminal: "No ingreses tarjetas por SSH. Paga en el navegador o escanea el QR.",
-		AccountOrders:          "historial de pedidos",
-		AccountSubscriptions:   "mis suscripciones",
+		ShellBrand:                "Sip-Happens",
+		ShellShop:                 "tienda",
+		ShellAccount:              "cuenta",
+		ShellCart:                 "carrito",
+		ShellPromo:                "Envío gratis en pedidos mayores a $160.000 COP (ciudades piloto).",
+		CatalogFeatured:           "destacados",
+		CatalogAll:                "catálogo",
+		CatalogSelectHint:         "Selecciona una cerveza de la lista.",
+		CatalogFooter:             "↑/↓ productos  ←/→ agregar  b suscribirse  / buscar  f filtros  n/p página  c carrito  ? ayuda",
+		ProductDetailFooter:       "← quitar  → agregar  b suscribirse",
+		CrumbCart:                 "carrito",
+		CrumbShipping:             "envío",
+		CrumbPayment:              "pago",
+		CrumbConfirm:              "confirmación",
+		CartFooter:                "esc atrás  ↑/↓ artículos  +/- cantidad  x quitar  enter pagar",
+		CheckoutFooter:            "esc carrito  ↑/↓ dirección  enter/tab campos  enter confirmar",
+		ConfirmFooter:             "esc envío  p privacidad  y confirmar pedido",
+		PaymentFooter:             "o estado  esc tienda",
+		PaymentOffTerminal:        "No ingreses tarjetas por SSH. Paga en el navegador o escanea el QR.",
+		AccountOrders:             "historial de pedidos",
+		AccountSubscriptions:      "mis suscripciones",
 		AccountSubscriptionsEmpty: "(Sin suscripciones — suscríbete desde la tienda con b)",
 		AccountSubscriptionsHelp:  "enter ver  x cancelar  r actualizar",
-		SubscriptionConfirmTitle:    "Suscripción recurrente",
+		SubscriptionConfirmTitle:  "Suscripción recurrente",
 		SubscriptionConfirmProduct: func(name, price, interval string, qty int) string {
 			return fmt.Sprintf("%s\n%s × %d  ·  cada %s", name, price, qty, interval)
 		},
@@ -279,15 +279,15 @@ Pedidos
 		SubscriptionStatusTitle:      "Suscripción",
 		SubscriptionStatusHelp:       "x cancelar  r actualizar  esc cuenta",
 		SubscriptionStatusCancel:     "Suscripción cancelada.",
-		SubscriptionPaymentOrder:       "Suscripción",
-		SubscriptionIntervalWeek:       "semana",
-		SubscriptionIntervalMonth:      "mes",
-		AccountAddresses:       "direcciones guardadas",
-		AccountAddressesEmpty:  "(Sin direcciones guardadas — completa el pago para guardar una)",
-		AccountAddressesHelp:   "r actualizar",
-		AccountTokens:          "tokens de API",
-		AccountTokensEmpty:     "(Sin tokens — pulsa n para crear uno para tus scripts)",
-		AccountTokensHelp:      "n nuevo  x revocar  r actualizar",
+		SubscriptionPaymentOrder:     "Suscripción",
+		SubscriptionIntervalWeek:     "semana",
+		SubscriptionIntervalMonth:    "mes",
+		AccountAddresses:             "direcciones guardadas",
+		AccountAddressesEmpty:        "(Sin direcciones guardadas — completa el pago para guardar una)",
+		AccountAddressesHelp:         "r actualizar",
+		AccountTokens:                "tokens de API",
+		AccountTokensEmpty:           "(Sin tokens — pulsa n para crear uno para tus scripts)",
+		AccountTokensHelp:            "n nuevo  x revocar  r actualizar",
 		AccountTokensListHeader: func(prefix, name string, scopes int, status string) string {
 			return fmt.Sprintf("pat_%s…  %s  ·  %d permisos  ·  %s", prefix, name, scopes, status)
 		},
@@ -309,11 +309,11 @@ Pedidos
 		TokenShowFooter:           "esc volver a tokens",
 		TokenRevokedNotice:        "Token revocado.",
 		ErrTokenNameRequired:      "ingresa un nombre para el token (1-80 caracteres)",
-		CheckoutSavedAddresses: "Dirección guardada:",
-		CheckoutAddressPickHelp: "↑/↓ elegir  enter confirmar  e editar manual  tab campos",
-		CheckoutAddressRePick:   "e elegir dirección guardada",
-		AccountFAQ:    "preguntas frecuentes",
-		AccountAbout:  "acerca de",
+		CheckoutSavedAddresses:    "Dirección guardada:",
+		CheckoutAddressPickHelp:   "↑/↓ elegir  enter confirmar  e editar manual  tab campos",
+		CheckoutAddressRePick:     "e elegir dirección guardada",
+		AccountFAQ:                "preguntas frecuentes",
+		AccountAbout:              "acerca de",
 		AccountFAQBody: `Preguntas frecuentes (piloto)
 
 • ¿Cómo pago? Enlace seguro Stripe fuera de la terminal.
@@ -324,8 +324,8 @@ Pedidos
 
 Política de privacidad: %s
 Derechos del consumidor (SIC): %s`,
-		AccountFooter:     "↑/↓ menú  enter seleccionar  esc tienda",
-		HistoryPaneHelp:   "enter ver pedido  r actualizar",
+		AccountFooter:   "↑/↓ menú  enter seleccionar  esc tienda",
+		HistoryPaneHelp: "enter ver pedido  r actualizar",
 
 		SplashTagline:          "cerveza artesanal · Colombia",
 		ProfileLinkBanner:      "Tu llave SSH aún no está vinculada a un perfil completo — entra a 'cuenta' y completa tus datos para acelerar el pago.",

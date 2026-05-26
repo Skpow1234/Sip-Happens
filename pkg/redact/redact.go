@@ -15,22 +15,22 @@ var stripeTokenRE = regexp.MustCompile(`(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+|whs
 
 // Sensitive JSON object keys (lowercase match).
 var sensitiveKeys = map[string]struct{}{
-	"client_secret":          {},
-	"secret":                 {},
-	"api_key":                {},
-	"private_key":            {},
-	"password":               {},
-	"authorization":          {},
-	"stripe_signature":       {},
-	"webhook_secret":         {},
-	"signing_secret":         {},
-	"restricted_key":         {},
-	"publishable_key":        {}, // often pk_*; value also scanned
-	"stripe_secret_key":      {},
-	"stripe_webhook_secret":  {},
-	"admin_token":            {},
-	"access_token":           {},
-	"refresh_token":          {},
+	"client_secret":         {},
+	"secret":                {},
+	"api_key":               {},
+	"private_key":           {},
+	"password":              {},
+	"authorization":         {},
+	"stripe_signature":      {},
+	"webhook_secret":        {},
+	"signing_secret":        {},
+	"restricted_key":        {},
+	"publishable_key":       {}, // often pk_*; value also scanned
+	"stripe_secret_key":     {},
+	"stripe_webhook_secret": {},
+	"admin_token":           {},
+	"access_token":          {},
+	"refresh_token":         {},
 }
 
 // String replaces known secret patterns in free text (logs, error messages).

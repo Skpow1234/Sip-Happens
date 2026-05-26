@@ -388,4 +388,3 @@ func stripeRecurringInterval(in domain.SubscriptionInterval) (*stripe.CheckoutSe
 		return nil, errors.New("invalid subscription interval")
 	}
 }
-

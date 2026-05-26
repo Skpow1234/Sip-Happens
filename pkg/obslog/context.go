@@ -5,9 +5,9 @@ import "context"
 type ctxKey string
 
 const (
-	requestIDKey   ctxKey = "request_id"
-	customerIDKey  ctxKey = "customer_id"
-	orderIDKey     ctxKey = "order_id"
+	requestIDKey  ctxKey = "request_id"
+	customerIDKey ctxKey = "customer_id"
+	orderIDKey    ctxKey = "order_id"
 )
 
 func WithRequestID(ctx context.Context, requestID string) context.Context {

@@ -11,10 +11,10 @@ import (
 )
 
 type DemoSeedOutput struct {
-	CustomerID      string
-	SSHFingerprint  string
-	ProductIDs      []string
-	DemoSSHPubKey   string // path used when present
+	CustomerID     string
+	SSHFingerprint string
+	ProductIDs     []string
+	DemoSSHPubKey  string // path used when present
 }
 
 // Demo inserts a minimal dataset required to run a prototype checkout:
@@ -122,4 +122,3 @@ on conflict (product_id) do update set on_hand=excluded.on_hand, updated_at=now(
 		DemoSSHPubKey:  pubPath,
 	}, nil
 }
-

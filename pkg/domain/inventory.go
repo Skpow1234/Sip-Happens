@@ -13,4 +13,3 @@ type Inventory struct {
 func (i Inventory) Available() int {
 	return i.OnHand - i.Reserved - i.SafetyStock
 }
-

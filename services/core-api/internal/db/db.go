@@ -25,4 +25,3 @@ func (d *DB) WithTx(ctx context.Context, opts *sql.TxOptions, fn func(tx *sql.Tx
 	}
 	return tx.Commit()
 }
-

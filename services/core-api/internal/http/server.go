@@ -13,8 +13,8 @@ import (
 	"sip-happens/pkg/config"
 	"sip-happens/pkg/domain"
 	"sip-happens/pkg/natshealth"
-	"sip-happens/pkg/redact"
 	"sip-happens/pkg/obslog"
+	"sip-happens/pkg/redact"
 	"sip-happens/pkg/shipping"
 	"sip-happens/services/core-api/internal/addresses"
 	"sip-happens/services/core-api/internal/admin"
@@ -22,11 +22,11 @@ import (
 	"sip-happens/services/core-api/internal/customers"
 	"sip-happens/services/core-api/internal/email"
 	"sip-happens/services/core-api/internal/invoicing"
+	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
-	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/tokens"
 
@@ -35,19 +35,19 @@ import (
 )
 
 type Server struct {
-	Orders      orders.Service
+	Orders        orders.Service
 	Subscriptions subscriptions.Repository
-	Tokens       tokens.Repository
-	OAuthClients oauthapps.ClientRepository
-	OAuthCodes   oauthapps.CodeRepository
-	Payments    payments.Repository
-	Customers   customers.Service
-	Addresses   addresses.Repository
-	Catalog     catalog.Repository
-	Admin       admin.Service
-	Invoices    *invoicing.Service
-	AdminToken  string
-	AdminTokens []string
+	Tokens        tokens.Repository
+	OAuthClients  oauthapps.ClientRepository
+	OAuthCodes    oauthapps.CodeRepository
+	Payments      payments.Repository
+	Customers     customers.Service
+	Addresses     addresses.Repository
+	Catalog       catalog.Repository
+	Admin         admin.Service
+	Invoices      *invoicing.Service
+	AdminToken    string
+	AdminTokens   []string
 	// AdminTokenRoles maps bearer token string to RBAC tier when using ADMIN_* role envs (optional).
 	AdminTokenRoles   map[string]AdminRole
 	DB                *sql.DB

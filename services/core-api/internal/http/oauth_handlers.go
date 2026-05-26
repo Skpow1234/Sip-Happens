@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	authorizationCodeTTL  = 10 * time.Minute
-	oauthAccessTokenTTL   = 30 * 24 * time.Hour // 30 days
-	oauthSupportedGrant   = "authorization_code"
-	oauthTokenTypeBearer  = "Bearer"
+	authorizationCodeTTL = 10 * time.Minute
+	oauthAccessTokenTTL  = 30 * 24 * time.Hour // 30 days
+	oauthSupportedGrant  = "authorization_code"
+	oauthTokenTypeBearer = "Bearer"
 )
 
 // oauthError is a small typed wrapper so handlers can short-circuit with a

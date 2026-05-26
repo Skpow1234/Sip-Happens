@@ -24,6 +24,7 @@ import (
 	httpserver "sip-happens/services/core-api/internal/http"
 	"sip-happens/services/core-api/internal/inventory"
 	"sip-happens/services/core-api/internal/invoicing"
+	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/observability"
 	"sip-happens/services/core-api/internal/orders"
@@ -31,7 +32,6 @@ import (
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/seed"
-	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/tokens"
 )
@@ -145,33 +145,33 @@ func runServer() error {
 	}
 
 	srv := &httpserver.Server{
-		Orders:            ordersSvc,
-		Subscriptions:     subscriptions.NewSQLRepository(),
-		Tokens:            tokens.NewSQLRepository(),
-		OAuthClients:      oauthapps.NewSQLClientRepository(),
-		OAuthCodes:        oauthapps.NewSQLCodeRepository(),
-		Payments:          paymentsRepo,
-		Customers:         customersSvc,
-		Addresses:         addresses.NewSQLRepository(),
-		Catalog:           catalogRepo,
-		Admin:             adminSvc,
-		Invoices:          invoiceSvc,
-		AdminToken:        cfg.AdminToken,
-		AdminTokens:       cfg.AdminTokens,
-		AdminTokenRoles:   httpserver.AdminTokenRolesFromConfig(cfg),
-		DB:                sqlDB,
-		Namespace:         cfg.Namespace,
-		OutboxPublisher:   outboxPub.Kind,
-		NATSURL:           outboxPub.NATSURL,
-		FeatureFlags:      cfg.Flags.Enabled,
-		CoreAPIHMACSecret: cfg.CoreAPIHMACSecret,
-		CoreAPIHMACKeys:   cfg.CoreAPIHMACKeys,
-		Stripe:            selectStripeClient(cfg),
-		StripeWebhook:     stripeWebhook,
-		StripeWebhookPath: cfg.StripeWebhookPath,
-		Email:             emailSvc,
-		Redis:             redisClient,
-		RedisRequired:     cfg.RedisRequired,
+		Orders:                  ordersSvc,
+		Subscriptions:           subscriptions.NewSQLRepository(),
+		Tokens:                  tokens.NewSQLRepository(),
+		OAuthClients:            oauthapps.NewSQLClientRepository(),
+		OAuthCodes:              oauthapps.NewSQLCodeRepository(),
+		Payments:                paymentsRepo,
+		Customers:               customersSvc,
+		Addresses:               addresses.NewSQLRepository(),
+		Catalog:                 catalogRepo,
+		Admin:                   adminSvc,
+		Invoices:                invoiceSvc,
+		AdminToken:              cfg.AdminToken,
+		AdminTokens:             cfg.AdminTokens,
+		AdminTokenRoles:         httpserver.AdminTokenRolesFromConfig(cfg),
+		DB:                      sqlDB,
+		Namespace:               cfg.Namespace,
+		OutboxPublisher:         outboxPub.Kind,
+		NATSURL:                 outboxPub.NATSURL,
+		FeatureFlags:            cfg.Flags.Enabled,
+		CoreAPIHMACSecret:       cfg.CoreAPIHMACSecret,
+		CoreAPIHMACKeys:         cfg.CoreAPIHMACKeys,
+		Stripe:                  selectStripeClient(cfg),
+		StripeWebhook:           stripeWebhook,
+		StripeWebhookPath:       cfg.StripeWebhookPath,
+		Email:                   emailSvc,
+		Redis:                   redisClient,
+		RedisRequired:           cfg.RedisRequired,
 		ProductImages:           productImages,
 		PrivacyPolicyURL:        cfg.PrivacyPolicyURL,
 		ConsumerRightsURL:       cfg.ConsumerRightsURL,

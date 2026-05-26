@@ -434,4 +434,3 @@ func (m Model) viewPaymentV2() string {
 	}
 	return m.composeLayout(inner, opts)
 }
-

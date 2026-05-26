@@ -39,4 +39,3 @@ func (d Decoder) supports(typ string, version int) bool {
 	_, ok := vs[version]
 	return ok
 }
-

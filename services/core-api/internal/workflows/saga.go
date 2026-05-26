@@ -27,4 +27,3 @@ func (s *Saga) OnOrderPaid(ctx context.Context, now time.Time, orderID domain.Or
 	_, err := s.Fulfillment.StartFulfillment(ctx, now, orderID)
 	return err
 }
-

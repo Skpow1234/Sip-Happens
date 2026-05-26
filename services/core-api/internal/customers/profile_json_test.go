@@ -9,11 +9,11 @@ import (
 
 func TestProfileViewFromDomain(t *testing.T) {
 	c := &domain.Customer{
-		ID:           "cust-1",
-		Email:        "a@b.co",
-		FullName:     "Ana",
-		City:         "Bogotá",
-		BirthDate:    time.Date(1990, 3, 15, 0, 0, 0, 0, time.UTC),
+		ID:        "cust-1",
+		Email:     "a@b.co",
+		FullName:  "Ana",
+		City:      "Bogotá",
+		BirthDate: time.Date(1990, 3, 15, 0, 0, 0, 0, time.UTC),
 	}
 	v := ProfileViewFromDomain(c)
 	if v.ID != "cust-1" || v.Email != "a@b.co" || v.FullName != "Ana" || v.BirthDate != "1990-03-15" {

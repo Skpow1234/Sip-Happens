@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	oauthClientNameMaxLen     = 80
-	oauthClientMaxRedirectURI = 512
+	oauthClientNameMaxLen      = 80
+	oauthClientMaxRedirectURI  = 512
 	oauthClientMaxRedirectURIs = 8
 )
 

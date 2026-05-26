@@ -6,7 +6,7 @@ import "fmt"
 //
 // For **COP on Stripe**, the amount is in **pesos** (zero-decimal), not centavos.
 type Amount struct {
-	Currency string
+	Currency   string
 	MinorUnits int64
 }
 
@@ -20,4 +20,3 @@ func (a Amount) String() string {
 func COP(pesos int64) Amount {
 	return Amount{Currency: "COP", MinorUnits: pesos}
 }
-

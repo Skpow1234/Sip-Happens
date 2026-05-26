@@ -11,8 +11,8 @@ import (
 )
 
 type Migrator struct {
-	DB *sql.DB
-	FS fs.FS
+	DB  *sql.DB
+	FS  fs.FS
 	Dir string
 }
 
@@ -91,4 +91,3 @@ create table if not exists schema_migrations (
 
 	return nil
 }
-

@@ -12,14 +12,14 @@ import (
 
 // IssueRequest is the minimum buyer and totals payload for a DIAN invoice (v1).
 type IssueRequest struct {
-	OrderID     domain.OrderID
-	Currency    string
-	TotalMinor  int64
-	LegalID     string
-	FullName    string
-	City        string
-	Address     string
-	LineItems   []IssueLineItem
+	OrderID    domain.OrderID
+	Currency   string
+	TotalMinor int64
+	LegalID    string
+	FullName   string
+	City       string
+	Address    string
+	LineItems  []IssueLineItem
 }
 
 type IssueLineItem struct {

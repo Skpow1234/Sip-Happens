@@ -42,4 +42,3 @@ func runMigrateUp(ctx context.Context) error {
 	}
 	return m.Up(ctx)
 }
-

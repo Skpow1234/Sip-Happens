@@ -11,20 +11,20 @@ import (
 )
 
 type orderCreateRequest struct {
-	Currency       string `json:"currency"`
-	AddressID      string `json:"address_id"`
-	City           string `json:"city"`
-	Neighborhood   string `json:"neighborhood"`
-	AddressLine1   string `json:"address_line1"`
-	Phone          string `json:"phone"`
-	LegalID        string `json:"legal_id"`
-	FullName       string `json:"full_name"`
-	BirthDate      string `json:"birth_date"`
-	PrivacyConsent bool   `json:"privacy_consent"`
-	SuccessURL     string `json:"success_url"`
-	CancelURL      string `json:"cancel_url"`
+	Currency        string `json:"currency"`
+	AddressID       string `json:"address_id"`
+	City            string `json:"city"`
+	Neighborhood    string `json:"neighborhood"`
+	AddressLine1    string `json:"address_line1"`
+	Phone           string `json:"phone"`
+	LegalID         string `json:"legal_id"`
+	FullName        string `json:"full_name"`
+	BirthDate       string `json:"birth_date"`
+	PrivacyConsent  bool   `json:"privacy_consent"`
+	SuccessURL      string `json:"success_url"`
+	CancelURL       string `json:"cancel_url"`
 	PaymentMethodID string `json:"payment_method_id"`
-	Items          []struct {
+	Items           []struct {
 		ProductID string `json:"product_id"`
 		Qty       int    `json:"qty"`
 	} `json:"items"`

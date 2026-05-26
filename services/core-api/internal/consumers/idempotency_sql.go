@@ -53,4 +53,3 @@ on conflict (consumer_name, message_id) do nothing
 `, consumerName, messageID, processedAt)
 	return err
 }
-
