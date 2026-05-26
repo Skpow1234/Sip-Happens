@@ -184,6 +184,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setNotice(fmt.Errorf("%s", L.SubscriptionStatusCancel))
 		return m, nil
 
+	case tokensLoadedMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			return m, nil
+		}
+		m.state.tokens = msg.tokens
+		if m.state.tokenCursor >= len(m.state.tokens) {
+			m.state.tokenCursor = 0
+		}
+		return m, nil
+
+	case tokenCreatedMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			m.screen = screenTokenCreate
+			return m, nil
+		}
+		if msg.result == nil {
+			m.showErr(fmt.Errorf("empty token response"))
+			return m, nil
+		}
+		m.state.lastTokenRaw = msg.result.Token
+		t := msg.result.PersonalAccessToken
+		m.state.lastTokenView = &t
+		m.state.tokenDraft = tokenDraft{}
+		m.screen = screenTokenShow
+		return m, nil
+
+	case tokenRevokedMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.showErr(msg.err)
+			return m, nil
+		}
+		if msg.token != nil {
+			for i, t := range m.state.tokens {
+				if t.ID == msg.token.ID {
+					m.state.tokens[i] = *msg.token
+					break
+				}
+			}
+		}
+		m.setNotice(fmt.Errorf("%s", L.TokenRevokedNotice))
+		return m, nil
+
 	case orderLoadedMsg:
 		m.busy = false
 		if msg.err != nil {
@@ -365,6 +412,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.state.subscriptionCursor > 0 {
 					m.state.subscriptionCursor--
 				}
+			} else if m.state.accountSection == accountTokens && len(m.state.tokens) > 0 {
+				if m.state.tokenCursor > 0 {
+					m.state.tokenCursor--
+				}
 			} else if m.state.accountSection > accountOrders {
 				m.state.accountSection--
 				if cmd := m.accountSectionLoadCmd(); cmd != nil {
@@ -380,6 +431,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else if m.state.accountSection == accountSubscriptions && len(m.state.subscriptions) > 0 {
 				if m.state.subscriptionCursor < len(m.state.subscriptions)-1 {
 					m.state.subscriptionCursor++
+				}
+			} else if m.state.accountSection == accountTokens && len(m.state.tokens) > 0 {
+				if m.state.tokenCursor < len(m.state.tokens)-1 {
+					m.state.tokenCursor++
 				}
 			} else if m.state.accountSection < accountAbout {
 				m.state.accountSection++
@@ -415,6 +470,20 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.busy = true
 				return m, m.cancelSubscriptionCmd(sub.ID)
+			}
+			if m.state.accountSection == accountTokens && len(m.state.tokens) > 0 {
+				t := m.state.tokens[m.state.tokenCursor]
+				if t.RevokedAt != nil {
+					return m, nil
+				}
+				m.busy = true
+				return m, m.revokeTokenCmd(t.ID)
+			}
+		case "n":
+			if m.state.accountSection == accountTokens {
+				m.state.tokenDraft = tokenDraft{preset: tokenScopeReadOnly}
+				m.screen = screenTokenCreate
+				return m, nil
 			}
 		case "r":
 			if cmd := m.accountSectionLoadCmd(); cmd != nil {
@@ -452,6 +521,55 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "y":
 			m.busy = true
 			return m, m.submitSubscriptionCmd()
+		}
+
+	case screenTokenCreate:
+		switch msg.String() {
+		case "esc":
+			m.state.tokenDraft = tokenDraft{}
+			m.screen = screenAccount
+			m.state.accountSection = accountTokens
+			return m, nil
+		case "1":
+			m.state.tokenDraft.preset = tokenScopeReadOnly
+			return m, nil
+		case "2":
+			m.state.tokenDraft.preset = tokenScopeFullAccess
+			return m, nil
+		case "backspace":
+			if n := len(m.state.tokenDraft.name); n > 0 {
+				m.state.tokenDraft.name = m.state.tokenDraft.name[:n-1]
+			}
+			return m, nil
+		case "y":
+			if strings.TrimSpace(m.state.tokenDraft.name) == "" {
+				m.showErr(fmt.Errorf("%s", L.ErrTokenNameRequired))
+				return m, nil
+			}
+			m.busy = true
+			return m, m.submitTokenCmd()
+		default:
+			s := msg.String()
+			if len(s) == 1 && s != " " {
+				r := s[0]
+				printable := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+					(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.'
+				if printable && len(m.state.tokenDraft.name) < 80 {
+					m.state.tokenDraft.name += s
+				}
+			}
+			return m, nil
+		}
+
+	case screenTokenShow:
+		switch msg.String() {
+		case "esc", "enter":
+			m.state.lastTokenRaw = ""
+			m.state.lastTokenView = nil
+			m.screen = screenAccount
+			m.state.accountSection = accountTokens
+			m.busy = true
+			return m, m.loadTokensCmd()
 		}
 
 	case screenSubscriptionStatus:
@@ -816,6 +934,10 @@ func (m Model) View() string {
 			body = m.viewSubscriptionConfirm()
 		case screenSubscriptionStatus:
 			body = m.viewSubscriptionStatus()
+		case screenTokenCreate:
+			body = m.viewTokenCreate()
+		case screenTokenShow:
+			body = m.viewTokenShow()
 		case screenHelp:
 			body = m.composeLayout(m.viewHelp(), m.layoutDefaults(m.activeTab(), L.HelpBack))
 		case screenOrderComplete:
@@ -1158,6 +1280,18 @@ type subscriptionCancelledMsg struct {
 	subscription *api.SubscriptionView
 	err          error
 }
+type tokensLoadedMsg struct {
+	tokens []api.PersonalAccessTokenView
+	err    error
+}
+type tokenCreatedMsg struct {
+	result *api.PersonalAccessTokenCreateResult
+	err    error
+}
+type tokenRevokedMsg struct {
+	token *api.PersonalAccessTokenView
+	err   error
+}
 type checkoutBootstrapMsg struct {
 	customer  *api.CustomerView
 	addresses []api.AddressView
@@ -1442,8 +1576,44 @@ func (m Model) accountSectionLoadCmd() tea.Cmd {
 		return m.loadSubscriptionsCmd()
 	case accountAddresses:
 		return m.loadAddressesCmd()
+	case accountTokens:
+		return m.loadTokensCmd()
 	default:
 		return nil
+	}
+}
+
+func (m Model) loadTokensCmd() tea.Cmd {
+	return func() tea.Msg {
+		page, err := m.api.ListPersonalAccessTokensPage(context.Background(), 50, 0)
+		if err != nil {
+			return tokensLoadedMsg{err: err}
+		}
+		if page == nil {
+			return tokensLoadedMsg{tokens: nil}
+		}
+		return tokensLoadedMsg{tokens: page.Tokens}
+	}
+}
+
+func (m Model) submitTokenCmd() tea.Cmd {
+	draft := m.state.tokenDraft
+	client := m.api
+	return func() tea.Msg {
+		req := api.PersonalAccessTokenCreateRequest{
+			Name:   strings.TrimSpace(draft.name),
+			Scopes: draft.preset.scopes(),
+		}
+		res, err := client.CreatePersonalAccessToken(context.Background(), req)
+		return tokenCreatedMsg{result: res, err: err}
+	}
+}
+
+func (m Model) revokeTokenCmd(id string) tea.Cmd {
+	client := m.api
+	return func() tea.Msg {
+		t, err := client.RevokePersonalAccessToken(context.Background(), id)
+		return tokenRevokedMsg{token: t, err: err}
 	}
 }
 

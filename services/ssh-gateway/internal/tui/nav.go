@@ -38,11 +38,12 @@ func (m *Model) activeTab() shellTab {
 	switch m.screen {
 	case screenCart, screenCheckout, screenConfirm:
 		return tabCart
-	case screenAccount, screenOrderStatus, screenSubscriptionStatus, screenHelp:
+	case screenAccount, screenOrderStatus, screenSubscriptionStatus, screenTokenCreate, screenTokenShow, screenHelp:
 		if m.screen == screenHelp && m.helpFromAccount {
 			return tabAccount
 		}
-		if m.screen == screenAccount || m.screen == screenOrderStatus || m.screen == screenSubscriptionStatus {
+		switch m.screen {
+		case screenAccount, screenOrderStatus, screenSubscriptionStatus, screenTokenCreate, screenTokenShow:
 			return tabAccount
 		}
 		return tabShop
@@ -86,7 +87,7 @@ func (m *Model) goCart() (tea.Model, tea.Cmd, bool) {
 
 func (m *Model) tabKeysAllowed() bool {
 	switch m.screen {
-	case screenCheckout, screenConfirm, screenWelcome, screenCatalogFilters:
+	case screenCheckout, screenConfirm, screenWelcome, screenCatalogFilters, screenTokenCreate:
 		return false
 	case screenCatalog:
 		return !m.state.catalogSearchEdit
@@ -149,6 +150,7 @@ const (
 	accountOrders = iota
 	accountSubscriptions
 	accountAddresses
+	accountTokens
 	accountFAQ
 	accountAbout
 )

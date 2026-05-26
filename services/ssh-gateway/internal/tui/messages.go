@@ -146,6 +146,28 @@ type Messages struct {
 	AccountAddresses      string
 	AccountAddressesEmpty string
 	AccountAddressesHelp  string
+	AccountTokens             string
+	AccountTokensEmpty        string
+	AccountTokensHelp         string
+	AccountTokensListHeader   func(prefix, name string, scopes int, status string) string
+	AccountTokenStatusActive  string
+	AccountTokenStatusRevoked string
+	AccountTokenStatusExpired string
+	TokenCreateTitle          string
+	TokenCreateNameLabel      string
+	TokenCreateScopesLabel    string
+	TokenCreatePresetRead     string
+	TokenCreatePresetFull     string
+	TokenCreateFooter         string
+	TokenShowTitle            string
+	TokenShowOnceWarning      string
+	TokenShowPrefixLabel      string
+	TokenShowScopesLabel      string
+	TokenShowSecretLabel      string
+	TokenShowCopyHint         string
+	TokenShowFooter           string
+	TokenRevokedNotice        string
+	ErrTokenNameRequired      string
 	CheckoutSavedAddresses string
 	CheckoutAddressPickHelp string
 	CheckoutAddressRePick   string

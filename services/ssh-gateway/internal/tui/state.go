@@ -27,8 +27,46 @@ const (
 	screenAccount
 	screenSubscriptionConfirm
 	screenSubscriptionStatus
+	screenTokenCreate
+	screenTokenShow
 	screenError
 )
+
+// tokenScopePreset is the small set of pre-canned permission bundles offered
+// in the TUI form. Power users can call POST /tokens directly with custom
+// scopes (the API still validates against domain.PATScope*).
+type tokenScopePreset int
+
+const (
+	tokenScopeReadOnly tokenScopePreset = iota
+	tokenScopeFullAccess
+)
+
+func (p tokenScopePreset) scopes() []string {
+	switch p {
+	case tokenScopeFullAccess:
+		return []string{
+			"catalog:read",
+			"profile:read", "profile:write",
+			"cart:write",
+			"orders:read", "orders:write",
+			"subscriptions:read", "subscriptions:write",
+		}
+	default:
+		return []string{
+			"catalog:read",
+			"profile:read",
+			"orders:read",
+			"subscriptions:read",
+		}
+	}
+}
+
+// tokenDraft captures the in-progress token creation form.
+type tokenDraft struct {
+	name   string
+	preset tokenScopePreset
+}
 
 type paymentKind int
 
@@ -157,6 +195,14 @@ type AppState struct {
 	lastSubscriptionID     string
 	lastSubscriptionStatus string
 	paymentKind            paymentKind
+
+	tokens         []api.PersonalAccessTokenView
+	tokenCursor    int
+	tokenDraft     tokenDraft
+	// lastTokenRaw is the freshly minted PAT secret. Cleared as soon as the
+	// user leaves screenTokenShow so it never lingers in memory.
+	lastTokenRaw   string
+	lastTokenView  *api.PersonalAccessTokenView
 }
 
 func (s *AppState) rememberOrderID(id string) {

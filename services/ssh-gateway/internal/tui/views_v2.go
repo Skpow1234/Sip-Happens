@@ -98,6 +98,7 @@ func (m Model) accountMenuPane() string {
 		{accountOrders, L.AccountOrders},
 		{accountSubscriptions, L.AccountSubscriptions},
 		{accountAddresses, L.AccountAddresses},
+		{accountTokens, L.AccountTokens},
 		{accountFAQ, L.AccountFAQ},
 		{accountAbout, L.AccountAbout},
 	}
@@ -118,6 +119,8 @@ func (m Model) accountContentPane() string {
 		return m.accountAddressesPane()
 	case accountSubscriptions:
 		return m.accountSubscriptionsPane()
+	case accountTokens:
+		return m.accountTokensPane()
 	default:
 		return m.accountOrdersPane()
 	}

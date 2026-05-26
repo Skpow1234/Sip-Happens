@@ -20,6 +20,7 @@ func TestModel_WindowSize_AllScreens_ViewDoesNotPanic(t *testing.T) {
 		screenWelcome, screenCatalog, screenCart,
 		screenCheckout, screenConfirm, screenPayment, screenOrderStatus,
 		screenAccount, screenSubscriptionConfirm, screenSubscriptionStatus,
+		screenTokenCreate, screenTokenShow,
 		screenCatalogFilters, screenHelp, screenOrderComplete, screenError,
 	}
 	for _, sc := range screens {
@@ -54,6 +55,16 @@ func seedModelForScreen(sc screen) Model {
 	m.state.lastOrderDisplayRef = "SH-TEST"
 	m.state.lastSubscriptionID = "sub_test"
 	m.state.lastSubscriptionStatus = "PENDING"
+	m.state.tokenDraft = tokenDraft{name: "ci script", preset: tokenScopeReadOnly}
+	m.state.lastTokenRaw = "pat_deadbeefdeadbeefdeadbeefdeadbeef_AAAABBBBCCCCDDDDEEEEFFFF000011112222"
+	v := api.PersonalAccessTokenView{
+		ID:          "pat_00000000000000000000000000000001",
+		Name:        "ci script",
+		TokenPrefix: "deadbeefdeadbeefdeadbeefdeadbeef",
+		Scopes:      []string{"catalog:read", "orders:read"},
+	}
+	m.state.lastTokenView = &v
+	m.state.tokens = []api.PersonalAccessTokenView{v}
 	m.err = errForScreen(sc)
 	return m
 }
