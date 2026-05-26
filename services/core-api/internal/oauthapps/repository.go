@@ -13,13 +13,25 @@ type Querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// ClientRepository is the minimum surface needed by the OAuth flow handlers.
-// Full CRUD (list/create/delete) belongs to the upcoming oauth-app-crud task.
+// ClientPage is one page of a customer-scoped client listing.
+type ClientPage struct {
+	Clients []domain.OAuthClient
+	HasMore bool
+}
+
+// ClientRepository persists registered third-party OAuth apps.
+//
+// All customer-scoped methods MUST verify ownership (customer_id) so a caller
+// can never read or mutate another customer's client rows. GetByClientID is
+// the only intentionally unscoped lookup — it backs the public POST /oauth/token
+// endpoint and is gated by client_secret verification afterwards.
 type ClientRepository interface {
-	// GetByClientID loads the active client row identified by its public
-	// `client_id` string (NOT the internal UUID). Returns domain.ErrNotFound
-	// when missing or revoked.
 	GetByClientID(ctx context.Context, q Querier, clientID string) (*domain.OAuthClient, error)
+
+	ListByCustomer(ctx context.Context, q Querier, customerID domain.CustomerID, limit, offset int) (ClientPage, error)
+	Get(ctx context.Context, q Querier, customerID domain.CustomerID, id domain.OAuthClientID) (*domain.OAuthClient, error)
+	Create(ctx context.Context, q Querier, c domain.OAuthClient) error
+	Revoke(ctx context.Context, q Querier, customerID domain.CustomerID, id domain.OAuthClientID) (*domain.OAuthClient, error)
 }
 
 // CodeRepository persists short-lived authorization codes for the
