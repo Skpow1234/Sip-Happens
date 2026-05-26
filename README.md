@@ -371,6 +371,13 @@ Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address
 - `GET /tokens/{id}` — metadata for one PAT (`pat_…` public id or UUID)
 - `DELETE /tokens/{id}` — revoke (idempotent). Available scopes: `catalog:read`, `cart:write`, `orders:read`, `orders:write`, `subscriptions:read`, `subscriptions:write`, `profile:read`, `profile:write`.
 
+**OAuth 2.0 — Authorization Code grant** (for third-party apps)
+
+Sip-Happens has no browser session, so the customer-side step runs through the **signed** SSH/HMAC channel:
+
+- `POST /oauth/authorize` *(signed)* — body: `client_id` (`oci_…`), `redirect_uri`, `scopes[]`, optional `state`. Returns a single-use `oac_<prefix>_<secret>` code (10-minute TTL). The customer pastes the code into the third-party app.
+- `POST /oauth/token` *(public, RFC 6749 `application/x-www-form-urlencoded`)* — body: `grant_type=authorization_code`, `code`, `redirect_uri`, plus client credentials (HTTP Basic auth or form `client_id` / `client_secret`). Returns `{ access_token (pat_…), token_type=Bearer, expires_in, scope }`. The access token is persisted in `personal_access_tokens` so a single Bearer middleware can authenticate both SSH-minted PATs and OAuth-issued tokens. Error envelope is the RFC 6749 §5.2 shape (`error`, `error_description`).
+
 **Signed — checkout & shipping**
 
 - `POST /checkout` — pending order, inventory reservation, Stripe Checkout Session (`Idempotency-Key` required). Legacy/explicit entry point; `POST /cart/convert` and `POST /orders` share the same engine.
