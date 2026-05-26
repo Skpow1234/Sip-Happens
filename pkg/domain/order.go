@@ -13,6 +13,14 @@ const (
 	OrderStatusFulfilling     OrderStatus = "FULFILLING"
 	OrderStatusShipped        OrderStatus = "SHIPPED"
 	OrderStatusCancelled      OrderStatus = "CANCELLED"
+	// OrderStatusRefunded is set when a paid order has been fully or
+	// partially refunded via POST /admin/orders/{id}/refund. Full vs
+	// partial is distinguished by the rows in the `refunds` table — the
+	// order status flips to REFUNDED on the FIRST refund regardless of
+	// amount, because once any money has been sent back the order has
+	// permanently left the normal lifecycle. Inventory is NOT
+	// auto-restocked (a refunded order may still be in transit).
+	OrderStatusRefunded OrderStatus = "REFUNDED"
 )
 
 type Order struct {
