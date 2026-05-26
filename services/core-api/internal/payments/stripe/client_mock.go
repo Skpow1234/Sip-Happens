@@ -206,3 +206,26 @@ func (c MockClient) CancelSubscription(ctx context.Context, stripeSubscriptionID
 	_ = stripeSubscriptionID
 	return nil
 }
+
+func (c MockClient) CreateRefund(ctx context.Context, in CreateRefundInput) (*CreateRefundOutput, error) {
+	_ = ctx
+	if strings.TrimSpace(in.PaymentIntentID) == "" {
+		return nil, fmt.Errorf("missing payment_intent_id")
+	}
+	if strings.TrimSpace(in.IdempotencyKey) == "" {
+		return nil, fmt.Errorf("missing idempotency_key")
+	}
+	if in.AmountMinorUnits < 0 {
+		return nil, fmt.Errorf("invalid refund amount")
+	}
+	suffix, err := ids.RandomHex(8)
+	if err != nil {
+		return nil, err
+	}
+	return &CreateRefundOutput{
+		StripeRefundID: fmt.Sprintf("re_test_%s", suffix),
+		// MockClient always synthesizes a succeeded refund — the webhook
+		// path is what really exercises the FAILED branch.
+		Status: "succeeded",
+	}, nil
+}

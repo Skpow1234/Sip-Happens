@@ -35,6 +35,36 @@ type Service interface {
 
 	// CancelSubscription cancels an active Stripe subscription at period end or immediately.
 	CancelSubscription(ctx context.Context, stripeSubscriptionID string) error
+
+	// CreateRefund issues a refund against an existing payment intent.
+	// Stripe-side idempotency uses in.IdempotencyKey verbatim; callers are
+	// expected to derive a stable key like sha256(order_id|attempt_number)
+	// so retries of the same logical refund don't double-pay. AmountMinorUnits
+	// may be less than the original charge for partials; zero or unset means
+	// "full refund of remaining balance" per Stripe's defaults.
+	CreateRefund(ctx context.Context, in CreateRefundInput) (*CreateRefundOutput, error)
+}
+
+// CreateRefundInput is the request shape for stripe.CreateRefund. We keep
+// it minimal — the underlying Stripe API has dozens of optional fields,
+// but for the v1 admin partial-refund flow we only need amount + reason +
+// idempotency.
+type CreateRefundInput struct {
+	PaymentIntentID  string
+	AmountMinorUnits int64  // 0 = full refund of remaining balance
+	Reason           string // optional, free-form (Stripe accepts requested_by_customer | duplicate | fraudulent | "")
+	IdempotencyKey   string // required; usually sha256(order_id|attempt)
+	OrderID          domain.OrderID
+}
+
+// CreateRefundOutput mirrors the subset of the Stripe refund object we
+// store locally. Status is the raw Stripe value ("pending" | "succeeded"
+// | "failed" | "canceled"); the service layer normalizes it before
+// writing to `refunds.status`.
+type CreateRefundOutput struct {
+	StripeRefundID string
+	Status         string
+	FailureReason  string
 }
 
 type CreateCheckoutInput struct {

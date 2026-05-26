@@ -12,6 +12,7 @@ import (
 	stripecustomer "github.com/stripe/stripe-go/v82/customer"
 	paymentintent "github.com/stripe/stripe-go/v82/paymentintent"
 	paymentmethod "github.com/stripe/stripe-go/v82/paymentmethod"
+	striperefund "github.com/stripe/stripe-go/v82/refund"
 	stripesubscription "github.com/stripe/stripe-go/v82/subscription"
 
 	"sip-happens/pkg/domain"
@@ -425,6 +426,60 @@ func (c StripeGoClient) CancelSubscription(ctx context.Context, stripeSubscripti
 	_, err := stripesubscription.Cancel(stripeSubscriptionID, nil)
 	_ = ctx
 	return err
+}
+
+func (c StripeGoClient) CreateRefund(ctx context.Context, in CreateRefundInput) (*CreateRefundOutput, error) {
+	if c.SecretKey == "" {
+		return nil, errors.New("missing stripe secret key")
+	}
+	pi := strings.TrimSpace(in.PaymentIntentID)
+	if pi == "" {
+		return nil, errors.New("missing payment_intent_id")
+	}
+	if strings.TrimSpace(in.IdempotencyKey) == "" {
+		return nil, errors.New("missing idempotency_key")
+	}
+	if in.AmountMinorUnits < 0 {
+		return nil, errors.New("invalid refund amount")
+	}
+
+	stripe.Key = c.SecretKey
+
+	params := &stripe.RefundParams{
+		PaymentIntent: stripe.String(pi),
+	}
+	if in.AmountMinorUnits > 0 {
+		params.Amount = stripe.Int64(in.AmountMinorUnits)
+	}
+	if r := strings.TrimSpace(in.Reason); r != "" {
+		switch r {
+		case string(stripe.RefundReasonRequestedByCustomer),
+			string(stripe.RefundReasonDuplicate),
+			string(stripe.RefundReasonFraudulent):
+			params.Reason = stripe.String(r)
+		default:
+			// Free-form reasons go into metadata, not the typed enum.
+			params.AddMetadata("reason", r)
+		}
+	}
+	if in.OrderID != "" {
+		params.AddMetadata("order_id", string(in.OrderID))
+	}
+	params.SetIdempotencyKey(in.IdempotencyKey)
+
+	r, err := striperefund.New(params)
+	if err != nil {
+		return nil, err
+	}
+	_ = ctx
+	out := &CreateRefundOutput{
+		StripeRefundID: r.ID,
+		Status:         string(r.Status),
+	}
+	if r.FailureReason != "" {
+		out.FailureReason = string(r.FailureReason)
+	}
+	return out, nil
 }
 
 func stripeRecurringInterval(in domain.SubscriptionInterval) (*stripe.CheckoutSessionLineItemPriceDataRecurringParams, error) {
