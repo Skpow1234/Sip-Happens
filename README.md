@@ -114,7 +114,7 @@ Flow: confirm age → split-pane catalog → cart → delivery (breadcrumb steps
 
 TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `←`/`→` add/remove on catalog · `b` suscribirse (recurring subscription on selected product) · `enter` checkout from cart.
 
-Account sections (`a` then `↑/↓` or `tab`): pedidos · suscripciones · direcciones guardadas · preguntas frecuentes · acerca de.
+Account sections (`a` then `↑/↓` or `tab`): pedidos · suscripciones · direcciones guardadas · tokens de API (`n` nuevo, `x` revocar) · preguntas frecuentes · acerca de.
 
 Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`).
 
@@ -363,6 +363,13 @@ Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address
 - `GET /subscriptions/{id}` — detail (`sub_…` or internal UUID)
 - `PUT /subscriptions/{id}` — update `qty` and/or `address_id`
 - `DELETE /subscriptions/{id}` — cancel (cancels Stripe subscription when linked); idempotent
+
+**Signed — personal access tokens** (for scripts / non-SSH API access)
+
+- `GET /tokens` — list caller’s PATs (`limit`, `offset`, `has_more`); raw secrets are **never** included
+- `POST /tokens` — create a token (body: `name`, `scopes[]`, optional `expires_at`); the raw `pat_<prefix>_<secret>` is returned exactly **once** in `token`. Server stores SHA-256(raw) + indexed prefix only.
+- `GET /tokens/{id}` — metadata for one PAT (`pat_…` public id or UUID)
+- `DELETE /tokens/{id}` — revoke (idempotent). Available scopes: `catalog:read`, `cart:write`, `orders:read`, `orders:write`, `subscriptions:read`, `subscriptions:write`, `profile:read`, `profile:write`.
 
 **Signed — checkout & shipping**
 
