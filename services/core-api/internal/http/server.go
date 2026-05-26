@@ -178,6 +178,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/tokens/", s.requireSigned(http.HandlerFunc(s.handleTokenByID)))
 	mux.Handle("POST /oauth/authorize", s.requireSigned(checkoutRL.Wrap(http.HandlerFunc(s.handleOAuthAuthorize))))
 	mux.HandleFunc("POST /oauth/token", s.handleOAuthToken)
+	mux.Handle("/oauth/clients", s.requireSigned(http.HandlerFunc(s.handleOAuthClients)))
+	mux.Handle("/oauth/clients/", s.requireSigned(http.HandlerFunc(s.handleOAuthClientByID)))
 	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/profile", s.requireSigned(http.HandlerFunc(s.handleProfile)))
 	mux.Handle("/addresses", s.requireSigned(http.HandlerFunc(s.handleAddresses)))
