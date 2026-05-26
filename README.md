@@ -371,6 +371,10 @@ Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address
 - `GET /tokens/{id}` — metadata for one PAT (`pat_…` public id or UUID)
 - `DELETE /tokens/{id}` — revoke (idempotent). Available scopes: `catalog:read`, `cart:write`, `orders:read`, `orders:write`, `subscriptions:read`, `subscriptions:write`, `profile:read`, `profile:write`.
 
+**Signed — bootstrap**
+
+- `GET /view/init` — single signed call that fans out concurrently to load profile + first catalog page + cart + recent orders. Query: `currency` (default `COP`), `catalog_limit` (default 12, max 100), `orders_limit` (default 5, max 50). Profile is hard-required; failures in `catalog` / `cart` / `orders` drop the section and add a `warnings[]` entry so the TUI can still render. Reduces age-gate → first paint from four serial round-trips to one.
+
 **OAuth 2.0 — third-party app registration**
 
 - `GET /oauth/clients` — list caller’s registered apps (`limit`, `offset`, `has_more`); secrets are **never** included
