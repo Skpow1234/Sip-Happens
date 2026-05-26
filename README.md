@@ -371,7 +371,14 @@ Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address
 - `GET /tokens/{id}` — metadata for one PAT (`pat_…` public id or UUID)
 - `DELETE /tokens/{id}` — revoke (idempotent). Available scopes: `catalog:read`, `cart:write`, `orders:read`, `orders:write`, `subscriptions:read`, `subscriptions:write`, `profile:read`, `profile:write`.
 
-**OAuth 2.0 — Authorization Code grant** (for third-party apps)
+**OAuth 2.0 — third-party app registration**
+
+- `GET /oauth/clients` — list caller’s registered apps (`limit`, `offset`, `has_more`); secrets are **never** included
+- `POST /oauth/clients` — register a new app (body: `name`, `redirect_uris[]`, `scopes[]`, optional `confidential` default `true`). Returns the new `oauth_client` plus a raw `client_secret` (`ocs_<prefix>_<secret>`) **shown exactly once**. Each `redirect_uri` must be absolute; `http://` only on loopback (RFC 8252 §7.3).
+- `GET /oauth/clients/{id}` — metadata for one app (`oc_…` public id or internal UUID)
+- `DELETE /oauth/clients/{id}` — revoke (idempotent)
+
+**OAuth 2.0 — Authorization Code grant**
 
 Sip-Happens has no browser session, so the customer-side step runs through the **signed** SSH/HMAC channel:
 
