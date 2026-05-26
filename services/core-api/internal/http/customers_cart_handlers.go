@@ -248,14 +248,18 @@ func (s *Server) enrichCartView(r *http.Request, customerID domain.CustomerID, v
 }
 
 func (s *Server) attachCartAddress(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {
+	return s.attachCartAddressCtx(r.Context(), customerID, view)
+}
+
+func (s *Server) attachCartAddressCtx(ctx context.Context, customerID domain.CustomerID, view cart.View) (cart.View, error) {
 	if s.Customers == nil {
 		return view, nil
 	}
-	addrID, err := s.Customers.LoadCartAddressID(r.Context(), customerID)
+	addrID, err := s.Customers.LoadCartAddressID(ctx, customerID)
 	if err != nil || addrID == "" || s.Addresses == nil || s.DB == nil {
 		return view, err
 	}
-	a, err := addresses.ResolveAddress(r.Context(), s.Addresses, s.DB, customerID, string(addrID))
+	a, err := addresses.ResolveAddress(ctx, s.Addresses, s.DB, customerID, string(addrID))
 	if err != nil {
 		if err == domain.ErrNotFound {
 			return view, nil
@@ -269,10 +273,14 @@ func (s *Server) attachCartAddress(r *http.Request, customerID domain.CustomerID
 }
 
 func (s *Server) attachCartPaymentMethod(r *http.Request, customerID domain.CustomerID, view cart.View) (cart.View, error) {
+	return s.attachCartPaymentMethodCtx(r.Context(), customerID, view)
+}
+
+func (s *Server) attachCartPaymentMethodCtx(ctx context.Context, customerID domain.CustomerID, view cart.View) (cart.View, error) {
 	if s.Customers == nil {
 		return view, nil
 	}
-	pmID, err := s.Customers.LoadCartPaymentMethodID(r.Context(), customerID)
+	pmID, err := s.Customers.LoadCartPaymentMethodID(ctx, customerID)
 	if err != nil || pmID == "" {
 		return view, err
 	}
@@ -280,14 +288,14 @@ func (s *Server) attachCartPaymentMethod(r *http.Request, customerID domain.Cust
 	if s.Stripe == nil {
 		return view, nil
 	}
-	stripeCustID, err := s.Customers.StripeCustomerID(r.Context(), customerID)
+	stripeCustID, err := s.Customers.StripeCustomerID(ctx, customerID)
 	if err != nil && err != domain.ErrNotFound {
 		return view, err
 	}
 	if stripeCustID == "" {
 		return view, nil
 	}
-	card, err := s.Stripe.GetPaymentMethod(r.Context(), stripepayments.GetPaymentMethodInput{
+	card, err := s.Stripe.GetPaymentMethod(ctx, stripepayments.GetPaymentMethodInput{
 		StripeCustomerID: stripeCustID,
 		PaymentMethodID:  pmID,
 	})
