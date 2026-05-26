@@ -5,9 +5,117 @@ on:
   push:
     branches: ["main", "master"]
 
+# Principle of least privilege: workflow-level read-only token. Individual
+# jobs that need write access (e.g. release publishing) must escalate
+# explicitly. Default GITHUB_TOKEN scope on push events was historically
+# write-all, which is a needless attack surface.
+permissions:
+  contents: read
+
+# Cancel superseded PR runs so stacked pushes don't burn minutes. Branch
+# pushes use a unique key per SHA so two successive main pushes do not
+# clobber each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Pinning -count=1 disables the test result cache so flakes can't masquerade
+  # as passes when re-run. Cheap insurance on a project this size.
+  GOFLAGS: "-count=1"
+
 jobs:
-  test-and-build:
+  # -------------------------------------------------------------------------
+  # lint — fast checks with no external services (no Postgres, no Docker).
+  # Runs in parallel with unit + integration so a missing gofmt fails the PR
+  # in ~30s instead of waiting behind a 4-minute integration suite.
+  # -------------------------------------------------------------------------
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            echo "::error::gofmt would change these files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        # Pinned action handles install + caching; bumping versions is
+        # managed by Dependabot via .github/dependabot.yml.
+        uses: dominikh/staticcheck-action@v1.4.0
+        with:
+          version: "2024.1.1"
+          install-go: false
+
+      - name: go mod tidy is clean
+        # Catches PRs that add an import but forget to run `go mod tidy`,
+        # which would otherwise only surface during a downstream `go build`
+        # in a fresh environment.
+        run: |
+          go mod tidy
+          if ! git diff --exit-code go.mod go.sum; then
+            echo "::error::go.mod / go.sum out of date — run 'go mod tidy' locally."
+            exit 1
+          fi
+
+      - name: Migration linearity (no gaps, no duplicates)
+        run: bash scripts/check-migration-linearity.sh
+
+      - name: shellcheck
+        # shellcheck ships pre-installed on ubuntu-latest. Scoped to
+        # scripts/*.sh so we don't lint vendored / generated shell.
+        run: shellcheck scripts/*.sh
+
+  # -------------------------------------------------------------------------
+  # unit — race-enabled tests for packages that DO NOT need Postgres. Fast
+  # signal on logic-level regressions (TUI, pkg/*, ssh-gateway client).
+  # -------------------------------------------------------------------------
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Unit tests (race detector, no DB)
+        # Race detector is roughly 2x slower but it's the only realistic way
+        # to catch the kinds of concurrency bugs the order reservation and
+        # outbox-dispatch paths can have. We restrict this job to packages
+        # that don't pull a Postgres testcontainer so the wall time stays
+        # well under the integration job.
+        run: |
+          go test -race -timeout 5m \
+            ./pkg/... \
+            ./services/ssh-gateway/...
+
+  # -------------------------------------------------------------------------
+  # integration — Postgres-backed tests, migration smoke, outbox multi-node
+  # claim, e2e HTTP smoke. Race detector is on for everything: the order /
+  # reservation / outbox-claim code is exactly where data races would hurt.
+  # -------------------------------------------------------------------------
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -36,15 +144,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Go fmt check
-        run: |
-          test -z "$(gofmt -l .)"
-
-      - name: Go test
-        run: |
-          go test ./...
-
       - name: Vulnerability scan (govulncheck)
+        # Runs first so a known CVE in a dependency surfaces before we spend
+        # time on the full integration suite.
         uses: golang/govulncheck-action@v1
         with:
           go-version-file: go.mod
@@ -52,18 +154,28 @@ jobs:
           repo-checkout: false
           work-dir: .
 
+      - name: Core-API integration tests (race, Postgres)
+        run: |
+          go test -race -timeout 15m ./services/core-api/...
+
       - name: Migration smoke (core-api migrate up)
+        # Sanity: after the test suite (which uses per-test random schemas)
+        # the canonical migrator must also apply cleanly against the live
+        # public schema. Catches per-migration scoping bugs that the test
+        # helper papers over with search_path tricks.
         run: |
           go run ./services/core-api/cmd/migrate up
 
       - name: Checkout concurrency (integration)
         run: |
-          go test ./services/core-api/internal/orders/... -run TestConcurrentCreatePendingOrder -count=1 -v
+          go test -race ./services/core-api/internal/orders/... \
+            -run TestConcurrentCreatePendingOrder -v
 
       - name: Outbox multi-node claim (two dispatch workers)
         run: |
           bash scripts/outbox-multi-node-ci.sh
-          go test ./services/core-api/internal/outbox/... -run TestMultiNodeOutboxDispatch -count=1 -v
+          go test -race ./services/core-api/internal/outbox/... \
+            -run TestMultiNodeOutboxDispatch -v
 
       - name: E2E smoke (seed demo + core-api + HTTP checks)
         env:
@@ -76,12 +188,38 @@ jobs:
           go run ./services/core-api/cmd/api &
           API_PID=$!
           trap 'kill $API_PID 2>/dev/null || true' EXIT
+          # Wait for the API to bind before firing the smoke harness;
+          # otherwise the first request can race the listener and turn
+          # into a flaky ECONNREFUSED on slow runners.
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:18080/healthz >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
           export BASE_URL=http://localhost:18080
           export SSH_FINGERPRINT=demo:ssh-fingerprint
           export CORE_API_HMAC_KEYS=dev:dev-hmac-secret
           go run ./services/core-api/cmd/e2e-smoke
 
+  # -------------------------------------------------------------------------
+  # docker — compose build verifies Dockerfiles still build with the current
+  # go.mod and Alpine base. Depends on the three test jobs so a broken
+  # Dockerfile doesn't mask a real test failure (and vice versa we don't
+  # waste a 2-minute build when tests are red).
+  # -------------------------------------------------------------------------
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint, unit, integration]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker build (compose)
+        # We don't push — this is purely a build verification so a Dockerfile
+        # edit (FROM bump, COPY path change) is caught before merge.
         run: |
           docker compose -f infra/compose.yaml -f infra/compose.dev.yaml build
-

@@ -1,0 +1,73 @@
+# Dependabot keeps the workflow actions and Go modules current so security
+# fixes (and follow-up govulncheck PRs) don't pile up. We group conservatively
+# to avoid PR floods on a small team:
+#   * actions: weekly, all in one PR
+#   * Go modules: monthly, grouped into 'minor and patch' vs 'major'
+#     (major bumps land in their own PR so the diff is easier to review)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    groups:
+      ci-actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(actions)"
+      include: scope
+    labels: [dependencies, ci]
+
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: deps
+      include: scope
+    labels: [dependencies, go]
+    # Block automatic major bumps for the runtime SDKs we pin intentionally
+    # (Stripe, Bubble Tea, Wish/SSH stack). Renovate-style: still flagged
+    # by govulncheck, but the upgrade is a deliberate human decision.
+    ignore:
+      - dependency-name: "github.com/stripe/stripe-go/v82"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "github.com/charmbracelet/bubbletea"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "github.com/charmbracelet/wish"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "github.com/charmbracelet/ssh"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directory: /services/core-api
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    commit-message:
+      prefix: "deps(docker/core-api)"
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/ssh-gateway
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    commit-message:
+      prefix: "deps(docker/ssh-gateway)"
+    labels: [dependencies, docker]

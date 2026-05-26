@@ -1,0 +1,33 @@
+# Force LF line endings for source / config files so a Windows contributor
+# with `core.autocrlf=true` can't accidentally commit CRLF and break the
+# `gofmt -l .` step in CI (gofmt rewrites CRLF to LF and flags any file
+# that changed). Binary types are listed explicitly so git doesn't try to
+# diff them as text.
+
+* text=auto eol=lf
+
+# Source / config — explicit for clarity.
+*.go        text eol=lf
+*.sh        text eol=lf
+*.sql       text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.toml      text eol=lf
+*.mod       text eol=lf
+*.sum       text eol=lf
+Dockerfile  text eol=lf
+Makefile    text eol=lf
+
+# Binary — keep raw.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.tgz       binary
