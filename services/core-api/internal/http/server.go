@@ -213,6 +213,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/admin/inventory", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminInventory))))
 	mux.Handle("GET /admin/products/{id}/price-history", adminRL.Wrap(http.HandlerFunc(s.handleAdminProductPriceHistory)))
 	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))
+	mux.Handle("POST /admin/orders/{id}/status", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderStatusOverride))))
 	mux.Handle("POST /admin/orders/{id}/reconcile-stripe", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderReconcileStripe))))
 	mux.Handle("POST /admin/orders/{id}/invoice", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderIssueInvoice))))
 	mux.Handle("PATCH /admin/orders/{id}/shipment", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderShipment))))
