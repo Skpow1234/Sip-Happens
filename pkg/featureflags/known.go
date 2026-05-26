@@ -3,12 +3,13 @@ package featureflags
 // Known feature flag names for core-api (FEATURE_FLAGS env, comma-separated).
 // Names are case-insensitive when parsed.
 const (
-	CatalogCache      = "catalog_cache"
-	CatalogCacheRedis = "catalog_cache_redis"
-	RedisRateLimit    = "redis_rate_limit"
-	EmailPaymentLink  = "email_payment_link"
-	EmailReceipt      = "email_receipt"
-	DianInvoice       = "dian_invoice"
+	CatalogCache          = "catalog_cache"
+	CatalogCacheRedis     = "catalog_cache_redis"
+	RedisRateLimit        = "redis_rate_limit"
+	EmailPaymentLink      = "email_payment_link"
+	EmailReceipt          = "email_receipt"
+	EmailSubscribeConfirm = "email_subscribe_confirm"
+	DianInvoice           = "dian_invoice"
 )
 
 // Known describes a single flag for operators and docs.
@@ -44,6 +45,11 @@ func All() []Known {
 			Name:        EmailReceipt,
 			Description: "Send receipt email when order.paid is consumed (nats-consume worker).",
 			Requires:    "EMAIL_PROVIDER; OUTBOX_PUBLISHER=nats and nats-consume running",
+		},
+		{
+			Name:        EmailSubscribeConfirm,
+			Description: "Send the double-opt-in confirmation email for POST /email subscribers; when disabled the subscriber row is still inserted but the user receives nothing (use only for local tests where SMTP is unavailable).",
+			Requires:    "EMAIL_PROVIDER (log or smtp)",
 		},
 		{
 			Name:        DianInvoice,
