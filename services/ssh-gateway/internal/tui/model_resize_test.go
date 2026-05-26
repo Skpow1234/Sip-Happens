@@ -17,7 +17,7 @@ func TestModel_WindowSize_AllScreens_ViewDoesNotPanic(t *testing.T) {
 		{Width: 200, Height: 60},
 	}
 	screens := []screen{
-		screenWelcome, screenCatalog, screenCart,
+		screenSplash, screenWelcome, screenCatalog, screenCart,
 		screenCheckout, screenConfirm, screenPayment, screenOrderStatus,
 		screenAccount, screenSubscriptionConfirm, screenSubscriptionStatus,
 		screenTokenCreate, screenTokenShow,
