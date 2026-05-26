@@ -6,7 +6,8 @@ Users connect via **SSH** to a TUI, browse a beer catalog, build a cart, and sta
 
 ## What’s in this repo (today)
 
-- **`core-api`**: Go service with PostgreSQL persistence, basic HTTP endpoints, migrations, and Stripe webhook verification.
+- **`core-api`**: Go service with PostgreSQL persistence, HTTP endpoints for catalog / cart / orders / subscriptions / addresses / payment methods / admin, migrations, and Stripe webhook verification. Aiming at [Terminal.shop API parity](docs/adr/0020-terminal-shop-api-parity.md) (adapted for Colombia + SSH + HMAC, **no card data in SSH**).
+- **`ssh-gateway`**: Bubble Tea TUI served over SSH (split-pane catalog, account area with pedidos / suscripciones / direcciones, cart breadcrumbs, off-terminal Stripe payment).
 - **Docker-only workflow**: the host machine is assumed to have **only Docker** installed.
 
 ## Run (Docker only)
@@ -111,7 +112,9 @@ The matching public key is in `infra/demo/authorized_keys` (mounted into the gat
 
 Flow: confirm age → split-pane catalog → cart → delivery (breadcrumb steps) → Stripe checkout URL off-terminal (mock when `STRIPE_MOCK=1`).
 
-TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `←`/`→` add/remove on catalog · `enter` checkout from cart.
+TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `←`/`→` add/remove on catalog · `b` suscribirse (recurring subscription on selected product) · `enter` checkout from cart.
+
+Account sections (`a` then `↑/↓` or `tab`): pedidos · suscripciones · direcciones guardadas · preguntas frecuentes · acerca de.
 
 Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`).
 
@@ -310,7 +313,9 @@ Database config is currently provided by Compose:
 
 ## Current endpoints
 
-Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /openapi.yaml`; Redoc at `GET /docs` with admin Bearer token).
+Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /openapi.yaml`; Redoc at `GET /docs` with admin Bearer token). Terminal.shop parity rationale: [`docs/adr/0020-terminal-shop-api-parity.md`](docs/adr/0020-terminal-shop-api-parity.md).
+
+Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address), `pm_…` (Stripe payment method), `sub_…` (subscription). Orders also expose a human-readable `display_ref` (`SH-…`) accepted on `/orders/{id}`.
 
 **Public**
 
@@ -319,15 +324,49 @@ Full contract: [`docs/openapi.yaml`](docs/openapi.yaml) (also served at `GET /op
 - `GET /catalog/{id}?currency=COP` — product detail (`prd_…` public id, UUID, or SKU) with `available_qty`
 - `GET /openapi.yaml` — OpenAPI 3 spec
 
-**Signed** (HMAC v2 + `X-SSH-Fingerprint`; used by `ssh-gateway`)
+**Signed — profile** (HMAC v2 + `X-SSH-Fingerprint`; used by `ssh-gateway`)
 
-- `POST /checkout` — pending order, inventory reservation, Stripe Checkout Session (`Idempotency-Key` required)
-- `GET /orders` — list caller’s orders (`limit`, default 20, max 100)
-- `GET /orders/{id}` — order detail (scoped to caller’s fingerprint)
 - `GET /customers/me`, `PATCH /customers/me` — profile (snake_case JSON)
 - `GET /profile`, `PUT /profile`, `PATCH /profile` — Terminal.shop aliases (`profile` wrapper)
-- `GET /addresses`, `POST /addresses`, `GET /addresses/{id}`, `DELETE /addresses/{id}` — saved delivery addresses (pilot cities)
-- `GET /cart`, `PUT /cart` — server-persistent cart
+
+**Signed — addresses**
+
+- `GET /addresses`, `POST /addresses`, `GET /addresses/{id}`, `DELETE /addresses/{id}` — saved delivery addresses (Bogotá, Medellín, Cali)
+
+**Signed — payment methods** (Stripe-hosted; **no card data ever crosses SSH**)
+
+- `POST /payment-methods/collect` — start a hosted Stripe Setup/Checkout Session to save a card; returns `{ collect: { url, checkout_session_id } }`
+- `GET /payment-methods` — list saved cards on the customer’s Stripe customer
+- `GET /payment-methods/{id}` — get one (`pm_…`), 404 when not owned
+- `DELETE /payment-methods/{id}` — detach saved card
+
+**Signed — cart**
+
+- `GET /cart` — server-persistent cart with live prices, subtotal, and optional saved `address_id` / `payment_method_id`
+- `PUT /cart` — bulk replace cart lines
+- `DELETE /cart` — clear all lines, saved `address_id`, and `payment_method_id`
+- `PUT /cart/items/{id}` — set quantity for one product (`qty: 0` removes); `id` accepts `prd_…`, UUID, or SKU
+- `PUT /cart/address` — attach saved `address_id` (empty string clears)
+- `PUT /cart/payment-method` — attach saved Stripe `payment_method_id` (empty string clears)
+- `POST /cart/convert` — convert cart → `PENDING_PAYMENT` + Stripe Checkout URL (`Idempotency-Key` required); clears cart on success
+
+**Signed — orders**
+
+- `GET /orders` — list caller’s orders (`limit`, default 20, max 100; `offset`, `has_more`); no delivery PII in list view
+- `POST /orders` — direct checkout from `items` + delivery (no server cart) → Stripe Checkout URL (`Idempotency-Key` required); does **not** touch the server cart
+- `GET /orders/{id}` — order detail (internal UUID or `display_ref`; scoped to caller’s fingerprint)
+
+**Signed — subscriptions** (Stripe Billing; Checkout in subscription mode)
+
+- `GET /subscriptions` — list caller’s subscriptions (`limit`, `offset`, `has_more`)
+- `POST /subscriptions` — create `PENDING` subscription + hosted Stripe subscription Checkout URL (`Idempotency-Key` required; body: `product_id`, `qty`, `interval` (`week`|`month`), optional `address_id`, `payment_method_id`, success/cancel URLs)
+- `GET /subscriptions/{id}` — detail (`sub_…` or internal UUID)
+- `PUT /subscriptions/{id}` — update `qty` and/or `address_id`
+- `DELETE /subscriptions/{id}` — cancel (cancels Stripe subscription when linked); idempotent
+
+**Signed — checkout & shipping**
+
+- `POST /checkout` — pending order, inventory reservation, Stripe Checkout Session (`Idempotency-Key` required). Legacy/explicit entry point; `POST /cart/convert` and `POST /orders` share the same engine.
 - `GET /shipping/estimate?city=...` — flat shipping estimate by city
 
 **Webhooks**
