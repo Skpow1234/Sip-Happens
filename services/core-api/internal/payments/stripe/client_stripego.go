@@ -19,6 +19,51 @@ import (
 
 type StripeGoClient struct {
 	SecretKey string
+
+	// AllowedCurrencies is a lowercase allow-list of ISO-4217 codes; if set,
+	// CreateCheckout / CreateSubscriptionCheckout reject any request whose
+	// Currency is not in this list. Empty means "no restriction" (legacy).
+	// "*" in the list disables the check.
+	AllowedCurrencies []string
+
+	// Request3DS controls payment_method_options.card.request_three_d_secure
+	// on hosted Checkout. Accepted values: "automatic", "any", or "" (unset).
+	// Anything else falls through to Stripe defaults.
+	Request3DS string
+}
+
+// currencyAllowed reports whether `cur` (case-insensitive) passes the
+// AllowedCurrencies check. An empty allow-list or one containing "*"
+// returns true unconditionally.
+func (c StripeGoClient) currencyAllowed(cur string) bool {
+	if len(c.AllowedCurrencies) == 0 {
+		return true
+	}
+	cur = strings.ToLower(strings.TrimSpace(cur))
+	for _, a := range c.AllowedCurrencies {
+		if a == "*" || a == cur {
+			return true
+		}
+	}
+	return false
+}
+
+// applyThreeDSecure attaches payment_method_options.card.request_three_d_secure
+// to a checkout-session params struct when Request3DS is "automatic" or "any".
+// Any other value is a no-op; this lets operators turn the feature off by
+// setting STRIPE_REQUEST_3DS="" without code changes.
+func (c StripeGoClient) applyThreeDSecure(p *stripe.CheckoutSessionParams) {
+	mode := strings.ToLower(strings.TrimSpace(c.Request3DS))
+	if mode != "automatic" && mode != "any" {
+		return
+	}
+	if p.PaymentMethodOptions == nil {
+		p.PaymentMethodOptions = &stripe.CheckoutSessionPaymentMethodOptionsParams{}
+	}
+	if p.PaymentMethodOptions.Card == nil {
+		p.PaymentMethodOptions.Card = &stripe.CheckoutSessionPaymentMethodOptionsCardParams{}
+	}
+	p.PaymentMethodOptions.Card.RequestThreeDSecure = stripe.String(mode)
 }
 
 func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*CreateCheckoutOutput, error) {
@@ -30,6 +75,9 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 	}
 	if in.Currency == "" {
 		return nil, errors.New("missing currency")
+	}
+	if !c.currencyAllowed(in.Currency) {
+		return nil, fmt.Errorf("currency %q not in STRIPE_ALLOWED_CURRENCIES", in.Currency)
 	}
 	if in.TotalMinorUnits <= 0 {
 		return nil, errors.New("invalid total")
@@ -101,6 +149,7 @@ func (c StripeGoClient) CreateCheckout(ctx context.Context, in CreateCheckoutInp
 		}
 	}
 
+	c.applyThreeDSecure(params)
 	params.SetIdempotencyKey(CheckoutSessionIdempotencyKey(in.OrderID))
 
 	s, err := checkoutsession.New(params)
@@ -310,6 +359,9 @@ func (c StripeGoClient) CreateSubscriptionCheckout(ctx context.Context, in Creat
 	if in.Currency == "" {
 		return nil, errors.New("missing currency")
 	}
+	if !c.currencyAllowed(in.Currency) {
+		return nil, fmt.Errorf("currency %q not in STRIPE_ALLOWED_CURRENCIES", in.Currency)
+	}
 	if in.Qty <= 0 || in.UnitAmountMinorUnits <= 0 {
 		return nil, errors.New("invalid subscription amounts")
 	}
@@ -347,6 +399,7 @@ func (c StripeGoClient) CreateSubscriptionCheckout(ctx context.Context, in Creat
 	if strings.TrimSpace(in.StripeCustomerID) != "" {
 		params.Customer = stripe.String(strings.TrimSpace(in.StripeCustomerID))
 	}
+	c.applyThreeDSecure(params)
 	params.SetIdempotencyKey(SubscriptionCheckoutIdempotencyKey(in.SubscriptionID))
 
 	s, err := checkoutsession.New(params)

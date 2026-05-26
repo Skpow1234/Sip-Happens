@@ -24,6 +24,18 @@ type CoreAPI struct {
 	StripeWebhookSecret string
 	StripeWebhookPath   string
 	StripeMock          bool
+	// StripeAllowedCurrencies restricts which ISO-4217 codes may be sent to
+	// Stripe.CreateCheckout, defending against an upstream bug that would
+	// otherwise pass a non-COP currency straight to the API. Empty list
+	// means "no restriction" (legacy permissive mode); the default in
+	// LoadCoreAPI is ["cop"].
+	StripeAllowedCurrencies []string
+	// StripeRequest3DS controls payment_method_options.card.request_three_d_secure
+	// on hosted Checkout. Accepted values match Stripe's API:
+	//   "automatic"  – default, Stripe decides per regional rules (recommended).
+	//   "any"        – force 3DS challenge on every card payment.
+	//   ""           – do not set the option (Stripe defaults).
+	StripeRequest3DS string
 
 	AdminToken  string
 	AdminTokens []string
@@ -67,6 +79,16 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 	c.StripeWebhookPath = getenvDefault("STRIPE_WEBHOOK_PATH", "/webhooks/stripe")
 	c.StripeMock = getenvBoolDefault("STRIPE_MOCK", true)
+	// COP-only by default — sip-happens is a single-market Colombian shop.
+	// Operators that genuinely need to accept USD/EUR in tests can override
+	// with STRIPE_ALLOWED_CURRENCIES=cop,usd or set to "*" to disable the
+	// check (NOT recommended in production).
+	c.StripeAllowedCurrencies = splitCommaEnvLower("STRIPE_ALLOWED_CURRENCIES")
+	if len(c.StripeAllowedCurrencies) == 0 {
+		c.StripeAllowedCurrencies = []string{"cop"}
+	}
+	c.StripeRequest3DS = strings.ToLower(strings.TrimSpace(
+		getenvDefault("STRIPE_REQUEST_3DS", "automatic")))
 
 	c.AdminToken = os.Getenv("ADMIN_TOKEN")
 	if v := strings.TrimSpace(os.Getenv("ADMIN_TOKENS")); v != "" {
@@ -144,6 +166,16 @@ func splitCommaEnv(key string) []string {
 		}
 	}
 	return out
+}
+
+// splitCommaEnvLower is like splitCommaEnv but lowercases each value. Used
+// for currency codes, where the canonical Stripe form is lowercase.
+func splitCommaEnvLower(key string) []string {
+	in := splitCommaEnv(key)
+	for i, v := range in {
+		in[i] = strings.ToLower(v)
+	}
+	return in
 }
 
 type DBPool struct {

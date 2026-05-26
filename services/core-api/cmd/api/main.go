@@ -188,7 +188,11 @@ func runServer() error {
 
 func selectStripeClient(cfg config.CoreAPI) stripepayments.Service {
 	if key := cfg.StripeSecretKey; key != "" {
-		return stripepayments.StripeGoClient{SecretKey: key}
+		return stripepayments.StripeGoClient{
+			SecretKey:         key,
+			AllowedCurrencies: cfg.StripeAllowedCurrencies,
+			Request3DS:        cfg.StripeRequest3DS,
+		}
 	}
 	if cfg.StripeMock {
 		return stripepayments.MockClient{}
