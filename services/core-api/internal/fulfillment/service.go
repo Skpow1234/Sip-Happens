@@ -17,7 +17,44 @@ type Service interface {
 	StartFulfillment(ctx context.Context, now time.Time, orderID domain.OrderID) (domain.Shipment, error)
 	CreateShipment(ctx context.Context, now time.Time, orderID domain.OrderID) (domain.Shipment, error)
 	UpdateTracking(ctx context.Context, now time.Time, orderID domain.OrderID, carrier, trackingCode string) (domain.Shipment, error)
+	// TransitionStatus performs an admin-driven state transition between
+	// any pair of shipment statuses in `AdminAllowedShipmentTransitions`
+	// (NEW → PACKED, PACKED → HANDED_OVER, HANDED_OVER → IN_TRANSIT,
+	// IN_TRANSIT → DELIVERED, plus → FAILED from any non-terminal state).
+	// Returns the updated shipment row + the previous status (caller uses
+	// the latter for audit/event emission). Idempotent when the current
+	// status already equals `to`.
+	TransitionStatus(ctx context.Context, now time.Time, orderID domain.OrderID, to domain.ShipmentStatus, reason string) (sh domain.Shipment, prev domain.ShipmentStatus, err error)
 	RunOnce(ctx context.Context, now time.Time, limit int) (int, error)
+}
+
+// AdminAllowedShipmentTransitions is the whitelist the admin endpoint
+// enforces. The runtime fulfillment runner (RunOnce) follows the same
+// straight-line happy path but doesn't issue FAILED — that's strictly
+// an operator decision.
+//
+// Wildcards are deliberately not used: every transition is explicitly
+// listed so a code reviewer can grep for it.
+var AdminAllowedShipmentTransitions = map[domain.ShipmentStatus][]domain.ShipmentStatus{
+	domain.ShipmentStatusNew:        {domain.ShipmentStatusPacked, domain.ShipmentStatusFailed},
+	domain.ShipmentStatusPacked:     {domain.ShipmentStatusHandedOver, domain.ShipmentStatusFailed},
+	domain.ShipmentStatusHandedOver: {domain.ShipmentStatusInTransit, domain.ShipmentStatusFailed},
+	domain.ShipmentStatusInTransit:  {domain.ShipmentStatusDelivered, domain.ShipmentStatusFailed},
+	// DELIVERED and FAILED are terminal — no transitions out of them.
+}
+
+// IsAdminAllowedShipmentTransition reports whether the (from, to) pair
+// is in the whitelist OR is a no-op (from == to, treated as idempotent).
+func IsAdminAllowedShipmentTransition(from, to domain.ShipmentStatus) bool {
+	if from == to {
+		return true
+	}
+	for _, allowed := range AdminAllowedShipmentTransitions[from] {
+		if allowed == to {
+			return true
+		}
+	}
+	return false
 }
 
 type SQLService struct {
@@ -190,6 +227,85 @@ select id, order_id, carrier, tracking_code, label_path, status, created_at, upd
 from shipments where order_id=$1
 `, string(orderID))
 	return scanShipment(row2)
+}
+
+// TransitionStatus implements Service.TransitionStatus. Whitelist is
+// enforced via AdminAllowedShipmentTransitions; an attempt to skip a
+// step or transition out of a terminal state returns domain.ErrConflict
+// so the HTTP layer can respond 409 with `allowed_to` hints.
+//
+// Side effect on success: when transitioning into IN_TRANSIT we also
+// flip the order to SHIPPED (matches the RunOnce happy path). FAILED
+// does NOT flip the order automatically — operators may want to recover
+// (refund, reship with a new shipment row in a future iteration). For
+// now an order whose shipment is FAILED stays in its current order
+// status and the operator must explicitly cancel/refund via the order
+// admin endpoints.
+func (s *SQLService) TransitionStatus(ctx context.Context, now time.Time, orderID domain.OrderID, to domain.ShipmentStatus, reason string) (domain.Shipment, domain.ShipmentStatus, error) {
+	if s == nil || s.DB == nil {
+		return domain.Shipment{}, "", errors.New("missing db")
+	}
+	if orderID == "" || to == "" {
+		return domain.Shipment{}, "", domain.ErrInvalidInput
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return domain.Shipment{}, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := tx.QueryRowContext(ctx, `
+select id, order_id, carrier, tracking_code, label_path, status, created_at, updated_at
+from shipments where order_id=$1 for update
+`, string(orderID))
+	sh, err := scanShipment(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return domain.Shipment{}, "", domain.ErrNotFound
+		}
+		return domain.Shipment{}, "", err
+	}
+	prev := sh.Status
+
+	if !IsAdminAllowedShipmentTransition(prev, to) {
+		return domain.Shipment{}, prev, domain.ErrConflict
+	}
+	if prev == to {
+		// Idempotent no-op; return current row unchanged.
+		return sh, prev, tx.Commit()
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+update shipments set status=$2, updated_at=$3 where id=$1
+`, string(sh.ID), string(to), now); err != nil {
+		return domain.Shipment{}, prev, err
+	}
+	if to == domain.ShipmentStatusInTransit {
+		if _, err := tx.ExecContext(ctx, `
+update orders set status=$2, updated_at=$3
+where id=$1 and status in ($4, $5)
+`, string(orderID), string(domain.OrderStatusShipped), now,
+			string(domain.OrderStatusFulfilling), string(domain.OrderStatusPaid)); err != nil {
+			return domain.Shipment{}, prev, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.Shipment{}, prev, err
+	}
+
+	row2 := s.DB.QueryRowContext(ctx, `
+select id, order_id, carrier, tracking_code, label_path, status, created_at, updated_at
+from shipments where order_id=$1
+`, string(orderID))
+	out, err := scanShipment(row2)
+	if err != nil {
+		return domain.Shipment{}, prev, err
+	}
+	_ = reason // reason is currently consumed by the HTTP-layer audit row; service emits no events itself.
+	return out, prev, nil
 }
 
 func (s *SQLService) RunOnce(ctx context.Context, now time.Time, limit int) (int, error) {

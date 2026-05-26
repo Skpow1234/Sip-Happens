@@ -1,0 +1,16 @@
+Hola{{if .CustomerName}} {{.CustomerName}}{{end}},
+
+Tu pedido {{.OrderID}} cambió de estado:
+
+  {{.StatusLabel}}
+
+{{.StatusDescription}}
+{{if .Carrier}}Transportadora: {{.Carrier}}{{end}}
+{{if .TrackingCode}}Guía: {{.TrackingCode}}{{end}}
+{{if .TrackingURL}}Seguimiento: {{.TrackingURL}}{{end}}
+{{if .SupportNote}}
+{{.SupportNote}}
+{{end}}
+— Sip-Happens
+
+{{template "footer" .}}

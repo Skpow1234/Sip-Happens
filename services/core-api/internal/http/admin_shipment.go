@@ -43,6 +43,19 @@ func (s *Server) handleAdminOrderShipment(w http.ResponseWriter, r *http.Request
 	}
 
 	svc := &fulfillment.SQLService{DB: s.DB}
+	// Capture prev status so we only fire a shipping-update email when
+	// the carrier/tracking PATCH actually advances state (NEW/PACKED →
+	// HANDED_OVER per UpdateTracking).
+	var prev domain.ShipmentStatus
+	if row, perr := s.DB.QueryContext(r.Context(),
+		`select status from shipments where order_id=$1`, orderID); perr == nil {
+		if row.Next() {
+			var st string
+			_ = row.Scan(&st)
+			prev = domain.ShipmentStatus(st)
+		}
+		_ = row.Close()
+	}
 	sh, err := svc.UpdateTracking(r.Context(), time.Now().UTC(), domain.OrderID(orderID), req.Carrier, req.TrackingCode)
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -60,6 +73,13 @@ func (s *Server) handleAdminOrderShipment(w http.ResponseWriter, r *http.Request
 		}
 		writeAPIError(w, r, status, code, "error")
 		return
+	}
+
+	if prev != sh.Status && s.Email != nil {
+		go func(status, carrier, code string) {
+			_ = s.Email.SendShippingUpdateForOrder(r.Context(),
+				domain.OrderID(orderID), domain.ShipmentStatus(status), carrier, code, "")
+		}(string(sh.Status), sh.Carrier, sh.TrackingCode)
 	}
 
 	w.Header().Set("content-type", "application/json")

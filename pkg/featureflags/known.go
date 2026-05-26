@@ -8,6 +8,7 @@ const (
 	RedisRateLimit        = "redis_rate_limit"
 	EmailPaymentLink      = "email_payment_link"
 	EmailReceipt          = "email_receipt"
+	EmailShippingUpdate   = "email_shipping_update"
 	EmailSubscribeConfirm = "email_subscribe_confirm"
 	DianInvoice           = "dian_invoice"
 )
@@ -45,6 +46,11 @@ func All() []Known {
 			Name:        EmailReceipt,
 			Description: "Send receipt email when order.paid is consumed (nats-consume worker).",
 			Requires:    "EMAIL_PROVIDER; OUTBOX_PUBLISHER=nats and nats-consume running",
+		},
+		{
+			Name:        EmailShippingUpdate,
+			Description: "Send a shipping update email when an admin transitions a shipment (PACKED, HANDED_OVER, IN_TRANSIT, DELIVERED, FAILED). Per-state copy is bilingual-aware (Spanish primary). Disable in dev to avoid SMTP noise.",
+			Requires:    "EMAIL_PROVIDER (log or smtp)",
 		},
 		{
 			Name:        EmailSubscribeConfirm,

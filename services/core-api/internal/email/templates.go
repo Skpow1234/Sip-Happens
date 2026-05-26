@@ -41,6 +41,22 @@ type SubscribeConfirmData struct {
 	ComplianceData
 }
 
+// ShippingUpdateData is the per-state body for shipment transition emails
+// (roadmap 138). The handler maps a `ShipmentStatus` to a Spanish
+// `StatusLabel` + `StatusDescription`; `SupportNote` is only populated
+// when the transition needs explicit recipient action (e.g. FAILED).
+type ShippingUpdateData struct {
+	CustomerName      string
+	OrderID           string
+	StatusLabel       string
+	StatusDescription string
+	Carrier           string
+	TrackingCode      string
+	TrackingURL       string
+	SupportNote       string
+	ComplianceData
+}
+
 func renderPaymentLink(data PaymentLinkData) (text, html string, err error) {
 	data.ComplianceData = data.ComplianceData.withDefaults()
 	text, err = renderTemplate("templates/payment_link.txt", data)
@@ -68,6 +84,16 @@ func renderSubscribeConfirm(data SubscribeConfirmData) (text, html string, err e
 		return "", "", err
 	}
 	html, err = renderTemplate("templates/subscribe_confirm.html", data)
+	return text, html, err
+}
+
+func renderShippingUpdate(data ShippingUpdateData) (text, html string, err error) {
+	data.ComplianceData = data.ComplianceData.withDefaults()
+	text, err = renderTemplate("templates/shipping_update.txt", data)
+	if err != nil {
+		return "", "", err
+	}
+	html, err = renderTemplate("templates/shipping_update.html", data)
 	return text, html, err
 }
 

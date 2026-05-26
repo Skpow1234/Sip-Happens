@@ -175,7 +175,19 @@ func (s *Server) placeOrderAndRespond(w http.ResponseWriter, r *http.Request, in
 	in.Delivery.City = canonCity
 
 	cityKey := shipping.CityKey(canonCity)
-	shipMinor, err := shipping.LookupAmountMinor(r.Context(), s.DB, cityKey, in.Currency)
+	weightItems := make([]shipping.ItemForWeight, 0, len(in.Items))
+	for _, it := range in.Items {
+		weightItems = append(weightItems, shipping.ItemForWeight{
+			ProductID: string(it.ProductID),
+			Qty:       it.Qty,
+		})
+	}
+	totalWeight, err := shipping.TotalWeightGrams(r.Context(), s.DB, weightItems)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	shipMinor, err := shipping.LookupAmountMinorForWeight(r.Context(), s.DB, cityKey, in.Currency, totalWeight)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return

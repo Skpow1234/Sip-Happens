@@ -258,6 +258,10 @@ func (s *Server) enrichCartView(r *http.Request, customerID domain.CustomerID, v
 // attached address (or with an unknown city / missing rate row) we leave
 // shipping at zero and total == subtotal — clients that need shipping
 // before they have an address should call /shipping/estimate directly.
+//
+// Uses the weight-tier table when present (roadmap 140); falls back to
+// the flat per-city rate when no tier matches (heavy carts) or the
+// product weight is unknown.
 func (s *Server) attachCartShipping(ctx context.Context, view cart.View) cart.View {
 	if s.DB == nil || view.Address == nil {
 		view.TotalMinorUnits = view.SubtotalMinorUnits
@@ -268,7 +272,19 @@ func (s *Server) attachCartShipping(ctx context.Context, view cart.View) cart.Vi
 		view.TotalMinorUnits = view.SubtotalMinorUnits
 		return view
 	}
-	amount, err := shipping.LookupAmountMinor(ctx, s.DB, shipping.CityKey(canon), view.Currency)
+	weightItems := make([]shipping.ItemForWeight, 0, len(view.Items))
+	for _, it := range view.Items {
+		weightItems = append(weightItems, shipping.ItemForWeight{
+			ProductID: it.Product.ID,
+			Qty:       it.Qty,
+		})
+	}
+	totalWeight, err := shipping.TotalWeightGrams(ctx, s.DB, weightItems)
+	if err != nil {
+		view.TotalMinorUnits = view.SubtotalMinorUnits
+		return view
+	}
+	amount, err := shipping.LookupAmountMinorForWeight(ctx, s.DB, shipping.CityKey(canon), view.Currency, totalWeight)
 	if err != nil {
 		view.TotalMinorUnits = view.SubtotalMinorUnits
 		return view

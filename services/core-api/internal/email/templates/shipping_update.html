@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es-co">
+<body style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:24px auto;line-height:1.5;color:#222">
+  <p>Hola{{if .CustomerName}} {{.CustomerName}}{{end}},</p>
+  <p>Tu pedido <strong>{{.OrderID}}</strong> cambió de estado:</p>
+  <p style="font-size:1.1em"><strong>{{.StatusLabel}}</strong></p>
+  <p>{{.StatusDescription}}</p>
+  {{if or .Carrier .TrackingCode}}
+  <ul>
+    {{if .Carrier}}<li>Transportadora: <strong>{{.Carrier}}</strong></li>{{end}}
+    {{if .TrackingCode}}<li>Guía: <strong>{{.TrackingCode}}</strong></li>{{end}}
+    {{if .TrackingURL}}<li><a href="{{.TrackingURL}}">Seguir envío</a></li>{{end}}
+  </ul>
+  {{end}}
+  {{if .SupportNote}}<p style="background:#fff7e6;border-left:3px solid #f59e0b;padding:10px 14px">{{.SupportNote}}</p>{{end}}
+  <p>— Sip-Happens</p>
+  {{template "footer" .}}
+</body>
+</html>

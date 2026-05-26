@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -231,6 +232,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /admin/products/{id}/price-history", adminRL.Wrap(http.HandlerFunc(s.handleAdminProductPriceHistory)))
 	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))
 	mux.Handle("POST /admin/orders/{id}/status", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderStatusOverride))))
+	mux.Handle("POST /admin/orders/{id}/shipment/transition", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminShipmentTransition))))
 	mux.Handle("POST /admin/orders/{id}/refund", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderRefund))))
 	mux.Handle("GET /admin/orders/{id}/refunds", adminRL.Wrap(http.HandlerFunc(s.handleAdminOrderRefunds)))
 	mux.Handle("POST /admin/orders/{id}/reconcile-stripe", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderReconcileStripe))))
@@ -929,7 +931,22 @@ func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	key := shipping.CityKey(canon)
-	n, err := shipping.LookupAmountMinor(r.Context(), s.DB, key, cur)
+	weightGrams := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("weight_grams")); raw != "" {
+		if v, perr := strconv.Atoi(raw); perr == nil && v > 0 {
+			weightGrams = v
+		}
+	}
+	var (
+		n    int64
+		mode = "flat"
+	)
+	if weightGrams > 0 {
+		n, err = shipping.LookupAmountMinorForWeight(r.Context(), s.DB, key, cur, weightGrams)
+		mode = "tier"
+	} else {
+		n, err = shipping.LookupAmountMinor(r.Context(), s.DB, key, cur)
+	}
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")
 		return
@@ -939,6 +956,8 @@ func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) 
 		"city":                 canon,
 		"currency":             cur,
 		"shipping_minor_units": n,
+		"weight_grams":         weightGrams,
+		"rate_mode":            mode,
 	})
 }
 
