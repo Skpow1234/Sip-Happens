@@ -25,6 +25,13 @@ type EventStore interface {
 	MarkProcessed(ctx context.Context, eventID string, processedAt time.Time) error
 }
 
+// RefundReconciler is the minimal surface the webhook handler needs from
+// the refunds service. Declared as a local interface to avoid a circular
+// import (refunds depends on stripe.Service).
+type RefundReconciler interface {
+	MarkRefundStatusByStripeID(ctx context.Context, stripeRefundID, newStatus, failureMessage string) error
+}
+
 type WebhookHandler struct {
 	Verifier   Verifier
 	EventStore EventStore
@@ -32,6 +39,10 @@ type WebhookHandler struct {
 	Orders     orders.Service
 	OrderRepo  orders.Repository
 	OrderQuery orders.Querier
+	// Refunds is the refund reconciler invoked on `charge.refunded` /
+	// `refund.updated` events. Optional; when nil the events still
+	// short-circuit to MarkIgnored without erroring.
+	Refunds RefundReconciler
 }
 
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +210,32 @@ func (h *WebhookHandler) applyEvent(ctx context.Context, evt stripeEvent) error 
 			RawPayload:  evt.RawObject,
 		}
 		return h.Orders.MarkPaid(ctx, orderID, payment)
+	case "charge.refunded", "refund.updated", "refund.created":
+		// Stripe sends `charge.refunded` when a refund is initiated and
+		// `refund.updated` when its status changes. The payload shapes
+		// differ: `charge.*` has a `refunds.data[]` array of refund
+		// objects; `refund.*` has the refund object directly. We try
+		// both shapes and forward each refund to the reconciler.
+		if h.Refunds == nil {
+			if h.EventLog != nil {
+				_ = h.EventLog.MarkIgnored(ctx, evt.ID, time.Now())
+			}
+			return nil
+		}
+		refundObjs, err := evt.AsRefundObjects()
+		if err != nil {
+			if h.EventLog != nil {
+				_ = h.EventLog.InsertDeadLetter(ctx, evt.ID, "invalid_refund_payload", evt.RawObject)
+			}
+			return domain.ErrInvalidInput
+		}
+		var firstErr error
+		for _, r := range refundObjs {
+			if err := h.Refunds.MarkRefundStatusByStripeID(ctx, r.ID, r.Status, r.FailureReason); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
 	default:
 		// Ignore unsupported event types.
 		if h.EventLog != nil {

@@ -31,6 +31,7 @@ import (
 	"sip-happens/services/core-api/internal/outbox"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+	"sip-happens/services/core-api/internal/refunds"
 	"sip-happens/services/core-api/internal/seed"
 	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/tokens"
@@ -144,6 +145,16 @@ func runServer() error {
 		return err
 	}
 
+	stripeClient := selectStripeClient(cfg)
+	refundSvc := &refunds.SQLService{
+		DB:     sqlDB,
+		Stripe: stripeClient,
+		Audit:  auditStore,
+	}
+	if stripeWebhook != nil {
+		stripeWebhook.Refunds = refundSvc
+	}
+
 	srv := &httpserver.Server{
 		Orders:                  ordersSvc,
 		Subscriptions:           subscriptions.NewSQLRepository(),
@@ -156,6 +167,7 @@ func runServer() error {
 		Catalog:                 catalogRepo,
 		Admin:                   adminSvc,
 		Invoices:                invoiceSvc,
+		Refunds:                 refundSvc,
 		AdminToken:              cfg.AdminToken,
 		AdminTokens:             cfg.AdminTokens,
 		AdminTokenRoles:         httpserver.AdminTokenRolesFromConfig(cfg),
@@ -166,7 +178,7 @@ func runServer() error {
 		FeatureFlags:            cfg.Flags.Enabled,
 		CoreAPIHMACSecret:       cfg.CoreAPIHMACSecret,
 		CoreAPIHMACKeys:         cfg.CoreAPIHMACKeys,
-		Stripe:                  selectStripeClient(cfg),
+		Stripe:                  stripeClient,
 		StripeWebhook:           stripeWebhook,
 		StripeWebhookPath:       cfg.StripeWebhookPath,
 		Email:                   emailSvc,

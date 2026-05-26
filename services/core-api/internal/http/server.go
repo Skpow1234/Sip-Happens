@@ -27,6 +27,7 @@ import (
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+	"sip-happens/services/core-api/internal/refunds"
 	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/tokens"
 
@@ -54,6 +55,10 @@ type Server struct {
 	Stripe            stripepayments.Service
 	StripeWebhook     *stripepayments.WebhookHandler
 	StripeWebhookPath string
+	// Refunds is optional; when nil the /admin/orders/{id}/refund and
+	// /admin/orders/{id}/refunds endpoints return 500 "refunds service
+	// not configured". Wired up in cmd/api/main.go alongside Stripe.
+	Refunds refunds.Service
 
 	CoreAPIHMACSecret string
 	CoreAPIHMACKeys   map[string]string
@@ -214,6 +219,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /admin/products/{id}/price-history", adminRL.Wrap(http.HandlerFunc(s.handleAdminProductPriceHistory)))
 	mux.Handle("POST /admin/orders/{id}/cancel", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderCancel))))
 	mux.Handle("POST /admin/orders/{id}/status", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderStatusOverride))))
+	mux.Handle("POST /admin/orders/{id}/refund", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderRefund))))
+	mux.Handle("GET /admin/orders/{id}/refunds", adminRL.Wrap(http.HandlerFunc(s.handleAdminOrderRefunds)))
 	mux.Handle("POST /admin/orders/{id}/reconcile-stripe", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderReconcileStripe))))
 	mux.Handle("POST /admin/orders/{id}/invoice", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderIssueInvoice))))
 	mux.Handle("PATCH /admin/orders/{id}/shipment", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminOrderShipment))))
