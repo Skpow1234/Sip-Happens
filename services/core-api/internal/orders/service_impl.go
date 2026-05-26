@@ -445,3 +445,57 @@ func (s *service) SetStripeRefs(ctx context.Context, id domain.OrderID, checkout
 		return s.orders.SetStripeRefs(ctx, tx, id, checkoutSessionID, paymentIntentID)
 	})
 }
+
+func (s *service) AdminOverrideStatus(ctx context.Context, id domain.OrderID, to domain.OrderStatus, reason string) (*domain.Order, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	to = domain.OrderStatus(strings.ToUpper(strings.TrimSpace(string(to))))
+	if to == "" {
+		return nil, domain.ErrInvalidInput
+	}
+
+	var out *domain.Order
+	err := s.db.WithTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(tx *sql.Tx) error {
+		o, err := s.orders.Get(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if o.Status == to {
+			out = o
+			return nil
+		}
+		if !IsAdminAllowedTransition(o.Status, to) {
+			return domain.ErrConflict
+		}
+		fromStatus := o.Status
+		if err := s.orders.UpdateStatus(ctx, tx, id, to); err != nil {
+			return err
+		}
+		o.Status = to
+
+		now := time.Now()
+		if err := s.insertOutbox(ctx, tx, func() (events.Envelope, error) {
+			return events.NewOrderStatusOverriddenEnvelope(
+				string(id), string(fromStatus), string(to), "admin", reason, "", now,
+			)
+		}); err != nil {
+			return err
+		}
+
+		logCtx := obslog.WithOrderID(ctx, string(id))
+		logCtx = obslog.WithCustomerID(logCtx, string(o.CustomerID))
+		obslog.Info(logCtx, "order_status_overridden", map[string]any{
+			"from":   string(fromStatus),
+			"to":     string(to),
+			"reason": reason,
+		})
+		out = o
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
