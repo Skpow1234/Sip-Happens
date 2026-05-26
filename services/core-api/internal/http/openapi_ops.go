@@ -46,6 +46,7 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "GET", Path: "/orders"},
 	{Method: "POST", Path: "/orders"},
 	{Method: "GET", Path: "/orders/{id}"},
+	{Method: "POST", Path: "/orders/{ref}/cancel"},
 	{Method: "GET", Path: "/subscriptions"},
 	{Method: "POST", Path: "/subscriptions"},
 	{Method: "GET", Path: "/subscriptions/{id}"},
@@ -82,10 +83,17 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "POST", Path: "/admin/orders/{id}/reconcile-stripe"},
 	{Method: "POST", Path: "/admin/orders/{id}/invoice"},
 	{Method: "PATCH", Path: "/admin/orders/{id}/shipment"},
+	{Method: "POST", Path: "/admin/orders/{id}/status"},
+	{Method: "POST", Path: "/admin/orders/{id}/refund"},
+	{Method: "GET", Path: "/admin/orders/{id}/refunds"},
+	{Method: "GET", Path: "/admin/products/{id}/price-history"},
 	{Method: "GET", Path: "/admin/audit-events"},
 	{Method: "GET", Path: "/admin/stripe/dead-letters"},
 	{Method: "POST", Path: "/admin/stripe/dead-letters/replay"},
 	{Method: "POST", Path: "/webhooks/stripe"},
+	{Method: "POST", Path: "/email"},
+	{Method: "GET", Path: "/email/confirm"},
+	{Method: "POST", Path: "/email/unsubscribe"},
 }
 
 var openAPIHTTPMethods = map[string]struct{}{

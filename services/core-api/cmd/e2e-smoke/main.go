@@ -140,6 +140,10 @@ func run() error {
   "items":[{"product_id":%q,"qty":1}]
 }`, productID)
 
+	var lastOrder struct {
+		ID     string
+		Status string
+	}
 	if err := checkJSON(ctx, client, base+"/checkout", http.MethodPost, []byte(checkoutBody), true, secret, keyID, fp, func(b []byte) error {
 		var out struct {
 			Order struct {
@@ -159,9 +163,153 @@ func run() error {
 		if out.Stripe.URL == "" {
 			return fmt.Errorf("missing stripe.URL")
 		}
+		lastOrder.ID = out.Order.ID
+		lastOrder.Status = out.Order.Status
 		return nil
 	}); err != nil {
 		return fmt.Errorf("checkout: %w", err)
+	}
+
+	// ---- Parity additions (Terminal.shop / API parity batch) ----
+
+	// /view/init bootstrap
+	if err := checkJSON(ctx, client, base+"/view/init?currency=COP&catalog_limit=5&orders_limit=5",
+		http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
+			var out struct {
+				Customer json.RawMessage `json:"customer"`
+				Catalog  json.RawMessage `json:"catalog"`
+				Orders   json.RawMessage `json:"orders"`
+			}
+			if err := json.Unmarshal(b, &out); err != nil {
+				return err
+			}
+			if len(out.Customer) == 0 || len(out.Catalog) == 0 || len(out.Orders) == 0 {
+				return fmt.Errorf("view/init missing one of customer/catalog/orders")
+			}
+			return nil
+		}); err != nil {
+		return fmt.Errorf("view/init: %w", err)
+	}
+
+	// /shipping/estimate
+	if err := checkJSON(ctx, client, base+"/shipping/estimate?city=Bogot%C3%A1&currency=COP",
+		http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
+			var out struct {
+				City                  string `json:"city"`
+				Currency              string `json:"currency"`
+				ShippingMinorUnits    int64  `json:"shipping_minor_units"`
+			}
+			if err := json.Unmarshal(b, &out); err != nil {
+				return err
+			}
+			if out.City == "" || out.Currency == "" {
+				return fmt.Errorf("missing city/currency")
+			}
+			if out.ShippingMinorUnits <= 0 {
+				return fmt.Errorf("shipping_minor_units should be > 0 for Bogotá")
+			}
+			return nil
+		}); err != nil {
+		return fmt.Errorf("shipping/estimate: %w", err)
+	}
+
+	// /cart lifecycle: GET → PUT item → GET (subtotal > 0) → DELETE → GET (empty)
+	if err := checkJSON(ctx, client, base+"/cart?currency=COP", http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
+		var v struct {
+			Currency string `json:"currency"`
+			Items    []any  `json:"items"`
+		}
+		if err := json.Unmarshal(b, &v); err != nil {
+			return err
+		}
+		if v.Currency == "" {
+			return fmt.Errorf("missing currency")
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("cart GET: %w", err)
+	}
+	putItemBody := fmt.Sprintf(`{"qty":1}`)
+	if err := checkJSON(ctx, client, base+"/cart/items/"+productID+"?currency=COP",
+		http.MethodPut, []byte(putItemBody), true, secret, keyID, fp, func(b []byte) error {
+			var v struct {
+				SubtotalMinorUnits int64 `json:"subtotal_minor_units"`
+				ItemCount          int   `json:"item_count"`
+			}
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			if v.ItemCount < 1 {
+				return fmt.Errorf("expected item_count >= 1 after PUT, got %d", v.ItemCount)
+			}
+			return nil
+		}); err != nil {
+		return fmt.Errorf("cart PUT item: %w", err)
+	}
+	if err := checkJSON(ctx, client, base+"/cart?currency=COP",
+		http.MethodDelete, nil, true, secret, keyID, fp, func(b []byte) error {
+			return nil
+		}); err != nil {
+		return fmt.Errorf("cart DELETE: %w", err)
+	}
+
+	// /tokens CRUD: list → create → list → revoke
+	if err := checkJSON(ctx, client, base+"/tokens",
+		http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
+			return nil
+		}); err != nil {
+		return fmt.Errorf("tokens GET: %w", err)
+	}
+	createTokBody := `{"name":"e2e-smoke","scopes":["catalog:read","orders:read"]}`
+	var createdTokenID string
+	if err := checkJSON(ctx, client, base+"/tokens",
+		http.MethodPost, []byte(createTokBody), true, secret, keyID, fp, func(b []byte) error {
+			var v struct {
+				Token               string `json:"token"`
+				PersonalAccessToken struct {
+					ID string `json:"id"`
+				} `json:"personal_access_token"`
+			}
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			if v.Token == "" {
+				return fmt.Errorf("missing raw token in response")
+			}
+			createdTokenID = v.PersonalAccessToken.ID
+			return nil
+		}); err != nil {
+		return fmt.Errorf("tokens POST: %w", err)
+	}
+	if createdTokenID != "" {
+		if err := checkJSON(ctx, client, base+"/tokens/"+createdTokenID,
+			http.MethodDelete, nil, true, secret, keyID, fp, func(b []byte) error {
+				return nil
+			}); err != nil {
+			return fmt.Errorf("tokens DELETE: %w", err)
+		}
+	}
+
+	// Customer-cancel-own-order on the PENDING_PAYMENT order we just made.
+	if lastOrder.ID != "" {
+		cancelBody := `{"reason":"e2e_smoke"}`
+		if err := checkJSON(ctx, client, base+"/orders/"+lastOrder.ID+"/cancel",
+			http.MethodPost, []byte(cancelBody), true, secret, keyID, fp, func(b []byte) error {
+				var v struct {
+					Order struct {
+						Status string `json:"Status"`
+					} `json:"order"`
+				}
+				if err := json.Unmarshal(b, &v); err != nil {
+					return err
+				}
+				if v.Order.Status != "CANCELLED" {
+					return fmt.Errorf("expected CANCELLED, got %q", v.Order.Status)
+				}
+				return nil
+			}); err != nil {
+			return fmt.Errorf("orders/cancel: %w", err)
+		}
 	}
 
 	return nil
