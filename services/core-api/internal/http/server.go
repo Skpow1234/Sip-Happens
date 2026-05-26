@@ -180,6 +180,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /oauth/token", s.handleOAuthToken)
 	mux.Handle("/oauth/clients", s.requireSigned(http.HandlerFunc(s.handleOAuthClients)))
 	mux.Handle("/oauth/clients/", s.requireSigned(http.HandlerFunc(s.handleOAuthClientByID)))
+	mux.Handle("GET /view/init", s.requireSigned(http.HandlerFunc(s.handleViewInit)))
 	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/profile", s.requireSigned(http.HandlerFunc(s.handleProfile)))
 	mux.Handle("/addresses", s.requireSigned(http.HandlerFunc(s.handleAddresses)))
