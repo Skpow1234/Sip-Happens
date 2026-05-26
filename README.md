@@ -112,9 +112,13 @@ The matching public key is in `infra/demo/authorized_keys` (mounted into the gat
 
 Flow: confirm age → split-pane catalog → cart → delivery (breadcrumb steps) → Stripe checkout URL off-terminal (mock when `STRIPE_MOCK=1`).
 
-TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `←`/`→` add/remove on catalog · `b` suscribirse (recurring subscription on selected product) · `enter` checkout from cart.
+TUI shortcuts: `s` shop · `a` account · `c` cart · `?` help · `←`/`→` add/remove on catalog · `g` toggle destacados/catálogo · `b` suscribirse (recurring subscription on selected product) · `enter` checkout from cart.
 
 Account sections (`a` then `↑/↓` or `tab`): pedidos · suscripciones · direcciones guardadas · tokens de API (`n` nuevo, `x` revocar) · preguntas frecuentes · acerca de.
+
+**First-paint UX:** the TUI now shows a brief `sip-happens█` splash before the age form, then issues a single signed `GET /view/init` call after age confirmation to hydrate profile + cart + featured catalog in parallel (falls back to sequential loaders on failure). Product detail (`GET /catalog/{id}`) is cached per session so `↑/↓` browsing doesn't re-hit the network once you've already opened a product. If the SSH fingerprint resolved to a skeleton customer (no name / email / legal ID), a one-line yellow banner nudges the user to complete their profile.
+
+**Payment screen:** Polling for order status auto-recovers from transient network errors silently (no scary popups in front of the QR). When the Stripe Checkout session expires past the order's `expires_at`, the (now-broken) QR/URL is hidden and the user gets a `c — empezar de nuevo desde el carrito` recovery path. Shipment statuses `PACKED`, `HANDED_OVER`, and `FAILED` render in Spanish (e.g. "entregado al transportador", "fallido") via `ShipmentStatusLabel` in `messages_es_co.go`.
 
 Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`).
 
@@ -122,7 +126,7 @@ Dev HMAC between gateway and API is pre-wired in Compose (`CORE_API_HMAC_KEY_ID=
 
 **Host key**: local dev mounts a committed key at `infra/demo/ssh_host_ed25519_key` (see `compose.dev.yaml`); production uses volume `sshkeys` — [`docs/ops/ssh-production.md`](docs/ops/ssh-production.md).
 
-Catalog TUI shortcuts: `/` search, `f` filters (style, brewery, ABV), `n`/`p` pages.
+Catalog TUI shortcuts: `/` search, `f` filters (style, brewery, ABV), `n`/`p` pages, `g` switch between destacados (newest active products, 6 per page) and catálogo (full list, 15 per page). The destacados group maps to `GET /catalog?featured=true` server-side — same filters apply, just a different `ORDER BY`.
 
 ### Start the “order reaper” (expires pending orders)
 
