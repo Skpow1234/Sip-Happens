@@ -192,17 +192,6 @@ func catalogLine(name string, width int, selected bool) string {
 	return styleMuted().Render("  " + line) + "\n"
 }
 
-func box(title, inner string, width int) string {
-	if width < 10 {
-		width = 40
-	}
-	titleRendered := ""
-	if title != "" {
-		titleRendered = styleBoxTitle().Render(title) + "\n"
-	}
-	return styleBox().Width(width).Render(titleRendered + inner)
-}
-
 func splitHorizontal(leftWidth int, left, right string) string {
 	l := lipgloss.NewStyle().Width(leftWidth).Render(left)
 	r := lipgloss.NewStyle().Render(right)

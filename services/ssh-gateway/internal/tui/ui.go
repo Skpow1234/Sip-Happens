@@ -3,36 +3,8 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"sip-happens/services/ssh-gateway/internal/api"
 )
-
-func (m Model) statusBar() string {
-	var parts []string
-	if m.busy {
-		parts = append(parts, L.StatusBarLoading)
-	}
-	if n := m.state.cartCount(); n > 0 {
-		parts = append(parts, L.StatusBarCart(n))
-	}
-	if label := m.state.orderLabel(); label != "" {
-		parts = append(parts, L.StatusBarOrder(label))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, "  |  ")
-}
-
-func (m Model) withFooter(body string) string {
-	bar := m.statusBar()
-	if bar == "" {
-		return body
-	}
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	return body + "\n\n" + style.Render(bar)
-}
 
 func formatOrderLabel(id, displayRef string) string {
 	if dr := strings.TrimSpace(displayRef); dr != "" {

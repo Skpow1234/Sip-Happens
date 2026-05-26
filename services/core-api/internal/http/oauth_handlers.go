@@ -32,12 +32,11 @@ type oauthError struct {
 func (e *oauthError) Error() string { return e.code + ": " + e.description }
 
 var (
-	errOAuthInvalidRequest      = &oauthError{httpStatus: http.StatusBadRequest, code: "invalid_request"}
-	errOAuthInvalidClient       = &oauthError{httpStatus: http.StatusUnauthorized, code: "invalid_client"}
-	errOAuthInvalidGrant        = &oauthError{httpStatus: http.StatusBadRequest, code: "invalid_grant"}
-	errOAuthUnsupportedGrant    = &oauthError{httpStatus: http.StatusBadRequest, code: "unsupported_grant_type"}
-	errOAuthInvalidScope        = &oauthError{httpStatus: http.StatusBadRequest, code: "invalid_scope"}
-	errOAuthServerError         = &oauthError{httpStatus: http.StatusInternalServerError, code: "server_error"}
+	errOAuthInvalidRequest   = &oauthError{httpStatus: http.StatusBadRequest, code: "invalid_request"}
+	errOAuthInvalidClient    = &oauthError{httpStatus: http.StatusUnauthorized, code: "invalid_client"}
+	errOAuthInvalidGrant     = &oauthError{httpStatus: http.StatusBadRequest, code: "invalid_grant"}
+	errOAuthUnsupportedGrant = &oauthError{httpStatus: http.StatusBadRequest, code: "unsupported_grant_type"}
+	errOAuthServerError      = &oauthError{httpStatus: http.StatusInternalServerError, code: "server_error"}
 )
 
 func writeOAuthError(w http.ResponseWriter, base *oauthError, description string) {

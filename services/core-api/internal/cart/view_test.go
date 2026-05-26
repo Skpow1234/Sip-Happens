@@ -1,13 +1,14 @@
 package cart
 
 import (
+	"context"
 	"testing"
 
 	"sip-happens/services/core-api/internal/customers"
 )
 
 func TestBuildView_empty(t *testing.T) {
-	v, err := BuildView(nil, nil, nil, nil, "COP", nil)
+	v, err := BuildView(context.TODO(), nil, nil, nil, "COP", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +18,7 @@ func TestBuildView_empty(t *testing.T) {
 }
 
 func TestBuildView_skipsLinesWhenCatalogNil(t *testing.T) {
-	v, err := BuildView(nil, nil, nil, nil, "COP", []customers.CartLine{
+	v, err := BuildView(context.TODO(), nil, nil, nil, "COP", []customers.CartLine{
 		{ProductID: "prd_missing", Qty: 2},
 	})
 	if err != nil {

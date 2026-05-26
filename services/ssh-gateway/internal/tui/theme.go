@@ -15,7 +15,6 @@ var (
 	colorOnAccent     = lipgloss.Color("15") // white on cyan
 	colorBrandGold    = lipgloss.Color("11") // prices, accent word
 	colorBrandCyan    = lipgloss.Color("14") // brand word, links
-	colorSpec         = lipgloss.Color("8")
 	colorLink         = lipgloss.Color("14")
 	colorWarn         = lipgloss.Color("9")
 	colorDanger       = lipgloss.Color("9")
@@ -46,20 +45,12 @@ func styleMuted() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colorMuted)
 }
 
-func styleDim() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(colorDim)
-}
-
 func styleText() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colorText)
 }
 
 func stylePrice() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
-}
-
-func styleSpec() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(colorSpec)
 }
 
 func styleLink() lipgloss.Style {
@@ -98,17 +89,6 @@ func styleFooter() lipgloss.Style {
 		Border(lipgloss.NormalBorder(), true, false, false, false).
 		BorderForeground(colorBorder).
 		Foreground(colorMuted)
-}
-
-func styleBox() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(colorBorder).
-		Padding(0, 1)
-}
-
-func styleBoxTitle() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorText)
 }
 
 func styleCrumbActive() lipgloss.Style {

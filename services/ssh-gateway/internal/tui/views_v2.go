@@ -435,12 +435,3 @@ func (m Model) viewPaymentV2() string {
 	return m.composeLayout(inner, opts)
 }
 
-func clampInt(hi, v int) int {
-	if v > hi {
-		return hi
-	}
-	if v < 1 {
-		return 1
-	}
-	return v
-}

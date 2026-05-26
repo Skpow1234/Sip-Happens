@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2086
+# Word-splitting on $COMPOSE_FILES is intentional (multi-flag expansion).
 set -euo pipefail
 
 STACK="${1:-dev}"

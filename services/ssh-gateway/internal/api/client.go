@@ -95,11 +95,10 @@ type CatalogDetail struct {
 }
 
 func (d CatalogDetail) AsCatalogItem() CatalogItem {
-	return CatalogItem{
-		Product:      d.Product,
-		Price:        d.Price,
-		AvailableQty: d.AvailableQty,
-	}
+	// CatalogDetail and CatalogItem are structurally identical (same fields,
+	// same order); a direct conversion is clearer than a field-by-field
+	// struct literal and stays in sync if either type grows a new field.
+	return CatalogItem(d)
 }
 
 type CheckoutItem struct {

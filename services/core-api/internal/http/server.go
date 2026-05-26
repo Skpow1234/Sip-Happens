@@ -105,7 +105,12 @@ func (s *Server) Handler() http.Handler {
 		catalogCache = NewSWRCache(15*time.Second, 45*time.Second)
 	}
 
+	// Rate limits use `N / 60.0` to read as "N tokens per minute" so the
+	// pair (checkout = 10/min, admin = 60/min) stays visually parallel.
+	// staticcheck flags 60.0/60.0 as identical-sides (SA4000) which is true
+	// but defeats the readability — we keep the form intentionally.
 	checkoutLimiter := RateLimiter(&TokenBucketLimiter{Capacity: 10, RefillRate: 10.0 / 60.0, TTL: 30 * time.Minute})
+	//lint:ignore SA4000 60.0/60.0 = "60 per minute"; keeps parity with the 10.0/60.0 sibling above
 	adminLimiter := RateLimiter(&TokenBucketLimiter{Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute})
 	if s.featureEnabled("redis_rate_limit") && s.Redis != nil {
 		rlPrefix := fmt.Sprintf("sip:%s:rl", nsPrefix)
@@ -115,6 +120,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		adminLimiter = &RedisTokenBucketLimiter{
 			Client: s.Redis, KeyPrefix: rlPrefix,
+			//lint:ignore SA4000 60.0/60.0 = "60 per minute"; keeps parity with sibling limiters
 			Capacity: 60, RefillRate: 60.0 / 60.0, TTL: 30 * time.Minute,
 		}
 	}

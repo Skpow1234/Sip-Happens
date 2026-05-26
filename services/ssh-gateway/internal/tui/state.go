@@ -451,34 +451,3 @@ func (s *AppState) productDetailFromCache(ref string) *api.CatalogDetail {
 	return s.productDetailCache[strings.TrimSpace(ref)]
 }
 
-func (s *AppState) catalogFilterSummary() string {
-	var parts []string
-	if s.catalogQuery.Q != "" {
-		parts = append(parts, "q="+s.catalogQuery.Q)
-	}
-	if s.catalogQuery.Style != "" {
-		parts = append(parts, "style="+s.catalogQuery.Style)
-	}
-	if s.catalogQuery.Brewery != "" {
-		parts = append(parts, "brewery="+s.catalogQuery.Brewery)
-	}
-	if s.catalogQuery.ABVMin != nil {
-		parts = append(parts, fmt.Sprintf("abv>=%.1f", *s.catalogQuery.ABVMin))
-	}
-	if s.catalogQuery.ABVMax != nil {
-		parts = append(parts, fmt.Sprintf("abv<=%.1f", *s.catalogQuery.ABVMax))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, "  ")
-}
-
-func (s *AppState) findCartIndex(productID string) int {
-	for i, l := range s.cart {
-		if l.ProductID == productID {
-			return i
-		}
-	}
-	return -1
-}

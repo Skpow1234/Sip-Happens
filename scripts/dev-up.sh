@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2086
+# Word-splitting on $COMPOSE_FILES is intentional: it expands to
+# `-f infra/compose.yaml -f infra/compose.dev.yaml` and must remain
+# unquoted so docker compose receives two separate -f flags.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
