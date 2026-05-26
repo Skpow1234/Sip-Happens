@@ -229,7 +229,7 @@ func run() error {
 	}); err != nil {
 		return fmt.Errorf("cart GET: %w", err)
 	}
-	putItemBody := fmt.Sprintf(`{"qty":1}`)
+	putItemBody := `{"qty":1}`
 	if err := checkJSON(ctx, client, base+"/cart/items/"+productID+"?currency=COP",
 		http.MethodPut, []byte(putItemBody), true, secret, keyID, fp, func(b []byte) error {
 			var v struct {

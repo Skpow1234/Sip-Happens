@@ -117,10 +117,7 @@ func (p *HTTPProvider) Issue(ctx context.Context, req IssueRequest) (IssueResult
 		},
 	}
 	for _, li := range req.LineItems {
-		body.LineItems = append(body.LineItems, httpProviderLineItem{
-			SKU: li.SKU, Name: li.Name, Qty: li.Qty,
-			UnitMinor: li.UnitMinor, LineMinor: li.LineMinor,
-		})
+		body.LineItems = append(body.LineItems, httpProviderLineItem(li))
 	}
 
 	reqBody, err := json.Marshal(body)
