@@ -7,6 +7,15 @@ type OrderID string
 type OrderStatus string
 
 const (
+	// OrderStatusDraft is RESERVED and currently NEVER written by any
+	// production code path. See ADR 0021 (docs/adr/0021-draft-order-state.md):
+	// the constant exists so future cart-draft / quote features can
+	// reference it without re-introducing a string literal, and so the
+	// admin filter on GET /admin/orders accepts ?status=DRAFT for
+	// forensic investigations. Any row found in this state today is a
+	// bug to file; the transition whitelist
+	// (orders.AdminAllowedTransitions) explicitly does NOT include
+	// DRAFT as a source or target.
 	OrderStatusDraft          OrderStatus = "DRAFT"
 	OrderStatusPendingPayment OrderStatus = "PENDING_PAYMENT"
 	OrderStatusPaid           OrderStatus = "PAID"

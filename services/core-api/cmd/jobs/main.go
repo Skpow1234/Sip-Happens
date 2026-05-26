@@ -544,8 +544,8 @@ func runFulfillmentRunner(ctx context.Context) error {
 //   - JOB_BATCH_LIMIT           max rows per pass (default 500)
 //   - JOB_RUN_ONCE              "true" → run a single pass and exit
 //   - EMAIL_TOKEN_RETENTION     duration (Go format) for which dead
-//                               tokens are retained before deletion
-//                               (default 720h = 30d)
+//     tokens are retained before deletion
+//     (default 720h = 30d)
 //
 // Uses the same DB-pool defaults as cancel-expired.
 func runEmailSubscribeReapJob(ctx context.Context) error {

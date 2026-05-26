@@ -22,10 +22,10 @@ import (
 // to one vendor — the request and response JSON shapes are defined by us
 // and an integrator either:
 //
-//   (a) configures their PT to accept this shape via a custom integration
-//       contract (most PTs let you POST a JSON body), or
-//   (b) deploys a thin shim (Cloud Run / Lambda / nginx mod_js) that
-//       translates between our shape and the PT's native shape.
+//	(a) configures their PT to accept this shape via a custom integration
+//	    contract (most PTs let you POST a JSON body), or
+//	(b) deploys a thin shim (Cloud Run / Lambda / nginx mod_js) that
+//	    translates between our shape and the PT's native shape.
 //
 // Option (b) is the recommended path for prod — it keeps the PT-specific
 // auth (mutual TLS, OAuth, etc.) and XML signing concerns out of core-api

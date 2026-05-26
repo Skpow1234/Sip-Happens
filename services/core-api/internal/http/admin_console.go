@@ -52,6 +52,7 @@ const adminConsoleHTML = `<!DOCTYPE html>
     <button type="button" class="tab" data-tab="products">Products</button>
     <button type="button" class="tab" data-tab="inventory">Inventory</button>
     <button type="button" class="tab" data-tab="reservations">Reservations</button>
+    <button type="button" class="tab" data-tab="prices">Price history</button>
   </div>
   <section id="panel-orders" class="panel active">
     <div class="bar">
@@ -82,6 +83,23 @@ const adminConsoleHTML = `<!DOCTYPE html>
     <div id="resErr" class="err"></div>
     <table><thead><tr><th>Order</th><th>SKU</th><th>Qty</th><th>Order status</th><th>Expires</th></tr></thead>
     <tbody id="resBody"></tbody></table>
+  </section>
+  <section id="panel-prices" class="panel">
+    <div class="bar">
+      <label>Product ID <input type="text" id="priceProductId" placeholder="prd_… or internal UUID" size="36"/></label>
+      <button type="button" id="loadPriceHistory">Load</button>
+      <span class="sub" style="margin:0">Requires finance+ role. Source: <code>GET /admin/products/{id}/price-history</code> (bi-temporal ledger joined with admin audit rows).</span>
+    </div>
+    <div id="pricesErr" class="err"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Currency</th><th>Amount (minor)</th><th>Valid from</th><th>Valid through</th>
+          <th>Set by</th><th>Set at</th><th>Ended by</th><th>Ended reason</th>
+        </tr>
+      </thead>
+      <tbody id="pricesBody"></tbody>
+    </table>
   </section>
   <script>
     const LS_KEY = 'sip_happens_admin_token';
@@ -156,6 +174,28 @@ const adminConsoleHTML = `<!DOCTYPE html>
         tb.appendChild(tr);
       });
     }
+    async function loadPriceHistory() {
+      $('pricesErr').textContent = '';
+      const id = $('priceProductId').value.trim();
+      const tb = $('pricesBody'); tb.innerHTML = '';
+      if (!id) { $('pricesErr').textContent = 'enter a product id'; return; }
+      try {
+        const data = await api('/admin/products/' + encodeURIComponent(id) + '/price-history');
+        (data.entries || []).forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + esc(row.currency) + '</td><td>' + esc(row.amount_minor_units) +
+            '</td><td>' + esc(row.valid_from || '') + '</td><td>' + esc(row.valid_through || '(open)') +
+            '</td><td>' + esc(row.set_by || '') + '</td><td>' + esc(row.set_at || '') +
+            '</td><td>' + esc(row.ended_by || '') + '</td><td>' + esc(row.ended_reason || '') + '</td>';
+          tb.appendChild(tr);
+        });
+        if (!(data.entries || []).length) {
+          $('pricesErr').textContent = 'no history';
+        }
+      } catch (e) {
+        $('pricesErr').textContent = e.message || String(e);
+      }
+    }
     async function loadReservations() {
       $('resErr').textContent = '';
       let q = '/admin/inventory/reservations?limit=200';
@@ -185,6 +225,7 @@ const adminConsoleHTML = `<!DOCTYPE html>
     $('orderStatus').onchange = loadOrders;
     $('invSku').onchange = loadInventory;
     $('resSku').onchange = loadReservations;
+    $('loadPriceHistory').onclick = loadPriceHistory;
     if (tokenEl.value) reloadAll();
   </script>
   <footer style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--muted);">

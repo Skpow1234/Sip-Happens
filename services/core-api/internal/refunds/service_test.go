@@ -63,16 +63,16 @@ func TestIdempotencyKey_ReasonWhitespaceNormalised(t *testing.T) {
 
 func TestNormalizeStripeRefundStatus(t *testing.T) {
 	cases := map[string]domain.RefundStatus{
-		"succeeded":        domain.RefundStatusSucceeded,
-		"SUCCEEDED":        domain.RefundStatusSucceeded,
-		"  succeeded  ":    domain.RefundStatusSucceeded,
-		"failed":           domain.RefundStatusFailed,
-		"canceled":         domain.RefundStatusFailed,
-		"cancelled":        domain.RefundStatusFailed,
-		"pending":          domain.RefundStatusPending,
-		"requires_action":  domain.RefundStatusPending,
-		"":                 domain.RefundStatusPending,
-		"unknown_garbage":  domain.RefundStatusPending,
+		"succeeded":       domain.RefundStatusSucceeded,
+		"SUCCEEDED":       domain.RefundStatusSucceeded,
+		"  succeeded  ":   domain.RefundStatusSucceeded,
+		"failed":          domain.RefundStatusFailed,
+		"canceled":        domain.RefundStatusFailed,
+		"cancelled":       domain.RefundStatusFailed,
+		"pending":         domain.RefundStatusPending,
+		"requires_action": domain.RefundStatusPending,
+		"":                domain.RefundStatusPending,
+		"unknown_garbage": domain.RefundStatusPending,
 	}
 	for in, want := range cases {
 		if got := normalizeStripeRefundStatus(in); got != want {
