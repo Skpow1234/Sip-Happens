@@ -55,6 +55,8 @@ var ImplementedRoutes = []RouteOp{
 	{Method: "POST", Path: "/tokens"},
 	{Method: "GET", Path: "/tokens/{id}"},
 	{Method: "DELETE", Path: "/tokens/{id}"},
+	{Method: "POST", Path: "/oauth/authorize"},
+	{Method: "POST", Path: "/oauth/token"},
 	{Method: "POST", Path: "/checkout"},
 	{Method: "GET", Path: "/admin/products"},
 	{Method: "POST", Path: "/admin/products"},

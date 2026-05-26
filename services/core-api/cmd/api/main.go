@@ -31,6 +31,7 @@ import (
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/seed"
+	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/tokens"
 )
@@ -147,6 +148,8 @@ func runServer() error {
 		Orders:            ordersSvc,
 		Subscriptions:     subscriptions.NewSQLRepository(),
 		Tokens:            tokens.NewSQLRepository(),
+		OAuthClients:      oauthapps.NewSQLClientRepository(),
+		OAuthCodes:        oauthapps.NewSQLCodeRepository(),
 		Payments:          paymentsRepo,
 		Customers:         customersSvc,
 		Addresses:         addresses.NewSQLRepository(),

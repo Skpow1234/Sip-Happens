@@ -26,6 +26,7 @@ import (
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
+	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/subscriptions"
 	"sip-happens/services/core-api/internal/tokens"
 
@@ -36,7 +37,9 @@ import (
 type Server struct {
 	Orders      orders.Service
 	Subscriptions subscriptions.Repository
-	Tokens      tokens.Repository
+	Tokens       tokens.Repository
+	OAuthClients oauthapps.ClientRepository
+	OAuthCodes   oauthapps.CodeRepository
 	Payments    payments.Repository
 	Customers   customers.Service
 	Addresses   addresses.Repository
@@ -173,6 +176,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/subscriptions/", s.requireSigned(http.HandlerFunc(s.handleSubscriptionByID)))
 	mux.Handle("/tokens", s.requireSigned(http.HandlerFunc(s.handleTokens)))
 	mux.Handle("/tokens/", s.requireSigned(http.HandlerFunc(s.handleTokenByID)))
+	mux.Handle("POST /oauth/authorize", s.requireSigned(checkoutRL.Wrap(http.HandlerFunc(s.handleOAuthAuthorize))))
+	mux.HandleFunc("POST /oauth/token", s.handleOAuthToken)
 	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
 	mux.Handle("/profile", s.requireSigned(http.HandlerFunc(s.handleProfile)))
 	mux.Handle("/addresses", s.requireSigned(http.HandlerFunc(s.handleAddresses)))
