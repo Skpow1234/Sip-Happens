@@ -25,6 +25,7 @@ import (
 	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/objectstore"
 	"sip-happens/services/core-api/internal/orders"
+	"sip-happens/services/core-api/internal/emailsubscribe"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/refunds"
@@ -72,6 +73,9 @@ type Server struct {
 	FeatureFlags map[string]struct{}
 
 	Email *email.Service
+	// EmailSubscribe is the public POST /email newsletter service. Nil
+	// disables the routes and they return 500 misconfigured.
+	EmailSubscribe emailsubscribe.Service
 
 	// Redis is optional; used when feature flags request shared cache or rate limits.
 	Redis *redis.Client
@@ -87,6 +91,9 @@ type Server struct {
 	PrivacyPolicyURL        string
 	ConsumerRightsURL       string
 	DataProcessingPolicyURL string
+	// PublicBaseURL is the canonical user-facing URL of the API,
+	// used to build links in outbound emails (e.g. confirmation).
+	PublicBaseURL string
 }
 
 func (s *Server) Handler() http.Handler {
@@ -209,6 +216,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/cart/convert", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCartConvert)))))
 	mux.Handle("/cart", s.requireSigned(http.HandlerFunc(s.handleCart)))
 	mux.Handle("/shipping/estimate", s.requireSigned(http.HandlerFunc(s.handleShippingEstimate)))
+	// Public newsletter subscribe with double-opt-in (Ley 1581).
+	// Rate-limited via checkoutRL to prevent enumeration / spam.
+	mux.Handle("POST /email", checkoutRL.Wrap(http.HandlerFunc(s.handleEmailSubscribe)))
+	mux.HandleFunc("GET /email/confirm", s.handleEmailConfirm)
+	mux.Handle("POST /email/unsubscribe", checkoutRL.Wrap(http.HandlerFunc(s.handleEmailUnsubscribe)))
 	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))

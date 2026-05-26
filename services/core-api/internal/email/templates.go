@@ -32,6 +32,15 @@ type ReceiptData struct {
 	ComplianceData
 }
 
+// SubscribeConfirmData is the template payload for the double-opt-in
+// confirmation email triggered by POST /email.
+type SubscribeConfirmData struct {
+	Email      string
+	ConfirmURL string
+	TTLHours   int
+	ComplianceData
+}
+
 func renderPaymentLink(data PaymentLinkData) (text, html string, err error) {
 	data.ComplianceData = data.ComplianceData.withDefaults()
 	text, err = renderTemplate("templates/payment_link.txt", data)
@@ -49,6 +58,16 @@ func renderReceipt(data ReceiptData) (text, html string, err error) {
 		return "", "", err
 	}
 	html, err = renderTemplate("templates/receipt.html", data)
+	return text, html, err
+}
+
+func renderSubscribeConfirm(data SubscribeConfirmData) (text, html string, err error) {
+	data.ComplianceData = data.ComplianceData.withDefaults()
+	text, err = renderTemplate("templates/subscribe_confirm.txt", data)
+	if err != nil {
+		return "", "", err
+	}
+	html, err = renderTemplate("templates/subscribe_confirm.html", data)
 	return text, html, err
 }
 

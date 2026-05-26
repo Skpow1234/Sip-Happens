@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es-co">
+<body style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:24px auto;line-height:1.5;color:#222">
+  <p>Hola,</p>
+  <p>Recibimos una solicitud para suscribir <strong>{{.Email}}</strong> al boletín de Sip-Happens.</p>
+  <p>Para confirmar tu suscripción, haz clic aquí:</p>
+  <p>
+    <a href="{{.ConfirmURL}}" style="display:inline-block;background:#1f7a3a;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px">
+      Confirmar suscripción
+    </a>
+  </p>
+  <p style="color:#666;font-size:90%">
+    O copia y pega este enlace en tu navegador:<br>
+    <code style="word-break:break-all">{{.ConfirmURL}}</code>
+  </p>
+  <p style="color:#666;font-size:90%">
+    Este enlace vence en {{.TTLHours}} horas. Si no fuiste tú, puedes ignorar este mensaje — no haremos nada con tu correo sin tu confirmación explícita.
+  </p>
+  <p>— Sip-Happens</p>
+  <hr style="border:none;border-top:1px solid #e5e5e5;margin-top:24px">
+  <p style="color:#888;font-size:80%">
+    {{.MinorAlcoholWarning}}<br>
+    Privacidad: <a href="{{.PrivacyPolicyURL}}">{{.PrivacyPolicyURL}}</a><br>
+    Tratamiento de datos personales: <a href="{{.DataProcessingPolicyURL}}">{{.DataProcessingPolicyURL}}</a><br>
+    Derechos del consumidor (SIC): <a href="{{.ConsumerRightsURL}}">{{.ConsumerRightsURL}}</a>
+  </p>
+</body>
+</html>

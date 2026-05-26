@@ -88,6 +88,40 @@ func (s *Service) SendPaymentLink(ctx context.Context, order *domain.Order, cust
 	})
 }
 
+// SendSubscribeConfirmation delivers the double-opt-in email for a newly
+// pending newsletter subscriber. Gated by the email_subscribe_confirm
+// feature flag so dev/test setups without SMTP don't try to send.
+func (s *Service) SendSubscribeConfirmation(ctx context.Context, recipientEmail, confirmURL string, ttlHours int) error {
+	if s == nil || s.Mailer == nil {
+		return nil
+	}
+	if !s.Flags.Has("email_subscribe_confirm") {
+		return nil
+	}
+	to := strings.TrimSpace(recipientEmail)
+	if to == "" || strings.TrimSpace(confirmURL) == "" {
+		return nil
+	}
+	if ttlHours <= 0 {
+		ttlHours = 48
+	}
+	text, html, err := renderSubscribeConfirm(SubscribeConfirmData{
+		Email:          to,
+		ConfirmURL:     confirmURL,
+		TTLHours:       ttlHours,
+		ComplianceData: s.Compliance,
+	})
+	if err != nil {
+		return err
+	}
+	return s.Mailer.Send(ctx, Message{
+		To:       to,
+		Subject:  "Confirma tu suscripción al boletín de Sip-Happens",
+		TextBody: text,
+		HTMLBody: html,
+	})
+}
+
 func (s *Service) SendReceiptForOrder(ctx context.Context, orderID domain.OrderID) error {
 	if s == nil || s.Mailer == nil || s.DB == nil {
 		return nil

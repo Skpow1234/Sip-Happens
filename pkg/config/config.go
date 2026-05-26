@@ -59,6 +59,12 @@ type CoreAPI struct {
 	PrivacyPolicyURL        string
 	ConsumerRightsURL       string
 	DataProcessingPolicyURL string
+
+	// PublicBaseURL is the customer-facing canonical URL of the API used
+	// to construct links in outbound emails (e.g. /email/confirm links).
+	// Defaults to "http://localhost:8080" for dev; prod must override to
+	// the real https://api.sip-happens.co or similar.
+	PublicBaseURL string
 }
 
 func LoadCoreAPI() (CoreAPI, error) {
@@ -110,6 +116,7 @@ func LoadCoreAPI() (CoreAPI, error) {
 	c.PrivacyPolicyURL = getenvDefault("PRIVACY_POLICY_URL", "https://sip-happens.local/privacy")
 	c.ConsumerRightsURL = getenvDefault("CONSUMER_RIGHTS_URL", "https://www.sic.gov.co/proteccion-del-consumidor")
 	c.DataProcessingPolicyURL = getenvDefault("DATA_PROCESSING_POLICY_URL", "https://sip-happens.local/legal/data-processing")
+	c.PublicBaseURL = strings.TrimRight(getenvDefault("PUBLIC_BASE_URL", "http://localhost:8080"), "/")
 
 	return c, nil
 }

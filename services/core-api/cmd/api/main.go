@@ -29,6 +29,7 @@ import (
 	"sip-happens/services/core-api/internal/observability"
 	"sip-happens/services/core-api/internal/orders"
 	"sip-happens/services/core-api/internal/outbox"
+	"sip-happens/services/core-api/internal/emailsubscribe"
 	"sip-happens/services/core-api/internal/payments"
 	stripepayments "sip-happens/services/core-api/internal/payments/stripe"
 	"sip-happens/services/core-api/internal/refunds"
@@ -168,6 +169,7 @@ func runServer() error {
 		Admin:                   adminSvc,
 		Invoices:                invoiceSvc,
 		Refunds:                 refundSvc,
+		EmailSubscribe:          emailsubscribe.NewService(sqlDB),
 		AdminToken:              cfg.AdminToken,
 		AdminTokens:             cfg.AdminTokens,
 		AdminTokenRoles:         httpserver.AdminTokenRolesFromConfig(cfg),
@@ -188,6 +190,7 @@ func runServer() error {
 		PrivacyPolicyURL:        cfg.PrivacyPolicyURL,
 		ConsumerRightsURL:       cfg.ConsumerRightsURL,
 		DataProcessingPolicyURL: cfg.DataProcessingPolicyURL,
+		PublicBaseURL:           cfg.PublicBaseURL,
 	}
 
 	httpSrv := &http.Server{

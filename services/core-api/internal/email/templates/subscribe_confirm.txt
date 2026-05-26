@@ -1,0 +1,19 @@
+Hola,
+
+Recibimos una solicitud para suscribir {{.Email}} al boletín de Sip-Happens.
+
+Para confirmar tu suscripción y empezar a recibir nuevidades sobre productos,
+descuentos y eventos, confirma haciendo clic en el siguiente enlace:
+
+{{.ConfirmURL}}
+
+Este enlace vence en {{.TTLHours}} horas. Si no fuiste tú, puedes ignorar
+este mensaje — no haremos nada con tu correo sin tu confirmación explícita.
+
+— Sip-Happens
+
+---
+{{.MinorAlcoholWarning}}
+Privacidad: {{.PrivacyPolicyURL}}
+Tratamiento de datos personales: {{.DataProcessingPolicyURL}}
+Derechos del consumidor (SIC): {{.ConsumerRightsURL}}
