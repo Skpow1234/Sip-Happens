@@ -167,6 +167,9 @@ type CatalogQuery struct {
 	Brewery  string
 	ABVMin   *float64
 	ABVMax   *float64
+	// Featured maps to ?featured=true — switches the server's result order
+	// to "destacados" (most recently introduced active products first).
+	Featured bool
 }
 
 type CatalogPage struct {
@@ -202,6 +205,9 @@ func (c *Client) GetCatalog(ctx context.Context, q CatalogQuery) (*CatalogPage, 
 	}
 	if q.ABVMax != nil {
 		params.Set("abv_max", strconv.FormatFloat(*q.ABVMax, 'f', -1, 64))
+	}
+	if q.Featured {
+		params.Set("featured", "true")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/catalog?"+params.Encode(), nil)
@@ -496,6 +502,99 @@ type CartItemView struct {
 		Currency         string `json:"currency"`
 		AmountMinorUnits int64  `json:"amount_minor_units"`
 	} `json:"price"`
+}
+
+// ViewInit is the GET /view/init envelope. Sections may be nil if the
+// upstream dependency was slow or failed; ViewInitResult.Warnings carries
+// the diagnostic and lets the TUI render whatever did load.
+type ViewInit struct {
+	Profile  *CustomerView      `json:"profile"`
+	Catalog  *CatalogPage       `json:"catalog,omitempty"`
+	Cart     *CartView          `json:"cart,omitempty"`
+	Orders   *OrderListPage     `json:"orders,omitempty"`
+	Warnings []ViewInitWarning  `json:"warnings,omitempty"`
+}
+
+// OrderListPage mirrors GET /orders so /view/init's `orders` section can be
+// reused by the standard list view without a second round-trip.
+type OrderListPage struct {
+	Orders  []OrderView `json:"orders"`
+	Limit   int         `json:"limit"`
+	Offset  int         `json:"offset"`
+	HasMore bool        `json:"has_more"`
+}
+
+// ViewInitWarning marks a soft-failed section (catalog / cart / orders).
+type ViewInitWarning struct {
+	Section string `json:"section"`
+	Error   string `json:"error"`
+}
+
+// rawViewInit is the wire-format intermediate; the server emits catalog
+// items inline (not wrapped in CatalogPage struct field names) so we decode
+// once with a struct that matches the on-the-wire JSON shape.
+type rawViewInit struct {
+	Profile *CustomerView `json:"profile"`
+	Catalog *struct {
+		Currency string        `json:"currency"`
+		Items    []CatalogItem `json:"items"`
+		Limit    int           `json:"limit"`
+		Offset   int           `json:"offset"`
+		HasMore  bool          `json:"has_more"`
+	} `json:"catalog,omitempty"`
+	Cart     *CartView          `json:"cart,omitempty"`
+	Orders   *OrderListPage     `json:"orders,omitempty"`
+	Warnings []ViewInitWarning  `json:"warnings,omitempty"`
+}
+
+// GetViewInit fetches the bootstrap envelope used right after the age gate.
+// catalogLimit and ordersLimit clamp the page sizes server-side; pass 0 to
+// accept the server defaults (12 catalog / 5 orders).
+func (c *Client) GetViewInit(ctx context.Context, currency string, catalogLimit, ordersLimit int) (*ViewInit, error) {
+	if strings.TrimSpace(currency) == "" {
+		currency = "COP"
+	}
+	params := url.Values{}
+	params.Set("currency", currency)
+	if catalogLimit > 0 {
+		params.Set("catalog_limit", strconv.Itoa(catalogLimit))
+	}
+	if ordersLimit > 0 {
+		params.Set("orders_limit", strconv.Itoa(ordersLimit))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/view/init?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return nil, parseAPIError(resp.StatusCode, body)
+	}
+	var raw rawViewInit
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+	out := &ViewInit{
+		Profile:  raw.Profile,
+		Cart:     raw.Cart,
+		Orders:   raw.Orders,
+		Warnings: raw.Warnings,
+	}
+	if raw.Catalog != nil {
+		out.Catalog = &CatalogPage{
+			Currency: raw.Catalog.Currency,
+			Items:    raw.Catalog.Items,
+			Limit:    raw.Catalog.Limit,
+			Offset:   raw.Catalog.Offset,
+			HasMore:  raw.Catalog.HasMore,
+		}
+	}
+	return out, nil
 }
 
 func (c *Client) GetCustomerMe(ctx context.Context) (*CustomerView, error) {

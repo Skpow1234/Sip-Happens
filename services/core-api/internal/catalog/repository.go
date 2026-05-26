@@ -24,6 +24,11 @@ type ListCatalogFilter struct {
 	Brewery  string
 	ABVMin   *float64
 	ABVMax   *float64
+	// Featured switches the result ordering from the default lexical sort
+	// (by sku asc) to a "destacados" curation: most recently introduced
+	// active products first. Used by the TUI's "destacados" tab and the
+	// /view/init bootstrap so the first paint highlights fresh inventory.
+	Featured bool
 }
 
 type ListCatalogResult struct {

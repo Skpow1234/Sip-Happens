@@ -49,12 +49,20 @@ func formatShipmentSummary(orderStatus string, sh *api.ShipmentView) string {
 	if sh != nil && strings.TrimSpace(sh.Status) != "" {
 		st := strings.TrimSpace(sh.Status)
 		var lines []string
-		lines = append(lines, L.ShipmentLabel+" "+st)
+		lines = append(lines, L.ShipmentLabel+" "+L.ShipmentStatusLabel(st))
 		if sh.Carrier != "" {
 			lines = append(lines, L.ShipmentCarrier+" "+sh.Carrier)
 		}
 		if sh.TrackingCode != "" {
 			lines = append(lines, L.ShipmentTracking+" "+sh.TrackingCode)
+		}
+		switch st {
+		case "PACKED":
+			lines = append(lines, L.ShipmentPacked)
+		case "HANDED_OVER":
+			lines = append(lines, L.ShipmentHandedOver)
+		case "FAILED":
+			lines = append(lines, L.ShipmentFailed)
 		}
 		if sh.TrackingCode != "" && (orderStatus == "SHIPPED" || st == "IN_TRANSIT" || st == "HANDED_OVER" || st == "DELIVERED") {
 			lines = append(lines, L.ShipmentTrackHint)

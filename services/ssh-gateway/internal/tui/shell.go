@@ -34,7 +34,7 @@ type layoutOpts struct {
 
 func (m Model) usesShell() bool {
 	switch m.screen {
-	case screenWelcome, screenError:
+	case screenSplash, screenWelcome, screenError:
 		return false
 	default:
 		return true
@@ -45,6 +45,9 @@ func (m Model) composeLayout(body string, opts layoutOpts) string {
 	var parts []string
 	if opts.showTabs {
 		parts = append(parts, m.renderTopBar(opts.tab))
+	}
+	if banner := m.renderProfileLinkBanner(); banner != "" {
+		parts = append(parts, banner)
 	}
 	if opts.checkout != nil {
 		parts = append(parts, m.renderBreadcrumbs(*opts.checkout))
@@ -64,6 +67,21 @@ func (m Model) composeLayout(body string, opts layoutOpts) string {
 		parts = append(parts, m.renderFooter(opts.footer))
 	}
 	return strings.Join(parts, "\n")
+}
+
+// renderProfileLinkBanner surfaces a one-line nudge across the shell when
+// the SSH fingerprint resolved to an empty customer record. Returns "" when
+// the profile is fleshed out or hasn't been fetched yet (it relies on
+// state.profileIncomplete which only flips after a successful /view/init).
+func (m Model) renderProfileLinkBanner() string {
+	if !m.state.profileIncomplete {
+		return ""
+	}
+	w := m.width
+	if w < 40 {
+		w = 80
+	}
+	return styleBanner().Width(w).Render(L.ProfileLinkBanner)
 }
 
 func (m Model) renderTopBar(active shellTab) string {

@@ -172,6 +172,14 @@ func formatFooterChunk(chunk string) string {
 	return styleFooterKey().Render(key) + " " + styleMuted().Render(label)
 }
 
+func styleErr() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(colorWarn)
+}
+
+func styleBanner() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(colorBrandGold).Italic(true)
+}
+
 func renderProductCTA() string {
 	return styleFooterKey().Render("←") + " " + styleMuted().Render("quitar") + "  " +
 		styleFooterKey().Render("→") + " " + styleCTA().Render("agregar") + "  " +

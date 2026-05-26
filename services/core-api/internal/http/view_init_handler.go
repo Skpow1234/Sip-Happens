@@ -129,6 +129,7 @@ func (s *Server) handleViewInit(w http.ResponseWriter, r *http.Request) {
 			Currency: currency,
 			Limit:    catalogLimit,
 			Offset:   0,
+			Featured: true,
 		})
 		if err != nil {
 			recordWarning("catalog", err)

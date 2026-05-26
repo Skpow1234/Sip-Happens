@@ -30,7 +30,13 @@ func (m Model) viewCatalogSplit() string {
 
 func (m Model) catalogListPane(width int) string {
 	var b strings.Builder
-	b.WriteString(styleSection().Render("~ "+L.CatalogFeatured+" ~") + "\n\n")
+	// Group header reflects the active tab so destacados vs catálogo is
+	// actually distinguishable instead of always saying "destacados".
+	groupLabel := L.CatalogGroupAll
+	if m.state.catalogGroup == catalogGroupFeatured {
+		groupLabel = L.CatalogGroupDestacados
+	}
+	b.WriteString(styleSection().Render("~ "+groupLabel+" ~") + "\n\n")
 	if m.state.catalogSearchEdit {
 		b.WriteString(L.CatalogSearchPrompt + " " + m.state.catalogSearchBuf + "█\n")
 		return b.String()
@@ -43,16 +49,20 @@ func (m Model) catalogListPane(width int) string {
 		name := it.Product.Name
 		b.WriteString(catalogLine(name, width, i == m.state.catalogCursor))
 	}
-	b.WriteString("\n\n" + styleSection().Render("~ "+L.CatalogAll+" ~") + "\n")
-	page := m.state.catalogQuery.Offset/catalogPageSize + 1
+	pageSize := catalogPageSize
+	if m.state.catalogGroup == catalogGroupFeatured {
+		pageSize = catalogFeaturedSize
+	}
+	page := m.state.catalogQuery.Offset/pageSize + 1
 	var meta strings.Builder
-	meta.WriteString(styleMuted().Render(L.CatalogPageMeta(page, m.state.catalogQuery.Offset)))
+	meta.WriteString("\n" + styleMuted().Render(L.CatalogPageMeta(page, m.state.catalogQuery.Offset)))
 	if m.state.catalogHasMore {
 		meta.WriteString(stylePromo().Render("  · n → siguiente"))
 	}
 	if m.state.catalogQuery.Offset > 0 {
 		meta.WriteString(stylePromo().Render("  · p ← anterior"))
 	}
+	meta.WriteString("\n" + styleMuted().Render(L.CatalogGroupToggleHint))
 	b.WriteString(meta.String() + "\n")
 	return b.String()
 }
@@ -362,14 +372,20 @@ func (m Model) viewConfirmV2() string {
 
 func (m Model) viewPaymentV2() string {
 	step := crumbPayment
-	qr := asciiQR(m.state.stripeURL, m.width)
 	now := m.state.clock
 	if now.IsZero() {
 		now = time.Now()
 	}
-	expiry := ""
-	reservation := ""
-	if m.state.orderExpiresAt != nil {
+	expired := m.paymentSessionExpired()
+	var (
+		qr          string
+		expiry      string
+		reservation string
+	)
+	if !expired {
+		qr = asciiQR(m.state.stripeURL, m.width)
+	}
+	if m.state.orderExpiresAt != nil && !expired {
 		if cd := formatExpiryCountdown(m.state.orderExpiresAt, now); cd != "" {
 			expiry = L.PaymentPayWithin(cd)
 		}
@@ -377,7 +393,16 @@ func (m Model) viewPaymentV2() string {
 	}
 	orderLabel := L.PaymentOrder
 	var inner string
-	if m.state.paymentKind == paymentKindSubscription {
+	if expired {
+		// Stripe Checkout URLs are single-use and expire with the order
+		// reservation. Past the deadline we hide the (now-broken) QR/URL
+		// and give the user a clear "start over from cart" path.
+		banner := styleErr().Render(L.PaymentExpiredBanner)
+		inner = fmt.Sprintf("%s %s\n%s %s\n\n%s\n\n%s\n",
+			orderLabel, m.state.orderLabel(),
+			L.PaymentStatus, m.state.orderStatus,
+			banner, L.PaymentExpiredHelp)
+	} else if m.state.paymentKind == paymentKindSubscription {
 		orderLabel = L.SubscriptionPaymentOrder
 		status := m.state.lastSubscriptionStatus
 		if status == "" {
@@ -391,9 +416,9 @@ func (m Model) viewPaymentV2() string {
 			formatSelectableURL(m.state.stripeURL, m.width),
 			L.PaymentCopyTip)
 	} else {
-		inner = fmt.Sprintf("%s %s\n%s %s\n%s%s\n\n%s\n\n%s\n\n%s\n\n%s\n",
+		inner = fmt.Sprintf("%s %s\n%s %s  %s\n%s%s\n\n%s\n\n%s\n\n%s\n\n%s\n",
 			orderLabel, m.state.orderLabel(),
-			L.PaymentStatus, m.state.orderStatus,
+			L.PaymentStatus, m.state.orderStatus, styleMuted().Render(L.PaymentRefreshing),
 			expiry, reservation,
 			L.PaymentOffTerminal,
 			L.PaymentQRHint+"\n"+qr,

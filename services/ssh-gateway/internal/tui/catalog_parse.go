@@ -53,6 +53,16 @@ func (s *AppState) syncCatalogFilterForm() {
 
 func catalogQueryForLoad(s AppState) api.CatalogQuery {
 	q := s.catalogQuery
-	q.Limit = catalogPageSize
+	// Page size and featured flag follow the active group; user filters
+	// (style, brewery, abv) and free-text query ride along unchanged so
+	// the destacados tab can also be filtered.
+	switch s.catalogGroup {
+	case catalogGroupFeatured:
+		q.Limit = catalogFeaturedSize
+		q.Featured = true
+	default:
+		q.Limit = catalogPageSize
+		q.Featured = false
+	}
 	return q
 }

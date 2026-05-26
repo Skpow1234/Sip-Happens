@@ -2,20 +2,20 @@ package tui
 
 import "strings"
 
-// asciiImagePlaceholder is a tiny terminal-friendly preview when a product has an image URL.
-const asciiImagePlaceholder = `
- +------+
- | beer |
- +------+
-`
-
+// formatProductImageBlock renders the product detail's image hint.
+//
+// Terminals can't display real bitmaps, and the previous ASCII frame
+// (`+------+ | beer |`) was a fake placeholder that looked broken on
+// every product regardless of whether the image actually loaded. We
+// now render a single muted "Imagen: <url>" line when an image URL is
+// configured, and nothing at all otherwise — far less visual noise.
 func formatProductImageBlock(imageURL string) string {
 	imageURL = strings.TrimSpace(imageURL)
 	if imageURL == "" {
 		return ""
 	}
 	link := truncateURL(imageURL, 72)
-	return strings.TrimSpace(asciiImagePlaceholder) + "\nImage: " + link + "\n"
+	return styleMuted().Render(L.ProductImageLabel+" "+link) + "\n"
 }
 
 func truncateURL(s string, max int) string {

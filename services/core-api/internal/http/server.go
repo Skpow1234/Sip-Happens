@@ -1027,6 +1027,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		Brewery:  r.URL.Query().Get("brewery"),
 		ABVMin:   abvMin,
 		ABVMax:   abvMax,
+		Featured: parseBoolQuery(r, "featured"),
 	})
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal", "internal error")

@@ -99,6 +99,14 @@ func (r *SQLRepository) ListActiveProducts(ctx context.Context, q Querier, filte
 		whereSQL += " and " + strings.Join(where, " and ")
 	}
 
+	orderBy := "p.sku asc"
+	if filter.Featured {
+		// Pilot-grade "destacados": no schema flag yet, just surface the
+		// freshest active inventory first so the TUI's first paint never
+		// looks stale. Tie-break by sku so the order is deterministic.
+		orderBy = "p.created_at desc, p.sku asc"
+	}
+
 	fetchLimit := limit + 1
 	args = append(args, fetchLimit, offset)
 
@@ -119,9 +127,9 @@ join lateral (
   limit 1
 ) pr on true
 where %s
-order by p.sku asc
+order by %s
 limit $%d offset $%d
-`, productSelectCols, whereSQL, argN, argN+1)
+`, productSelectCols, whereSQL, orderBy, argN, argN+1)
 
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {

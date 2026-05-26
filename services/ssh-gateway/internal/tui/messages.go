@@ -93,6 +93,13 @@ type Messages struct {
 	ShipmentPaid         string
 	ShipmentFulfilling   string
 	ShipmentShipped      string
+	ShipmentPacked       string
+	ShipmentHandedOver   string
+	ShipmentFailed       string
+	// ShipmentStatusLabel translates raw shipment status codes
+	// (PENDING / PACKED / HANDED_OVER / IN_TRANSIT / DELIVERED / FAILED)
+	// into user-visible Spanish labels. Unknown codes pass through as-is.
+	ShipmentStatusLabel  func(status string) string
 	Expired              string
 	ErrBirthRequired     string
 	ErrBirthFormat       string
@@ -177,6 +184,17 @@ type Messages struct {
 	AccountAboutBody      string
 	AccountFooter         string
 	HistoryPaneHelp       string
+
+	// Splash + linking + payment-recovery copy added in the TUI polish batch.
+	SplashTagline           string
+	ProfileLinkBanner       string
+	PaymentExpiredBanner    string
+	PaymentExpiredHelp      string
+	PaymentRefreshing       string
+	CatalogGroupDestacados  string
+	CatalogGroupAll         string
+	CatalogGroupToggleHint  string
+	ProductImageLabel       string
 }
 
 // L is the active locale (Spanish Colombia).

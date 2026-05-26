@@ -141,6 +141,13 @@ func (m *Model) maybeLoadCatalogDetailCmd() tea.Cmd {
 		return nil
 	}
 	m.state.productSKU = ref
+	// Session cache hit: hydrate from memory instead of round-tripping.
+	// This is the big perceived-latency win on ↑/↓ browsing — typical
+	// list browsing only fetches each detail once per session.
+	if cached := m.state.productDetailFromCache(ref); cached != nil {
+		m.state.productDetail = cached
+		return nil
+	}
 	m.busy = true
 	return m.loadDetailCmd(ref)
 }

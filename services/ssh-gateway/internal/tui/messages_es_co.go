@@ -200,6 +200,27 @@ Pedidos
 		ShipmentPaid:      "Comenzaremos el despacho en breve.",
 		ShipmentFulfilling: "Tu pedido se está preparando para envío.",
 		ShipmentShipped:   "Tu pedido fue enviado. La guía aparecerá cuando el transportador escanee.",
+		ShipmentPacked:     "Pedido empacado y listo para entregar al transportador.",
+		ShipmentHandedOver: "Entregado al transportador; en ruta a tu dirección.",
+		ShipmentFailed:     "El envío falló. Soporte se pondrá en contacto contigo.",
+		ShipmentStatusLabel: func(status string) string {
+			switch status {
+			case "PENDING":
+				return "pendiente"
+			case "PACKED":
+				return "empacado"
+			case "HANDED_OVER":
+				return "entregado al transportador"
+			case "IN_TRANSIT":
+				return "en ruta"
+			case "DELIVERED":
+				return "entregado"
+			case "FAILED":
+				return "fallido"
+			default:
+				return status
+			}
+		},
 		Expired:           "vencido",
 		ErrBirthRequired:  "ingresa tu fecha de nacimiento (AAAA-MM-DD)",
 		ErrBirthFormat:    "usa el formato AAAA-MM-DD (ej. 1995-06-15)",
@@ -305,5 +326,15 @@ Política de privacidad: %s
 Derechos del consumidor (SIC): %s`,
 		AccountFooter:     "↑/↓ menú  enter seleccionar  esc tienda",
 		HistoryPaneHelp:   "enter ver pedido  r actualizar",
+
+		SplashTagline:          "cerveza artesanal · Colombia",
+		ProfileLinkBanner:      "Tu llave SSH aún no está vinculada a un perfil completo — entra a 'cuenta' y completa tus datos para acelerar el pago.",
+		PaymentExpiredBanner:   "La sesión de pago de Stripe venció y el inventario fue liberado.",
+		PaymentExpiredHelp:     "c — empezar de nuevo desde el carrito   esc — tienda",
+		PaymentRefreshing:      "actualizando…",
+		CatalogGroupDestacados: "destacados",
+		CatalogGroupAll:        "catálogo",
+		CatalogGroupToggleHint: "g destacados/catálogo",
+		ProductImageLabel:      "Imagen:",
 	}
 }

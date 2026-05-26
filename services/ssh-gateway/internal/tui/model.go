@@ -53,18 +53,64 @@ func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataP
 		dataProcessingPolicyURL: dataProcessingPolicyURL,
 		supportContact:          supportContact,
 		dispatchETAPolicy:       dispatchETAPolicy,
-		screen:                  screenWelcome,
+		screen:                  screenSplash,
 	}
 }
 
+// splashHoldDuration is how long the bare `sip-happens█` wordmark holds on
+// the very first frame before transitioning to the age-gate form. Short
+// enough to feel like a flash, not a load screen.
+const splashHoldDuration = 600 * time.Millisecond
+
 func (m Model) Init() tea.Cmd {
-	return m.loadServerCartCmd()
+	// We don't load the server cart yet — the user hasn't passed the age
+	// gate. The /view/init fan-out runs after age confirmation; until then
+	// the splash is the only thing on screen.
+	return tea.Tick(splashHoldDuration, func(time.Time) tea.Msg {
+		return splashAdvanceMsg{}
+	})
 }
+
+type splashAdvanceMsg struct{}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		return m, nil
+
+	case splashAdvanceMsg:
+		if m.screen == screenSplash {
+			m.screen = screenWelcome
+		}
+		return m, nil
+
+	case viewInitLoadedMsg:
+		m.busy = false
+		if msg.err != nil {
+			// /view/init is best-effort at age-gate time — fall back to
+			// the original sequential loaders so the user can still shop.
+			return m, tea.Batch(m.loadServerCartCmd(), m.loadCatalogCmd())
+		}
+		if msg.view == nil {
+			return m, nil
+		}
+		if msg.view.Profile != nil {
+			m.prefillCheckout(*msg.view.Profile)
+			if msg.view.Profile.BirthDate != "" && m.state.birthDate == "" {
+				m.state.birthDate = msg.view.Profile.BirthDate
+			}
+			m.state.profileIncomplete = profileLooksIncomplete(msg.view.Profile)
+		}
+		if msg.view.Cart != nil {
+			m.state.cart = cartLinesFromAPI(msg.view.Cart)
+		}
+		if msg.view.Catalog != nil {
+			m.state.catalog = msg.view.Catalog.Items
+			m.state.catalogHasMore = msg.view.Catalog.HasMore
+			m.state.catalogCursor = 0
+			return m, m.maybeLoadCatalogDetailCmd()
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -100,6 +146,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailLoadedMsg:
 		m.busy = false
 		m.state.productDetail = msg.detail
+		m.state.rememberProductDetail(msg.detail)
 		return m, nil
 
 	case checkoutDoneMsg:
@@ -337,11 +384,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		m.busy = false
+		// Silent recovery on the payment screen — transient network blips
+		// while polling /orders/{id} should NOT pop a scary error in front
+		// of the QR code. We just keep polling and let orderLoadedMsg /
+		// subscriptionLoadedMsg drive the UI when the next attempt succeeds.
+		if m.screen == screenPayment {
+			return m, paymentPollCmd()
+		}
 		m.showErr(msg.err)
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// profileLooksIncomplete returns true when the customer record bears the
+// hallmarks of an auto-created skeleton row — i.e. the SSH key generated a
+// row via GetOrCreateByFingerprint but the user never filled anything in.
+// Drives the "tu llave SSH aún no está vinculada" banner.
+func profileLooksIncomplete(p *api.CustomerView) bool {
+	if p == nil {
+		return false
+	}
+	return strings.TrimSpace(p.FullName) == "" &&
+		strings.TrimSpace(p.Email) == "" &&
+		strings.TrimSpace(p.LegalID) == ""
 }
 
 func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -364,7 +431,12 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state.resetCatalogPage()
 			m.screen = screenCatalog
 			m.busy = true
-			return m, tea.Batch(m.patchBirthDateCmd(), m.loadServerCartCmd(), m.loadCatalogCmd())
+			// /view/init returns profile + cart + catalog (destacados) in
+			// one signed round-trip; patchBirthDate fires alongside it so
+			// the server records the user's age the moment they confirm.
+			// On view-init failure, the dispatch in Update falls back to
+			// the old sequential loaders.
+			return m, tea.Batch(m.patchBirthDateCmd(), m.loadViewInitCmd())
 		case "backspace":
 			m.state.birthDateInput = backspaceBirthDateInput(m.state.birthDateInput)
 		default:
@@ -601,14 +673,14 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenCatalogFilters
 		case "n":
 			if m.state.catalogHasMore {
-				m.state.catalogQuery.Offset += catalogPageSize
+				m.state.catalogQuery.Offset += m.currentCatalogPageSize()
 				m.state.catalogCursor = 0
 				m.busy = true
 				return m, m.loadCatalogCmd()
 			}
 		case "p":
 			if m.state.catalogQuery.Offset > 0 {
-				off := m.state.catalogQuery.Offset - catalogPageSize
+				off := m.state.catalogQuery.Offset - m.currentCatalogPageSize()
 				if off < 0 {
 					off = 0
 				}
@@ -638,6 +710,19 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.catalogCartDelta(-1)
 		case "b":
 			return m.beginSubscriptionFlow()
+		case "g":
+			// Toggle destacados <-> catálogo. Resets the page cursor and
+			// query offset so the next n/p paging starts from the top of
+			// the new group.
+			if m.state.catalogGroup == catalogGroupFeatured {
+				m.state.catalogGroup = catalogGroupAll
+			} else {
+				m.state.catalogGroup = catalogGroupFeatured
+			}
+			m.state.catalogQuery = catalogQueryForGroup(m.state.catalogGroup)
+			m.state.catalogCursor = 0
+			m.busy = true
+			return m, m.loadCatalogCmd()
 		}
 
 	case screenCatalogFilters:
@@ -713,6 +798,19 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenOrderStatus
 			m.busy = true
 			return m, tea.Batch(m.fetchOrderCmd(), m.pollTickCmd())
+		case "c":
+			// Payment session expired → bail back to the cart so the user
+			// can re-checkout. We don't auto-resubmit because Stripe URLs
+			// are one-shot; the user must explicitly start a new session.
+			if m.paymentSessionExpired() {
+				m.state.stripeURL = ""
+				m.state.lastOrderID = ""
+				m.state.lastOrderDisplayRef = ""
+				m.state.orderStatus = ""
+				m.state.orderExpiresAt = nil
+				next, cmd, _ := m.goCart()
+				return next, cmd
+			}
 		}
 
 	case screenOrderStatus:
@@ -903,6 +1001,9 @@ func (m Model) checkoutValid() bool {
 }
 
 func (m Model) View() string {
+	if m.screen == screenSplash {
+		return m.viewSplash()
+	}
 	if m.screen == screenWelcome {
 		return m.viewWelcome()
 	}
@@ -1301,6 +1402,10 @@ type addressesLoadedMsg struct {
 	err       error
 }
 type cartLoadedMsg struct{ cart *api.CartView }
+type viewInitLoadedMsg struct {
+	view *api.ViewInit
+	err  error
+}
 type shippingEstimateMsg struct {
 	minor    int64
 	currency string
@@ -1487,6 +1592,40 @@ func (m Model) loadServerCartCmd() tea.Cmd {
 		}
 		return cartLoadedMsg{cart: cart}
 	}
+}
+
+// loadViewInitCmd fans out the bootstrap fetch via a single signed call.
+// On error the Update handler falls back to the legacy sequential loaders.
+func (m Model) loadViewInitCmd() tea.Cmd {
+	client := m.api
+	return func() tea.Msg {
+		v, err := client.GetViewInit(context.Background(), "COP", catalogFeaturedSize, 5)
+		return viewInitLoadedMsg{view: v, err: err}
+	}
+}
+
+// currentCatalogPageSize returns the page step (n/p) for the active group.
+func (m Model) currentCatalogPageSize() int {
+	if m.state.catalogGroup == catalogGroupFeatured {
+		return catalogFeaturedSize
+	}
+	return catalogPageSize
+}
+
+// paymentSessionExpired reports whether the current PENDING_PAYMENT order's
+// reservation has elapsed — Stripe Checkout URLs are unusable past this point.
+func (m Model) paymentSessionExpired() bool {
+	if m.state.orderStatus != "PENDING_PAYMENT" {
+		return false
+	}
+	if m.state.orderExpiresAt == nil {
+		return false
+	}
+	now := m.state.clock
+	if now.IsZero() {
+		now = time.Now()
+	}
+	return !m.state.orderExpiresAt.After(now)
 }
 
 func (m Model) loadShippingEstimateCmd() tea.Cmd {

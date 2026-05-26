@@ -29,6 +29,11 @@ const (
 	screenSubscriptionStatus
 	screenTokenCreate
 	screenTokenShow
+	// screenSplash is the optional first-paint shown briefly (≈600 ms) before
+	// the age form. It exists so the very first thing the user sees is the
+	// Sip-Happens wordmark, not a legal warning. Auto-advances to screenWelcome
+	// via a splashAdvanceMsg tick — see Init().
+	screenSplash
 	screenError
 )
 
@@ -85,7 +90,21 @@ type subscriptionDraft struct {
 	addressID   string
 }
 
-const catalogPageSize = 15
+const (
+	catalogPageSize = 15
+	// catalogFeaturedSize is the small "destacados" page surfaced on the
+	// catalog tab toggle and the /view/init bootstrap.
+	catalogFeaturedSize = 6
+)
+
+// catalogGroup selects which catalog slice the TUI is currently showing.
+// Persisted on AppState so n/p paging stays within the active group.
+type catalogGroup int
+
+const (
+	catalogGroupFeatured catalogGroup = iota
+	catalogGroupAll
+)
 
 type CartLine struct {
 	ProductID    string
@@ -158,8 +177,19 @@ type AppState struct {
 	catalogSearchEdit bool
 	catalogSearchBuf  string
 	catalogFilter     catalogFilterFields
+	catalogGroup      catalogGroup
 	productSKU        string
 	productDetail     *api.CatalogDetail
+	// productDetailCache memoises GET /catalog/{id} per session so
+	// ↑/↓ browsing inside a single TUI run doesn't re-hit the network
+	// for products the user already looked at. Keyed by the public id
+	// the catalog list returned. Capped via len() < detailCacheMax to
+	// keep long browsing sessions from growing the map unbounded.
+	productDetailCache map[string]*api.CatalogDetail
+	// profileIncomplete is true when the customer record returned by
+	// /view/init has no name / email — the TUI shows a one-line banner
+	// nudging the user to complete the account.
+	profileIncomplete bool
 
 	lastOrderID         string
 	lastOrderDisplayRef string
@@ -366,10 +396,59 @@ func (f *catalogFilterFields) setCurrent(v string) {
 }
 
 func (s *AppState) resetCatalogPage() {
-	s.catalogQuery = api.CatalogQuery{Limit: catalogPageSize, Offset: 0}
+	s.catalogQuery = catalogQueryForGroup(s.catalogGroup)
 	s.catalogHasMore = false
 	s.catalogSearchBuf = ""
 	s.catalogSearchEdit = false
+}
+
+// catalogQueryForGroup builds the default CatalogQuery for the given group
+// (destacados vs full catalog). Used at first paint, after age-gate, and
+// whenever the user toggles `g` on the catalog screen.
+func catalogQueryForGroup(g catalogGroup) api.CatalogQuery {
+	switch g {
+	case catalogGroupFeatured:
+		return api.CatalogQuery{Limit: catalogFeaturedSize, Offset: 0, Featured: true}
+	default:
+		return api.CatalogQuery{Limit: catalogPageSize, Offset: 0}
+	}
+}
+
+const detailCacheMax = 50
+
+// rememberProductDetail stores `d` in productDetailCache, evicting an
+// arbitrary entry if the map has grown past detailCacheMax. Iteration over
+// a Go map is intentionally non-deterministic — good enough for a
+// per-session bounded cache.
+func (s *AppState) rememberProductDetail(d *api.CatalogDetail) {
+	if d == nil {
+		return
+	}
+	key := strings.TrimSpace(d.Product.ID)
+	if key == "" {
+		key = strings.TrimSpace(d.Product.SKU)
+	}
+	if key == "" {
+		return
+	}
+	if s.productDetailCache == nil {
+		s.productDetailCache = make(map[string]*api.CatalogDetail, 16)
+	}
+	if len(s.productDetailCache) >= detailCacheMax {
+		for k := range s.productDetailCache {
+			delete(s.productDetailCache, k)
+			break
+		}
+	}
+	s.productDetailCache[key] = d
+}
+
+// productDetailFromCache returns the cached detail for `ref` if present.
+func (s *AppState) productDetailFromCache(ref string) *api.CatalogDetail {
+	if s.productDetailCache == nil {
+		return nil
+	}
+	return s.productDetailCache[strings.TrimSpace(ref)]
 }
 
 func (s *AppState) catalogFilterSummary() string {
