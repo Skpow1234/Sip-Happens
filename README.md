@@ -359,6 +359,7 @@ Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address
 - `GET /orders` — list caller’s orders (`limit`, default 20, max 100; `offset`, `has_more`); no delivery PII in list view
 - `POST /orders` — direct checkout from `items` + delivery (no server cart) → Stripe Checkout URL (`Idempotency-Key` required); does **not** touch the server cart
 - `GET /orders/{id}` — order detail (internal UUID or `display_ref`; scoped to caller’s fingerprint)
+- `POST /orders/{ref}/cancel` — customer cancels their own `PENDING_PAYMENT` order (optional `reason` body, ≤120 chars); idempotent. Post-`PENDING_PAYMENT` orders return 409 — request an admin refund instead.
 
 **Signed — subscriptions** (Stripe Billing; Checkout in subscription mode)
 
@@ -400,7 +401,13 @@ Sip-Happens has no browser session, so the customer-side step runs through the *
 
 **Webhooks**
 
-- `POST /webhooks/stripe` (when `STRIPE_WEBHOOK_SECRET` is set; path overridable via `STRIPE_WEBHOOK_PATH`)
+- `POST /webhooks/stripe` (when `STRIPE_WEBHOOK_SECRET` is set; path overridable via `STRIPE_WEBHOOK_PATH`). Handles `checkout.session.completed/expired`, `payment_intent.succeeded/payment_failed`, and `charge.refunded` / `refund.updated` (refund reconciliation).
+
+**Public — newsletter** (Ley 1581 double-opt-in)
+
+- `POST /email` — subscribe (body: `{"email": "...", "source": "web"}`); captures consent IP + User-Agent, queues confirmation email gated by feature flag `email_subscribe_confirm`. Idempotent: re-submitting a `CONFIRMED` email returns `200 {"already_confirmed": true}`; re-submitting `PENDING` reissues a fresh token (old one is marked used). Rate-limited.
+- `GET /email/confirm?token=subc_<prefix>_<secret>` — click target from the confirmation email; flips the row to `CONFIRMED`. 48-hour TTL, single-use.
+- `POST /email/unsubscribe` — `{"email": "..."}`, idempotent, exposed in the marketing footer.
 
 **Admin** (`Authorization: Bearer` token; optional RBAC via `ADMIN_SUPPORT_TOKENS` / `ADMIN_FINANCE_TOKENS`; optional `X-Admin-Actor` for audit)
 
@@ -414,6 +421,10 @@ Sip-Happens has no browser session, so the customer-side step runs through the *
 - `GET /admin/orders/{id}` — order, items, payments, optional shipment
 - `POST /admin/orders/{id}/cancel` — cancel `PENDING_PAYMENT`, release reservations (`Idempotency-Key` required)
 - `POST /admin/orders/{id}/reconcile-stripe` — poll Stripe PI, mark paid if succeeded (`Idempotency-Key` required)
+- `POST /admin/orders/{id}/status` — force a status transition (ops); only whitelisted transitions, audited, emits `orders.order.status_overridden` outbox event
+- `POST /admin/orders/{id}/refund` — issue a partial/full Stripe refund (ops; `amount_minor_units` + optional `reason`); idempotency key derived from `(order, amount, reason)` so retries dedupe Stripe-side
+- `GET /admin/orders/{id}/refunds` — list refunds for an order (support+)
+- `GET /admin/products/{id}/price-history` — bi-temporal price ledger joined with admin audit rows (finance+)
 - `PATCH /admin/orders/{id}/shipment` — set carrier + tracking (ops); advances shipment when packed
 - `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`, `order_id` — matches `order` aggregate or JSON `order_id` in payload)
 - `GET /admin/orders/{id}` includes `payments` and `payment_status_history` (normalized checkout/webhook/reconcile timeline)

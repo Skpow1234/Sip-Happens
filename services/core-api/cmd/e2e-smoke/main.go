@@ -195,9 +195,9 @@ func run() error {
 	if err := checkJSON(ctx, client, base+"/shipping/estimate?city=Bogot%C3%A1&currency=COP",
 		http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
 			var out struct {
-				City                  string `json:"city"`
-				Currency              string `json:"currency"`
-				ShippingMinorUnits    int64  `json:"shipping_minor_units"`
+				City               string `json:"city"`
+				Currency           string `json:"currency"`
+				ShippingMinorUnits int64  `json:"shipping_minor_units"`
 			}
 			if err := json.Unmarshal(b, &out); err != nil {
 				return err

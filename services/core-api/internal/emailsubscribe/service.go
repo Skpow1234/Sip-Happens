@@ -40,16 +40,16 @@ const (
 
 // Subscriber is one row in email_subscribers.
 type Subscriber struct {
-	ID                string
-	Email             string
-	Status            string
-	Source            string
-	ConsentIP         string
-	ConsentUserAgent  string
-	ConfirmedAt       *time.Time
-	UnsubscribedAt    *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID               string
+	Email            string
+	Status           string
+	Source           string
+	ConsentIP        string
+	ConsentUserAgent string
+	ConfirmedAt      *time.Time
+	UnsubscribedAt   *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // SubscribeInput is what the POST /email handler builds from the request.

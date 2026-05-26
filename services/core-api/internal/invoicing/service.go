@@ -187,14 +187,14 @@ func buildIssueRequest(o *domain.Order, items []domain.OrderItem) IssueRequest {
 func scanInvoice(row *sql.Row) (*domain.Invoice, error) {
 	var inv domain.Invoice
 	var (
-		payload    sql.NullString
-		issuedAt   sql.NullTime
-		seqNumber  int64
-		cufe       string
-		resNumber  string
-		resPrefix  string
-		xmlURL     string
-		pdfURL     string
+		payload   sql.NullString
+		issuedAt  sql.NullTime
+		seqNumber int64
+		cufe      string
+		resNumber string
+		resPrefix string
+		xmlURL    string
+		pdfURL    string
 	)
 	err := row.Scan(
 		&inv.ID, &inv.OrderID, &inv.Provider, &inv.ExternalID, &inv.Status,

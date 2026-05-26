@@ -121,11 +121,11 @@ type EmailSubscriberView struct {
 // these today, but partner integrations and the admin console use them. ---
 
 type OAuthClientView struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	RedirectURI string    `json:"redirect_uri"`
-	Scopes      []string  `json:"scopes"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	RedirectURI string     `json:"redirect_uri"`
+	Scopes      []string   `json:"scopes"`
+	CreatedAt   time.Time  `json:"created_at"`
 	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
 }
 

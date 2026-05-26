@@ -18,17 +18,17 @@ const (
 // of amount, because once any money goes back the order has permanently
 // left the normal post-PAID lifecycle.
 type Refund struct {
-	ID                RefundID
-	OrderID           OrderID
-	PaymentID         PaymentID
-	AmountMinorUnits  int64
-	Currency          string
-	Reason            string
-	StripeRefundID    string
-	IdempotencyKey    string
-	Status            RefundStatus
-	Actor             string
-	FailureMessage    string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID               RefundID
+	OrderID          OrderID
+	PaymentID        PaymentID
+	AmountMinorUnits int64
+	Currency         string
+	Reason           string
+	StripeRefundID   string
+	IdempotencyKey   string
+	Status           RefundStatus
+	Actor            string
+	FailureMessage   string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
