@@ -181,6 +181,14 @@ jobs:
         # the canonical migrator must also apply cleanly against the live
         # public schema. Catches per-migration scoping bugs that the test
         # helper papers over with search_path tricks.
+        #
+        # `infra/migrations/*.sql` is gitignored (prod migrations are
+        # managed via a separate operator workflow), so on a fresh CI
+        # checkout there's nothing to apply. Skip the step entirely in
+        # that case rather than blowing up on `open .: no such file or
+        # directory`. The same hashFiles gate is reused on the E2E smoke
+        # step below because the seeded demo needs a schema to populate.
+        if: hashFiles('infra/migrations/*.sql') != ''
         run: |
           go run ./services/core-api/cmd/migrate up
 
@@ -196,6 +204,9 @@ jobs:
             -run TestMultiNodeOutboxDispatch -v
 
       - name: E2E smoke (seed demo + core-api + HTTP checks)
+        # Depends on the migrations step above: `seed demo` writes into
+        # tables created by migrations. Same gitignore-aware gate.
+        if: hashFiles('infra/migrations/*.sql') != ''
         env:
           HTTP_ADDR: ":18080"
           CORE_API_HMAC_KEYS: dev:dev-hmac-secret
