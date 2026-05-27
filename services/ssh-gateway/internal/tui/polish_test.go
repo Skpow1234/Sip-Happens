@@ -204,6 +204,8 @@ func TestCatalogQueryForGroupSetsFeaturedFlag(t *testing.T) {
 // instead of the raw upper-case status code.
 func TestShipmentLabelLocalizesNewStates(t *testing.T) {
 	cases := map[string]string{
+		"NEW":         "pendiente",
+		"PENDING":     "pendiente", // backward-compat alias
 		"PACKED":      "empacado",
 		"HANDED_OVER": "entregado al transportador",
 		"FAILED":      "fallido",

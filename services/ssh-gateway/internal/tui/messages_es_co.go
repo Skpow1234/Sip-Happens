@@ -200,12 +200,19 @@ Pedidos
 		ShipmentPaid:       "Comenzaremos el despacho en breve.",
 		ShipmentFulfilling: "Tu pedido se está preparando para envío.",
 		ShipmentShipped:    "Tu pedido fue enviado. La guía aparecerá cuando el transportador escanee.",
+		ShipmentNew:        "Pedido recibido; pronto comenzamos a prepararlo.",
 		ShipmentPacked:     "Pedido empacado y listo para entregar al transportador.",
 		ShipmentHandedOver: "Entregado al transportador; en ruta a tu dirección.",
+		ShipmentInTransit:  "Tu pedido está en tránsito hacia tu dirección.",
+		ShipmentDelivered:  "Tu pedido fue entregado. ¡Gracias por tu compra!",
 		ShipmentFailed:     "El envío falló. Soporte se pondrá en contacto contigo.",
 		ShipmentStatusLabel: func(status string) string {
 			switch status {
-			case "PENDING":
+			// "PENDING" was the v0 placeholder; the v1 schema persists
+			// "NEW" (see pkg/domain/shipment.go). Map both to the same
+			// Spanish label so older order pages and the new lifecycle
+			// render identically.
+			case "PENDING", "NEW":
 				return "pendiente"
 			case "PACKED":
 				return "empacado"

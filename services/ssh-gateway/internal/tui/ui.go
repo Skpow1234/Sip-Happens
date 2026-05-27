@@ -29,10 +29,16 @@ func formatShipmentSummary(orderStatus string, sh *api.ShipmentView) string {
 			lines = append(lines, L.ShipmentTracking+" "+sh.TrackingCode)
 		}
 		switch st {
+		case "NEW", "PENDING":
+			lines = append(lines, L.ShipmentNew)
 		case "PACKED":
 			lines = append(lines, L.ShipmentPacked)
 		case "HANDED_OVER":
 			lines = append(lines, L.ShipmentHandedOver)
+		case "IN_TRANSIT":
+			lines = append(lines, L.ShipmentInTransit)
+		case "DELIVERED":
+			lines = append(lines, L.ShipmentDelivered)
 		case "FAILED":
 			lines = append(lines, L.ShipmentFailed)
 		}

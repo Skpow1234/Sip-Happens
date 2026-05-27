@@ -93,12 +93,17 @@ type Messages struct {
 	ShipmentPaid                    string
 	ShipmentFulfilling              string
 	ShipmentShipped                 string
+	ShipmentNew                     string
 	ShipmentPacked                  string
 	ShipmentHandedOver              string
+	ShipmentInTransit               string
+	ShipmentDelivered               string
 	ShipmentFailed                  string
 	// ShipmentStatusLabel translates raw shipment status codes
-	// (PENDING / PACKED / HANDED_OVER / IN_TRANSIT / DELIVERED / FAILED)
-	// into user-visible Spanish labels. Unknown codes pass through as-is.
+	// (NEW / PACKED / HANDED_OVER / IN_TRANSIT / DELIVERED / FAILED;
+	// "PENDING" is accepted as an alias for NEW for backward
+	// compatibility with the v0 schema). Unknown codes pass through
+	// as-is so unfamiliar values still render rather than disappear.
 	ShipmentStatusLabel  func(status string) string
 	Expired              string
 	ErrBirthRequired     string
