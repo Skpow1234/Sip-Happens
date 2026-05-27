@@ -198,6 +198,15 @@ jobs:
             -run TestConcurrentCreatePendingOrder -v
 
       - name: Outbox multi-node claim (two dispatch workers)
+        # Both the smoke script and the integration test exercise the
+        # live `beer_shop` DB on the postgres service, which requires
+        # `outbox_events` (migration 005). `infra/migrations/*.sql` is
+        # gitignored, so on a fresh CI checkout we skip — same pattern
+        # as the migrate + E2E smoke steps above. Without this gate the
+        # smoke fails with `relation "outbox_events" does not exist` and
+        # the test silently passes (it self-skips when OpenMigrated has
+        # no migrations dir to read).
+        if: hashFiles('infra/migrations/*.sql') != ''
         run: |
           bash scripts/outbox-multi-node-ci.sh
           go test -race ./services/core-api/internal/outbox/... \
