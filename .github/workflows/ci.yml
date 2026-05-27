@@ -256,6 +256,66 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Stub gitignored Dockerfile COPY sources
+        # The core-api Dockerfile COPYs `infra/migrations`, `infra/demo`,
+        # and `docs/openapi.yaml`. All three are excluded by `.gitignore`
+        # (prod artifacts are managed via a separate operator workflow),
+        # so on a fresh CI checkout the COPY layers fail with
+        # `failed to calculate checksum of ref … not found`.
+        #
+        # We don't push from this job (next step's comment notes it's
+        # build-verification only), so the only thing the image needs to
+        # demonstrate is that the Dockerfile *layering* is correct —
+        # `FROM` digest resolves, `go mod download` succeeds with the
+        # current go.mod, `go build` produces a binary, etc. To keep that
+        # verification intact without un-gitignoring real prod assets,
+        # we drop minimal placeholder files into the COPY source paths
+        # whenever the real ones aren't checked in.
+        #
+        # The placeholders are clearly labelled so anyone who pulls the
+        # resulting (never-pushed) image and pokes inside knows not to
+        # rely on the contents. A `git status` after this step shows the
+        # stubs as ignored — they never enter source control.
+        # NOTE: avoid heredocs here. `run: |` is a YAML literal block;
+        # any heredoc body line that out-dents below the block's indent
+        # silently terminates the scalar and breaks workflow parsing
+        # (YAML doesn't care that bash sees a `SQL` / `YAML` sentinel).
+        # Use printf with explicit \n so every line stays at one
+        # indentation level and the bash script remains a single YAML
+        # value.
+        run: |
+          set -euo pipefail
+          if [ -z "$(ls -A infra/migrations 2>/dev/null || true)" ]; then
+            mkdir -p infra/migrations
+            printf '%s\n' \
+              '-- CI build-verification placeholder. The real migrations live outside' \
+              '-- source control (see .gitignore + the operator migration workflow).' \
+              '-- This file exists only so docker COPY succeeds; running it is a no-op.' \
+              'select 1;' \
+              > infra/migrations/000_ci_placeholder.sql
+            echo "stubbed infra/migrations/000_ci_placeholder.sql"
+          fi
+          if [ ! -d infra/demo ]; then
+            mkdir -p infra/demo
+            printf '%s\n' \
+              '# CI build-verification placeholder; real demo assets are gitignored.' \
+              > infra/demo/README.ci-placeholder.md
+            echo "stubbed infra/demo/README.ci-placeholder.md"
+          fi
+          if [ ! -f docs/openapi.yaml ]; then
+            mkdir -p docs
+            printf '%s\n' \
+              '# CI build-verification placeholder. The real spec is gitignored;' \
+              '# served-from-binary requests will return this empty stub instead.' \
+              'openapi: 3.0.0' \
+              'info:' \
+              '  title: sip-happens (CI placeholder - not the real spec)' \
+              '  version: 0.0.0-ci' \
+              'paths: {}' \
+              > docs/openapi.yaml
+            echo "stubbed docs/openapi.yaml"
+          fi
+
       - name: Docker build (compose)
         # We don't push — this is purely a build verification so a Dockerfile
         # edit (FROM bump, COPY path change) is caught before merge.
