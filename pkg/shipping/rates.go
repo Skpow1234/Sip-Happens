@@ -152,4 +152,3 @@ from products where id = any($2)
 	}
 	return total, nil
 }
-
