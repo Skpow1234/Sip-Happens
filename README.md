@@ -271,8 +271,9 @@ Set these in your shell (or in your Docker environment) before starting `core-ap
 - **`EMAIL_PROVIDER`**: `log` (default; prints to stdout) or `smtp`
 - **`EMAIL_FROM`**: sender address (default `noreply@sip-happens.local`)
 - **`SMTP_HOST`**, **`SMTP_PORT`** (default `587`), **`SMTP_USER`**, **`SMTP_PASSWORD`**: required when `EMAIL_PROVIDER=smtp`
+- **`SUPPORT_CONTACT_EMAIL`**: address shown in the shared compliance footer for unsubscribe / consent-revocation requests (default `soporte@sip-happens.local`). Used by every outbound template via `templates/_footer.{html,txt}`.
 
-Transactional email (Spanish templates) is sent only when the matching flag is set and the customer has an email on file: payment link after `POST /checkout` (`email_payment_link`), receipt when `order.paid` is consumed (`email_receipt` on `nats-consume`).
+Transactional email (Spanish templates) is sent only when the matching flag is set and the customer has an email on file: payment link after `POST /checkout` (`email_payment_link`), receipt when `order.paid` is consumed (`email_receipt` on `nats-consume`), shipping status updates when an admin transitions a shipment (`email_shipping_update`), and the double-opt-in confirmation for newsletter sign-ups (`email_subscribe_confirm`). Every template ends with the shared compliance footer (`_footer.{html,txt}`) carrying the legal-minors warning, SIC link, privacy/data-processing URLs, and the support unsubscribe contact.
 
 ### Feature flags
 
@@ -285,6 +286,8 @@ Set on **core-api** and **nats-consume** (email receipt) via `FEATURE_FLAGS` (co
 | `redis_rate_limit` | core-api | Shared checkout/admin rate limits in Redis; requires `REDIS_URL`. See [`docs/ops/rate-limit-scaling.md`](docs/ops/rate-limit-scaling.md). |
 | `email_payment_link` | core-api | Email Stripe checkout URL after `POST /checkout`. |
 | `email_receipt` | nats-consume | Email receipt when `order.paid` is handled; needs `OUTBOX_PUBLISHER=nats`. |
+| `email_shipping_update` | core-api | Email customer when an admin transitions a shipment (PACKED / HANDED_OVER / IN_TRANSIT / DELIVERED / FAILED). |
+| `email_subscribe_confirm` | core-api | Send the double-opt-in confirmation email for `POST /email` newsletter subscribers. |
 
 Example (typical Compose dev):
 
@@ -425,7 +428,8 @@ Sip-Happens has no browser session, so the customer-side step runs through the *
 - `POST /admin/orders/{id}/refund` — issue a partial/full Stripe refund (ops; `amount_minor_units` + optional `reason`); idempotency key derived from `(order, amount, reason)` so retries dedupe Stripe-side
 - `GET /admin/orders/{id}/refunds` — list refunds for an order (support+)
 - `GET /admin/products/{id}/price-history` — bi-temporal price ledger joined with admin audit rows (finance+)
-- `PATCH /admin/orders/{id}/shipment` — set carrier + tracking (ops); advances shipment when packed
+- `PATCH /admin/orders/{id}/shipment` — set carrier + tracking (ops); auto-advances NEW/PACKED → HANDED_OVER
+- `POST /admin/orders/{id}/shipment/transition` — full shipment FSM incl. FAILED (ops; reason required, audited); see `docs/runbooks/reservation-release-failure.md` for FAILED follow-up
 - `GET /admin/audit-events` (`limit`, `offset`, `aggregate_type`, `aggregate_id`, `order_id` — matches `order` aggregate or JSON `order_id` in payload)
 - `GET /admin/orders/{id}` includes `payments` and `payment_status_history` (normalized checkout/webhook/reconcile timeline)
 - `GET /admin/orders/export` — CSV download for finance (`status`, `created_from`, `created_to`, `limit` up to 10000; same filters as list)
