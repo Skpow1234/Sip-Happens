@@ -1,5 +1,5 @@
 # Base digests: infra/docker/base-images.env — see docs/ops/docker-image-security.md
-FROM golang:1.24@sha256:46fdd02b6cbcd624a4087ea298e4c8505e5d400c4ee5181e4dd06e2297d647ae AS build
+FROM golang:1.25@sha256:f7c6f0bf2d22b0b840d2b4956466b155532de36351056eaba6ea5e1aa458dc3b AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
