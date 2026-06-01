@@ -10,6 +10,22 @@ Users connect via **SSH** to a TUI, browse a beer catalog, build a cart, and sta
 - **`ssh-gateway`**: Bubble Tea TUI served over SSH (split-pane catalog, account area with pedidos / suscripciones / direcciones, cart breadcrumbs, off-terminal Stripe payment).
 - **Docker-only workflow**: the host machine is assumed to have **only Docker** installed.
 
+### Local Go / IDE (optional)
+
+`go.mod` requires **Go 1.25+** (`toolchain go1.25.10`). If your shell or editor still uses Go 1.24.x you will see `packages.Load` / `GOTOOLCHAIN=local` errors.
+
+- **Cursor / VS Code:** workspace settings set `GOTOOLCHAIN=auto` for gopls (see `.vscode/settings.json` — create it from the snippet below if missing).
+- **Terminal:** `export GOTOOLCHAIN=auto` before `go test` / `go build`, or install Go 1.25+ system-wide.
+
+```json
+{
+  "go.toolsEnvVars": { "GOTOOLCHAIN": "auto" },
+  "gopls": { "build.env": { "GOTOOLCHAIN": "auto" } }
+}
+```
+
+Docker builds use `GOTOOLCHAIN=auto` in the Dockerfiles so CI and `dev-up` do not depend on your host Go version.
+
 ## Run (Docker only)
 
 Base images are pinned by digest; CVE remediation: [`docs/ops/docker-image-security.md`](docs/ops/docker-image-security.md).

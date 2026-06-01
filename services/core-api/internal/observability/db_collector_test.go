@@ -8,11 +8,11 @@ import (
 
 func TestDBStatsCollectorDescribeCollect(t *testing.T) {
 	c := NewDBStatsCollector(nil)
-	ch := make(chan *prometheus.Desc, 4)
+	ch := make(chan *prometheus.Desc, 16)
 	c.Describe(ch)
-	if len(ch) != 4 {
-		t.Fatalf("expected 4 descriptors, got %d", len(ch))
+	if len(ch) != 9 {
+		t.Fatalf("expected 9 descriptors, got %d", len(ch))
 	}
 	// Collect with nil db should not panic.
-	c.Collect(make(chan prometheus.Metric, 4))
+	c.Collect(make(chan prometheus.Metric, 16))
 }
