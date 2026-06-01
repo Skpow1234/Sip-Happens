@@ -335,6 +335,7 @@ Derechos del consumidor (SIC): %s`,
 		HistoryPaneHelp: "enter ver pedido  r actualizar",
 
 		SplashTagline:          "cerveza artesanal · Colombia",
+		BootstrapHint:          "cargando productos…",
 		ProfileLinkBanner:      "Tu llave SSH aún no está vinculada a un perfil completo — entra a 'cuenta' y completa tus datos para acelerar el pago.",
 		PaymentExpiredBanner:   "La sesión de pago de Stripe venció y el inventario fue liberado.",
 		PaymentExpiredHelp:     "c — empezar de nuevo desde el carrito   esc — tienda",

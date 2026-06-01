@@ -192,6 +192,7 @@ type Messages struct {
 
 	// Splash + linking + payment-recovery copy added in the TUI polish batch.
 	SplashTagline          string
+	BootstrapHint          string
 	ProfileLinkBanner      string
 	PaymentExpiredBanner   string
 	PaymentExpiredHelp     string

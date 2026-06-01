@@ -34,7 +34,7 @@ type layoutOpts struct {
 
 func (m Model) usesShell() bool {
 	switch m.screen {
-	case screenSplash, screenWelcome, screenError:
+	case screenSplash, screenWelcome, screenBootstrap, screenError:
 		return false
 	default:
 		return true
@@ -42,6 +42,11 @@ func (m Model) usesShell() bool {
 }
 
 func (m Model) composeLayout(body string, opts layoutOpts) string {
+	w := m.shellContentWidth()
+	if max := m.maxShellBodyLines(opts); max > 0 {
+		body = clipLines(body, max)
+	}
+
 	var parts []string
 	if opts.showTabs {
 		parts = append(parts, m.renderTopBar(opts.tab))
@@ -57,14 +62,10 @@ func (m Model) composeLayout(body string, opts layoutOpts) string {
 		parts = append(parts, m.renderNoticeBar())
 	}
 	if opts.showPromo {
-		w := m.width
-		if w < 40 {
-			w = 80
-		}
 		parts = append(parts, stylePromo().Width(w).Render(L.ShellPromo))
 	}
 	if opts.footer != "" {
-		parts = append(parts, m.renderFooter(opts.footer))
+		parts = append(parts, m.renderFooter(fitFooterText(opts.footer, w)))
 	}
 	return strings.Join(parts, "\n")
 }
@@ -85,17 +86,10 @@ func (m Model) renderProfileLinkBanner() string {
 }
 
 func (m Model) renderTopBar(active shellTab) string {
-	w := m.width
-	if w < 40 {
-		w = 80
-	}
-	cell := w / 4
-	if cell < 12 {
-		cell = 12
-	}
+	w := m.shellContentWidth()
+	cell := topBarCellWidth(w)
 
 	mk := func(key, label string, tab shellTab, first bool) string {
-		activeTab := tab == active
 		var text string
 		if key != "" {
 			text = key + " " + label
@@ -104,12 +98,13 @@ func (m Model) renderTopBar(active shellTab) string {
 		}
 		if tab == tabCart {
 			text = fmt.Sprintf("%s %s %s [%d]", key, label, formatMoneyShort("COP", m.state.cartSubtotal()), m.state.cartCount())
+			text = truncate(text, cell-1)
 		}
 		st := styleTopCell(first).Width(cell).Align(lipgloss.Center)
 		if key == "" {
 			return st.Render(renderShellBrandWordmark())
 		}
-		if activeTab {
+		if tab == active {
 			return st.Render(styleTabLabel(true).Render(text))
 		}
 		return st.Render(styleTabLabel(false).Render(text))
@@ -122,7 +117,7 @@ func (m Model) renderTopBar(active shellTab) string {
 		mk("c", L.ShellCart, tabCart, false),
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, cells...)
-	return lipgloss.NewStyle().
+	return lipgloss.NewStyle().Width(w).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(colorBorder).
 		Render(row)
@@ -170,7 +165,8 @@ func (m Model) renderNoticeBar() string {
 }
 
 func (m Model) renderFooter(hints string) string {
-	return styleFooter().Render(formatFooterHints(hints))
+	w := m.shellContentWidth()
+	return styleFooter().Width(w).Render(formatFooterHints(hints))
 }
 
 func selectedLine(mark, text string, selected bool) string {
@@ -185,15 +181,9 @@ func selectedLine(mark, text string, selected bool) string {
 }
 
 func catalogLine(name string, width int, selected bool) string {
-	line := truncate(name, max(8, width-2))
+	line := truncate(name, max(8, width-4))
 	if selected {
-		return styleRowSelect().Width(width).Render(line) + "\n"
+		return styleRowSelect().Render("› "+line) + "\n"
 	}
 	return styleMuted().Render("  "+line) + "\n"
-}
-
-func splitHorizontal(leftWidth int, left, right string) string {
-	l := lipgloss.NewStyle().Width(leftWidth).Render(left)
-	r := lipgloss.NewStyle().Render(right)
-	return lipgloss.JoinHorizontal(lipgloss.Top, l, "  ", r)
 }

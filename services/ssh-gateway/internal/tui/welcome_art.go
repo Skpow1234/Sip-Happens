@@ -6,43 +6,69 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var welcomeLogoASCII = []string{
-	`      * · * · *`,
-	`     * ▓▓▓▓▓ *`,
-	`    .───────────.`,
-	`   /   S I P     \`,
-	`  │ ░▒▓█████▓▒░ │`,
-	`  │ ░▒▓█████▓▒░ │`,
-	`   \___________/`,
+// welcomePixelLogo is a fixed-width pixel grid (one terminal cell = one pixel).
+// Runes map to palette entries via styleLogoPixel; spaces are transparent.
+//
+//	░▒▓ foam/beer (white + gray) · sparkle (gray) █/▌/▐ glass (gold)
+var welcomePixelLogo = []string{
+	"      · · · ·      ",
+	"    ░▒▓██████▓▒░    ",
+	"   ░▒▓████████▓▒░   ",
+	"  ░▒▓██████████▓▒░  ",
+	" ██████████████████▌",
+	" ██████████████████▌",
+	" ████▓▓ S I P ▓▓████",
+	" ████▓▓▓▓▓▓▓▓▓▓█████",
+	" ████▓▓▓▓▓▓▓▓▓▓█████",
+	" ████▓▓▓▓▓▓▓▓▓▓█████",
+	" ██████████████████▌",
+	"  ░▒▓██████████▓▒░  ",
+	"   ░▒▓████████▓▒░   ",
+	"    ░▒▓██████▓▒░    ",
+	"      · · · ·      ",
 }
 
-var welcomeLogoStyles = []lipgloss.Style{
-	lipgloss.NewStyle().Foreground(colorFoam),
-	lipgloss.NewStyle().Foreground(colorBeerMid).Bold(true),
-	lipgloss.NewStyle().Foreground(colorBrandGold),
-	lipgloss.NewStyle().Foreground(colorBeerMid).Bold(true),
-	lipgloss.NewStyle().Foreground(colorBeerMid),
-	lipgloss.NewStyle().Foreground(colorBeerDeep),
-	lipgloss.NewStyle().Foreground(colorBrandGold),
+func styleLogoPixel(r rune) lipgloss.Style {
+	switch r {
+	case ' ':
+		return lipgloss.NewStyle()
+	case '·':
+		return lipgloss.NewStyle().Foreground(colorMuted)
+	case '░':
+		return lipgloss.NewStyle().Foreground(colorMuted)
+	case '▒':
+		return lipgloss.NewStyle().Foreground(colorFoam)
+	case '▓':
+		return lipgloss.NewStyle().Foreground(colorFoam).Bold(true)
+	case 'S', 'I', 'P':
+		return lipgloss.NewStyle().Foreground(colorFoam).Bold(true)
+	case '█', '▌', '▐':
+		return lipgloss.NewStyle().Foreground(colorBrandGold).Bold(true)
+	default:
+		return lipgloss.NewStyle().Foreground(colorText)
+	}
 }
 
 func renderWelcomeLogo() string {
-	var b strings.Builder
-	for i, line := range welcomeLogoASCII {
-		st := welcomeLogoStyles[i]
-		if i >= len(welcomeLogoStyles) {
-			st = styleBrand()
-		}
-		b.WriteString(st.Render(line))
-		if i < len(welcomeLogoASCII)-1 {
-			b.WriteByte('\n')
-		}
+	lines := make([]string, 0, len(welcomePixelLogo))
+	for _, row := range welcomePixelLogo {
+		lines = append(lines, renderLogoPixelRow(row))
 	}
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
-func renderWelcomeWordmark() string {
-	return renderShellBrandWordmark() + styleInputCursor().Render("█")
+func renderLogoPixelRow(row string) string {
+	var b strings.Builder
+	b.Grow(len(row) * 12)
+	for _, r := range row {
+		st := styleLogoPixel(r)
+		if r == ' ' {
+			b.WriteByte(' ')
+			continue
+		}
+		b.WriteString(st.Render(string(r)))
+	}
+	return b.String()
 }
 
 func renderWelcomeTagline() string {

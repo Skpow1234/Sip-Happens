@@ -251,6 +251,9 @@ func TestViewInitHydratesAllSections(t *testing.T) {
 	}
 	next, _ := m.Update(viewInitLoadedMsg{view: view})
 	nm := next.(Model)
+	if nm.screen != screenCatalog {
+		t.Fatalf("expected screenCatalog after view init, got %v", nm.screen)
+	}
 	if !nm.state.profileIncomplete {
 		t.Fatal("expected profileIncomplete from empty profile")
 	}
@@ -281,6 +284,41 @@ func TestViewInitErrorFallsBackToSequential(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected fallback batch command, got nil")
+	}
+}
+
+func TestBootstrapLeavesOnViewInit(t *testing.T) {
+	m := NewRootModel(nil, "", "", "", "", "")
+	m.screen = screenBootstrap
+	view := &api.ViewInit{
+		Catalog: &api.CatalogPage{
+			Items: []api.CatalogItem{{Product: api.CatalogProduct{ID: "p1"}}},
+		},
+	}
+	next, _ := m.Update(viewInitLoadedMsg{view: view})
+	nm := next.(Model)
+	if nm.screen != screenCatalog {
+		t.Fatalf("expected catalog after bootstrap, got %v", nm.screen)
+	}
+}
+
+func TestBootstrapHoldsUntilCatalogOnViewInitError(t *testing.T) {
+	m := NewRootModel(nil, "", "", "", "", "")
+	m.screen = screenBootstrap
+
+	next, cmd := m.Update(viewInitLoadedMsg{err: errResize{}})
+	nm := next.(Model)
+	if nm.screen != screenBootstrap {
+		t.Fatalf("bootstrap must hold on view-init error, got %v", nm.screen)
+	}
+	if cmd == nil {
+		t.Fatal("expected fallback loaders")
+	}
+
+	page := &api.CatalogPage{Items: []api.CatalogItem{{Product: api.CatalogProduct{ID: "p1"}}}}
+	next2, _ := nm.Update(catalogLoadedMsg{page: page})
+	if next2.(Model).screen != screenCatalog {
+		t.Fatal("catalog load should leave bootstrap")
 	}
 }
 

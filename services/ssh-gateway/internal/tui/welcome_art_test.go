@@ -5,10 +5,22 @@ import (
 	"testing"
 )
 
-func TestRenderWelcomeLogo_ContainsBrandAndArt(t *testing.T) {
+func TestRenderWelcomeLogo_PixelArt(t *testing.T) {
 	logo := renderWelcomeLogo()
-	if !strings.Contains(logo, "S I P") {
-		t.Fatal("logo missing SIP glass lettering")
+	plain := stripANSI(logo)
+	lines := strings.Split(strings.TrimSpace(plain), "\n")
+	if len(lines) < 10 {
+		t.Fatalf("expected tall pixel logo, got %d lines", len(lines))
+	}
+	if !strings.Contains(plain, "S I P") {
+		t.Fatal("logo missing SIP lettering in beer")
+	}
+	if !strings.Contains(plain, "█") {
+		t.Fatal("logo missing solid pixel blocks")
+	}
+	// Foam + beer shading characters should appear in the grid.
+	if !strings.Contains(plain, "░") || !strings.Contains(plain, "▓") {
+		t.Fatal("logo missing foam/beer pixel shading")
 	}
 }
 

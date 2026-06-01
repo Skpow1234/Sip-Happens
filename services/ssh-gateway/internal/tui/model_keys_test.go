@@ -19,18 +19,18 @@ func modelFromTea(v tea.Model) Model {
 	}
 }
 
-func TestModel_WelcomeEnter_GoesCatalog(t *testing.T) {
+func TestModel_WelcomeEnter_GoesBootstrap(t *testing.T) {
 	m := NewRootModel(nil, "", "", "", "", "")
 	m.screen = screenWelcome
 	m.state.birthDateInput = "1995-01-01"
 
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	nm := modelFromTea(next)
-	if nm.screen != screenCatalog {
-		t.Fatalf("screen: got %v want catalog", nm.screen)
+	if nm.screen != screenBootstrap {
+		t.Fatalf("screen: got %v want bootstrap loader", nm.screen)
 	}
 	if cmd == nil {
-		t.Fatal("expected commands after entering catalog")
+		t.Fatal("expected commands after age confirmation")
 	}
 }
 

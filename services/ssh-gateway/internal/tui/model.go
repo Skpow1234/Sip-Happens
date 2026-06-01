@@ -34,6 +34,10 @@ type Model struct {
 	height int
 
 	helpFromAccount bool
+
+	// brandCursorOn drives the Terminal.shop-style block cursor on splash and
+	// bootstrap loader screens; toggled by brandCursorBlinkMsg.
+	brandCursorOn bool
 }
 
 func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataProcessingPolicyURL, supportContact, dispatchETAPolicy string) Model {
@@ -54,6 +58,7 @@ func NewRootModel(client *api.Client, privacyPolicyURL, consumerRightsURL, dataP
 		supportContact:          supportContact,
 		dispatchETAPolicy:       dispatchETAPolicy,
 		screen:                  screenSplash,
+		brandCursorOn:           true,
 	}
 }
 
@@ -66,9 +71,12 @@ func (m Model) Init() tea.Cmd {
 	// We don't load the server cart yet — the user hasn't passed the age
 	// gate. The /view/init fan-out runs after age confirmation; until then
 	// the splash is the only thing on screen.
-	return tea.Tick(splashHoldDuration, func(time.Time) tea.Msg {
-		return splashAdvanceMsg{}
-	})
+	return tea.Batch(
+		tea.Tick(splashHoldDuration, func(time.Time) tea.Msg {
+			return splashAdvanceMsg{}
+		}),
+		brandCursorBlinkCmd(),
+	)
 }
 
 type splashAdvanceMsg struct{}
@@ -82,6 +90,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case splashAdvanceMsg:
 		if m.screen == screenSplash {
 			m.screen = screenWelcome
+		}
+		return m, nil
+
+	case brandCursorBlinkMsg:
+		if m.screen == screenSplash || m.screen == screenBootstrap {
+			m.brandCursorOn = !m.brandCursorOn
+			return m, brandCursorBlinkCmd()
 		}
 		return m, nil
 
@@ -109,8 +124,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state.catalog = msg.view.Catalog.Items
 			m.state.catalogHasMore = msg.view.Catalog.HasMore
 			m.state.catalogCursor = 0
+			m.leaveBootstrap()
 			return m, m.maybeLoadCatalogDetailCmd()
 		}
+		m.leaveBootstrap()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -141,6 +158,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state.catalogCursor >= len(m.state.catalog) {
 			m.state.catalogCursor = 0
 		}
+		m.leaveBootstrap()
 		return m, m.maybeLoadCatalogDetailCmd()
 
 	case detailLoadedMsg:
@@ -429,14 +447,15 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state.birthDate = strings.TrimSpace(m.state.birthDateInput)
 			m.state.ageConfirmed = true
 			m.state.resetCatalogPage()
-			m.screen = screenCatalog
-			m.busy = true
+			m.screen = screenBootstrap
+			m.brandCursorOn = true
 			// /view/init returns profile + cart + catalog (destacados) in
 			// one signed round-trip; patchBirthDate fires alongside it so
 			// the server records the user's age the moment they confirm.
 			// On view-init failure, the dispatch in Update falls back to
-			// the old sequential loaders.
-			return m, tea.Batch(m.patchBirthDateCmd(), m.loadViewInitCmd())
+			// the old sequential loaders. The bootstrap screen holds until
+			// catalog data arrives — then products replace the loader.
+			return m, tea.Batch(m.patchBirthDateCmd(), m.loadViewInitCmd(), brandCursorBlinkCmd())
 		case "backspace":
 			m.state.birthDateInput = backspaceBirthDateInput(m.state.birthDateInput)
 		default:
@@ -1004,6 +1023,9 @@ func (m Model) View() string {
 	if m.screen == screenSplash {
 		return m.viewSplash()
 	}
+	if m.screen == screenBootstrap {
+		return m.viewBootstrap()
+	}
 	if m.screen == screenWelcome {
 		return m.viewWelcome()
 	}
@@ -1058,7 +1080,7 @@ func (m Model) viewBusy() string {
 }
 
 func (m Model) viewOrderComplete() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10")).Render(L.OrderCompleteTitle)
+	title := styleBrand().Render(L.OrderCompleteTitle)
 	cur := m.state.lastOrderCurrency
 	if cur == "" {
 		cur = "COP"
@@ -1113,7 +1135,7 @@ func (m Model) viewOrderStatus() string {
 }
 
 func (m Model) viewError() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")).Render(L.ErrorTitle)
+	title := styleErr().Render(L.ErrorTitle)
 	msg := fmt.Sprintf("%v", m.err)
 	if ae, ok := m.err.(*api.APIError); ok {
 		msg = ae.FriendlyMessage()

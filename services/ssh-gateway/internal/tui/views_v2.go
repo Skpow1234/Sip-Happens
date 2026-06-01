@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m Model) layoutDefaults(tab shellTab, footer string) layoutOpts {
@@ -16,14 +18,8 @@ func (m Model) layoutDefaults(tab shellTab, footer string) layoutOpts {
 }
 
 func (m Model) viewCatalogSplit() string {
-	leftW := 34
-	if m.width > 0 && m.width/3 > 28 {
-		leftW = m.width / 3
-	}
-	if leftW < 28 {
-		leftW = 28
-	}
-	body := splitHorizontal(leftW, m.catalogListPane(leftW), m.catalogDetailPane())
+	leftW, rightW := m.catalogPaneWidths()
+	body := splitHorizontal(leftW, rightW, m.catalogListPane(leftW), m.catalogDetailPane(rightW))
 	opts := m.layoutDefaults(tabShop, L.CatalogFooter)
 	return m.composeLayout(body, opts)
 }
@@ -39,11 +35,11 @@ func (m Model) catalogListPane(width int) string {
 	b.WriteString(styleSection().Render("~ "+groupLabel+" ~") + "\n\n")
 	if m.state.catalogSearchEdit {
 		b.WriteString(L.CatalogSearchPrompt + " " + m.state.catalogSearchBuf + "█\n")
-		return b.String()
+		return lipgloss.NewStyle().Width(width).Render(b.String())
 	}
 	if len(m.state.catalog) == 0 {
 		b.WriteString("\n" + L.CatalogNoMatches + "\n")
-		return b.String()
+		return lipgloss.NewStyle().Width(width).Render(b.String())
 	}
 	for i, it := range m.state.catalog {
 		name := it.Product.Name
@@ -62,12 +58,12 @@ func (m Model) catalogListPane(width int) string {
 	if m.state.catalogQuery.Offset > 0 {
 		meta.WriteString(stylePromo().Render("  · p ← anterior"))
 	}
-	meta.WriteString("\n" + styleMuted().Render(L.CatalogGroupToggleHint))
+	meta.WriteString("\n" + styleMuted().Render(truncate(L.CatalogGroupToggleHint, width)) + "\n")
 	b.WriteString(meta.String() + "\n")
-	return b.String()
+	return lipgloss.NewStyle().Width(width).Render(b.String())
 }
 
-func (m Model) catalogDetailPane() string {
+func (m Model) catalogDetailPane(width int) string {
 	d := m.state.productDetail
 	if m.busy && d == nil {
 		return styleMuted().Render(L.LoadingProduct) + "\n"
@@ -90,12 +86,19 @@ func (m Model) catalogDetailPane() string {
 	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductAvailable, d.AvailableQty)) + "\n\n")
 	b.WriteString(formatProductImageBlock(p.ImageURL))
 	b.WriteString("\n\n" + renderProductCTA() + "\n")
+	if width > 0 {
+		return lipgloss.NewStyle().Width(width).Render(b.String())
+	}
 	return b.String()
 }
 
 func (m Model) viewAccountShell() string {
 	leftW := 22
-	body := splitHorizontal(leftW, m.accountMenuPane(), m.accountContentPane())
+	rightW := m.shellContentWidth() - leftW - splitPaneGap - 1
+	if rightW < 30 {
+		rightW = 30
+	}
+	body := splitHorizontal(leftW, rightW, m.accountMenuPane(), m.accountContentPane())
 	opts := m.layoutDefaults(tabAccount, L.AccountFooter)
 	return m.composeLayout(body, opts)
 }

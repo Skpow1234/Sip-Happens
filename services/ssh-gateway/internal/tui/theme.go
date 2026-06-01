@@ -6,22 +6,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// 16-color ANSI palette — Terminal.shop-style layout, Sip-Happens colors (cyan + gold, no orange/violet).
+// Andes nocturno — 16-color ANSI: white text, gray chrome, gold accent, red alerts.
+// Terminal.shop-style layout; one warm accent (no cyan split wordmark).
 var (
-	colorText      = lipgloss.Color("15")
-	colorMuted     = lipgloss.Color("8")
+	colorText      = lipgloss.Color("15") // primary copy
+	colorMuted     = lipgloss.Color("8")  // hints, borders, beer shading
 	colorDim       = lipgloss.Color("8")
-	colorAccent    = lipgloss.Color("6")  // cyan — list selection / CTA fill
-	colorOnAccent  = lipgloss.Color("15") // white on cyan
-	colorBrandGold = lipgloss.Color("11") // prices, accent word
-	colorBrandCyan = lipgloss.Color("14") // brand word, links
-	colorLink      = lipgloss.Color("14")
+	colorAccent    = lipgloss.Color("11") // gold — selection, CTAs, links, brand
+	colorOnAccent  = lipgloss.Color("0")  // black on gold fills
+	colorBrandGold = colorAccent
 	colorWarn      = lipgloss.Color("9")
 	colorDanger    = lipgloss.Color("9")
 	colorBorder    = lipgloss.Color("8")
 	colorFoam      = lipgloss.Color("15")
-	colorBeerMid   = lipgloss.Color("14")
-	colorBeerDeep  = lipgloss.Color("6")
 )
 
 func styleBrand() lipgloss.Style {
@@ -29,8 +26,7 @@ func styleBrand() lipgloss.Style {
 }
 
 func renderShellBrandWordmark() string {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandCyan).Render("sip") +
-		lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold).Render("-happens")
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold).Render("sip-happens")
 }
 
 func styleWordmark() lipgloss.Style {
@@ -54,18 +50,22 @@ func stylePrice() lipgloss.Style {
 }
 
 func styleLink() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(colorLink).Underline(true)
+	return lipgloss.NewStyle().Foreground(colorBrandGold).Underline(true)
 }
 
 func styleTabLabel(active bool) lipgloss.Style {
 	if active {
-		return lipgloss.NewStyle().Bold(true).Foreground(colorText)
+		return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
 	}
 	return lipgloss.NewStyle().Foreground(colorMuted)
 }
 
 func styleRowSelect() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorOnAccent).Background(colorAccent)
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
+}
+
+func styleActionLabel() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
 }
 
 func styleCTA() lipgloss.Style {
@@ -107,8 +107,14 @@ func stylePromo() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colorMuted).Align(lipgloss.Center)
 }
 
-func styleInputCursor() lipgloss.Style {
+// styleBrandCursor is the solid block on splash/bootstrap (gold fill, like Terminal.shop).
+func styleBrandCursor() lipgloss.Style {
 	return styleCTA()
+}
+
+// styleInputCursor is the typing caret in forms — gold glyph only, no CTA background.
+func styleInputCursor() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
 }
 
 func styleWelcomeFrame() lipgloss.Style {
@@ -162,6 +168,6 @@ func styleBanner() lipgloss.Style {
 
 func renderProductCTA() string {
 	return styleFooterKey().Render("←") + " " + styleMuted().Render("quitar") + "  " +
-		styleFooterKey().Render("→") + " " + styleCTA().Render("agregar") + "  " +
-		styleFooterKey().Render("b") + " " + styleCTA().Render("suscribirse")
+		styleFooterKey().Render("→") + " " + styleActionLabel().Render("agregar") + "  " +
+		styleFooterKey().Render("b") + " " + styleActionLabel().Render("suscribirse")
 }

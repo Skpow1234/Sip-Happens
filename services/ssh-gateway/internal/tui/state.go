@@ -34,6 +34,9 @@ const (
 	// Sip-Happens wordmark, not a legal warning. Auto-advances to screenWelcome
 	// via a splashAdvanceMsg tick — see Init().
 	screenSplash
+	// screenBootstrap is the post–age-gate welcome loader: full-screen brand
+	// art while /view/init (or the legacy catalog fallback) hydrates the shop.
+	screenBootstrap
 	screenError
 )
 
