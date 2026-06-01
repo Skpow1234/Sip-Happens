@@ -62,6 +62,7 @@ func (m Model) composeLayout(body string, opts layoutOpts) string {
 		parts = append(parts, m.renderNoticeBar())
 	}
 	if opts.showPromo {
+		parts = append(parts, "")
 		parts = append(parts, stylePromo().Width(w).Render(L.ShellPromo))
 	}
 	if opts.footer != "" {
@@ -102,7 +103,7 @@ func (m Model) renderTopBar(active shellTab) string {
 		}
 		st := styleTopCell(first).Width(cell).Align(lipgloss.Center)
 		if key == "" {
-			return st.Render(renderShellBrandWordmark())
+			return st.Render(renderTopBarBrand())
 		}
 		if tab == active {
 			return st.Render(styleTabLabel(true).Render(text))
@@ -181,9 +182,9 @@ func selectedLine(mark, text string, selected bool) string {
 }
 
 func catalogLine(name string, width int, selected bool) string {
-	line := truncate(name, max(8, width-4))
+	line := truncate(name, max(8, width))
 	if selected {
-		return styleRowSelect().Render("› "+line) + "\n"
+		return styleRowSelect().Width(width).Render(line) + "\n"
 	}
-	return styleMuted().Render("  "+line) + "\n"
+	return styleMuted().Render(line) + "\n"
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Andes nocturno — 16-color ANSI: white text, gray chrome, gold accent, red alerts.
-// Terminal.shop-style layout; one warm accent (no cyan split wordmark).
+// Andes nocturno — 16-color ANSI: white + gray chrome, gold accent fills, red alerts.
+// Matches Terminal.shop structure: white brand in header, accent pill selection + primary CTA.
 var (
 	colorText      = lipgloss.Color("15") // primary copy
 	colorMuted     = lipgloss.Color("8")  // hints, borders, beer shading
@@ -25,8 +25,14 @@ func styleBrand() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
 }
 
+// renderShellBrandWordmark is gold — splash, welcome, loaders.
 func renderShellBrandWordmark() string {
 	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold).Render("sip-happens")
+}
+
+// renderTopBarBrand is white — shell header matches Terminal.shop “terminal”.
+func renderTopBarBrand() string {
+	return lipgloss.NewStyle().Bold(true).Foreground(colorText).Render("sip-happens")
 }
 
 func styleWordmark() lipgloss.Style {
@@ -55,17 +61,14 @@ func styleLink() lipgloss.Style {
 
 func styleTabLabel(active bool) lipgloss.Style {
 	if active {
-		return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
+		return lipgloss.NewStyle().Bold(true).Foreground(colorText)
 	}
 	return lipgloss.NewStyle().Foreground(colorMuted)
 }
 
+// styleRowSelect — full-width accent bar, black label (Terminal.shop list selection).
 func styleRowSelect() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
-}
-
-func styleActionLabel() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(colorBrandGold)
+	return lipgloss.NewStyle().Bold(true).Foreground(colorOnAccent).Background(colorAccent)
 }
 
 func styleCTA() lipgloss.Style {
@@ -166,8 +169,8 @@ func styleBanner() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colorBrandGold).Italic(true)
 }
 
+// renderProductCTA — one accent pill + key hint; secondary action in muted text.
 func renderProductCTA() string {
-	return styleFooterKey().Render("←") + " " + styleMuted().Render("quitar") + "  " +
-		styleFooterKey().Render("→") + " " + styleActionLabel().Render("agregar") + "  " +
-		styleFooterKey().Render("b") + " " + styleActionLabel().Render("suscribirse")
+	return styleCTA().Render("agregar") + " " + styleText().Render("→") + "  " +
+		styleMuted().Render("b suscribirse")
 }

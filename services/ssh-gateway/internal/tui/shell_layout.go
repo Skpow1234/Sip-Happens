@@ -28,22 +28,22 @@ func topBarCellWidth(total int) int {
 	return usable / topBarCellCount
 }
 
-// catalogPaneWidths splits terminal width between list and detail columns.
+// catalogPaneWidths — narrow left rail like Terminal.shop (~¼ width).
 func (m Model) catalogPaneWidths() (left, right int) {
 	w := m.shellContentWidth()
-	gap := splitPaneGap + 1 // column separator
-	left = w / 3
-	if left < 26 {
-		left = 26
+	gap := splitPaneGap
+	left = w / 4
+	if left < 22 {
+		left = 22
 	}
-	if left > 42 {
-		left = 42
+	if left > 32 {
+		left = 32
 	}
 	right = w - left - gap
-	if right < 28 {
-		left = w - gap - 28
-		if left < 22 {
-			left = 22
+	if right < 32 {
+		left = w - gap - 32
+		if left < 20 {
+			left = 20
 		}
 		right = w - left - gap
 	}
@@ -124,7 +124,7 @@ func (m Model) maxShellBodyLines(opts layoutOpts) int {
 
 func splitHorizontal(leftWidth, rightWidth int, left, right string) string {
 	l := lipgloss.NewStyle().Width(leftWidth).Render(left)
-	sep := lipgloss.NewStyle().Foreground(colorBorder).Render("│")
+	sp := strings.Repeat(" ", splitPaneGap)
 	r := lipgloss.NewStyle().Width(rightWidth).Render(right)
-	return lipgloss.JoinHorizontal(lipgloss.Top, l, sep, r)
+	return lipgloss.JoinHorizontal(lipgloss.Top, l, sp, r)
 }

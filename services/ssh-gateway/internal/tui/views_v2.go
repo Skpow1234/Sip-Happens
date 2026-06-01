@@ -32,7 +32,8 @@ func (m Model) catalogListPane(width int) string {
 	if m.state.catalogGroup == catalogGroupFeatured {
 		groupLabel = L.CatalogGroupDestacados
 	}
-	b.WriteString(styleSection().Render("~ "+groupLabel+" ~") + "\n\n")
+	b.WriteString(lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Foreground(colorMuted).
+		Render("~ "+groupLabel+" ~") + "\n\n")
 	if m.state.catalogSearchEdit {
 		b.WriteString(L.CatalogSearchPrompt + " " + m.state.catalogSearchBuf + "█\n")
 		return lipgloss.NewStyle().Width(width).Render(b.String())
@@ -74,18 +75,25 @@ func (m Model) catalogDetailPane(width int) string {
 	p := d.Product
 	var b strings.Builder
 	b.WriteString(styleWordmark().Render(p.Name) + "\n\n")
-	b.WriteString(styleMuted().Render(fmt.Sprintf("%s  |  %s  |  %s",
-		fmt.Sprintf(L.ProductVolume, p.VolumeML), fmt.Sprintf(L.ProductABV, p.ABV), p.Brewery)) + "\n\n")
+	spec := fmt.Sprintf("%s  ·  %s", fmt.Sprintf(L.ProductVolume, p.VolumeML), fmt.Sprintf(L.ProductABV, p.ABV))
+	if br := strings.TrimSpace(p.Brewery); br != "" {
+		spec += "  ·  " + br
+	}
+	b.WriteString(styleMuted().Render(spec) + "\n\n")
 	b.WriteString(stylePrice().Render(formatMoney(d.Price.Currency, d.Price.AmountMinorUnits)) + "\n\n")
 	if desc := strings.TrimSpace(p.Description); desc != "" {
 		b.WriteString(styleMuted().Render(desc) + "\n\n")
 	}
+	var extra []string
 	if p.IBU != nil {
-		b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductIBU, *p.IBU)) + "\n")
+		extra = append(extra, fmt.Sprintf("%s: %d", L.ProductIBU, *p.IBU))
 	}
-	b.WriteString(styleMuted().Render(fmt.Sprintf("%s: %d", L.ProductAvailable, d.AvailableQty)) + "\n\n")
-	b.WriteString(formatProductImageBlock(p.ImageURL))
-	b.WriteString("\n\n" + renderProductCTA() + "\n")
+	extra = append(extra, fmt.Sprintf("%s: %d", L.ProductAvailable, d.AvailableQty))
+	b.WriteString(styleMuted().Render(strings.Join(extra, "  ·  ")) + "\n\n")
+	if img := formatProductImageBlock(p.ImageURL); strings.TrimSpace(img) != "" {
+		b.WriteString(img + "\n\n")
+	}
+	b.WriteString(renderProductCTA() + "\n")
 	if width > 0 {
 		return lipgloss.NewStyle().Width(width).Render(b.String())
 	}
@@ -94,7 +102,7 @@ func (m Model) catalogDetailPane(width int) string {
 
 func (m Model) viewAccountShell() string {
 	leftW := 22
-	rightW := m.shellContentWidth() - leftW - splitPaneGap - 1
+	rightW := m.shellContentWidth() - leftW - splitPaneGap
 	if rightW < 30 {
 		rightW = 30
 	}
@@ -298,7 +306,11 @@ func (m Model) viewCheckoutV2() string {
 		leftCol += fmt.Sprintf("%s%-14s\n", markL, label+":")
 		rightCol += fmt.Sprintf("%s%s\n", markR, vals[i])
 	}
-	cols := splitHorizontal(16, leftCol, rightCol)
+	formRightW := m.shellContentWidth() - 16 - splitPaneGap - 1
+	if formRightW < 24 {
+		formRightW = 24
+	}
+	cols := splitHorizontal(16, formRightW, leftCol, rightCol)
 	var addrBlock strings.Builder
 	if len(m.state.savedAddresses) > 0 {
 		addrBlock.WriteString(L.CheckoutSavedAddresses)

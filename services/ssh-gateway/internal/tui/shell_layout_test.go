@@ -29,7 +29,7 @@ func TestCatalogPaneWidths_SumWithinTerminal(t *testing.T) {
 	m := NewRootModel(nil, "", "", "", "", "")
 	m.width = 100
 	left, right := m.catalogPaneWidths()
-	gap := splitPaneGap + 1
+	gap := splitPaneGap
 	if left+right+gap > 100 {
 		t.Fatalf("panes overflow: %d + %d + %d > 100", left, right, gap)
 	}
