@@ -39,10 +39,6 @@ func styleWordmark() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(colorText)
 }
 
-func styleSection() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(colorMuted)
-}
-
 func styleMuted() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colorMuted)
 }
