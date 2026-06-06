@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	topBarCellCount    = 4
-	topBarBorderChars  = topBarCellCount - 1
-	splitPaneGap       = 1
+	topBarCellCount   = 4
+	topBarBorderChars = topBarCellCount - 1
+	splitPaneGap      = 1
 )
 
 func (m Model) shellContentWidth() int {
