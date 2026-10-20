@@ -127,8 +127,8 @@ func (s *SQLService) Subscribe(ctx context.Context, in SubscribeInput) (*Subscri
 	// Atomic upsert-by-email. If a subscriber row already exists in any
 	// status we DO NOT overwrite it — that would lose the confirmed/
 	// unsubscribed signal for repeat submissions. Instead we branch:
-	//   PENDING_CONFIRMATION  → reissue a fresh token (old one still
-	//                           hashes the same — but mark as used).
+	//   PENDING_CONFIRMATION  → reissue a fresh token (mark older unused
+	//                           tokens used so their links stop working).
 	//   CONFIRMED             → no-op, set AlreadyConfirmed.
 	//   UNSUBSCRIBED          → re-open: flip to PENDING_CONFIRMATION
 	//                           and issue a fresh token. Treat as new
@@ -260,9 +260,19 @@ where id = $3 and status = $4
 `, StatusExpired, now, subID, StatusPendingConfirmation)
 		return nil, ErrInvalidToken
 	}
-	// Already-confirmed via this same token: idempotent.
+	// Token already consumed:
+	//   - subscriber CONFIRMED → idempotent re-click of the same link
+	//   - still PENDING (or other) → token was invalidated by a re-subscribe
+	//     that marked older rows used_at without confirming
 	if usedAt.Valid {
-		return s.findByID(ctx, subID)
+		sub, err := s.findByID(ctx, subID)
+		if err != nil {
+			return nil, err
+		}
+		if sub.Status == StatusConfirmed {
+			return sub, nil
+		}
+		return nil, ErrInvalidToken
 	}
 	// Single-tx flip: mark token used + subscriber confirmed.
 	tx, err := s.DB.BeginTx(ctx, nil)

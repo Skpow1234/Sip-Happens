@@ -12,11 +12,15 @@ import (
 
 // SignRequest adds HMAC v2 headers for integration tests and e2e smoke runs.
 func SignRequest(req *http.Request, secret []byte, keyID, fingerprint string) error {
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		return err
+	var body []byte
+	if req.Body != nil {
+		var err error
+		body, err = io.ReadAll(req.Body)
+		if err != nil {
+			return err
+		}
+		_ = req.Body.Close()
 	}
-	_ = req.Body.Close()
 	req.Body = io.NopCloser(bytes.NewReader(body))
 
 	ts := strconv.FormatInt(time.Now().Unix(), 10)

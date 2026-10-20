@@ -59,9 +59,9 @@ func extractBearerToken(r *http.Request) string {
 // Write scopes imply their matching read scope (orders:write → orders:read, etc.).
 func scopeAllows(granted []domain.PersonalAccessTokenScope, need domain.PersonalAccessTokenScope) bool {
 	implied := map[domain.PersonalAccessTokenScope]domain.PersonalAccessTokenScope{
-		domain.PATScopeOrdersWrite:         domain.PATScopeOrdersRead,
-		domain.PATScopeSubscriptionsWrite:  domain.PATScopeSubscriptionsRead,
-		domain.PATScopeProfileWrite:        domain.PATScopeProfileRead,
+		domain.PATScopeOrdersWrite:        domain.PATScopeOrdersRead,
+		domain.PATScopeSubscriptionsWrite: domain.PATScopeSubscriptionsRead,
+		domain.PATScopeProfileWrite:       domain.PATScopeProfileRead,
 	}
 	for _, g := range granted {
 		if g == need {
