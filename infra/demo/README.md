@@ -2,6 +2,10 @@
 
 Used by `compose.dev.yaml` and `bash scripts/dev-up.sh`.
 
+Private keys here must **not** be copied into production images. The
+`core-api` Dockerfile only ships `sip-happens-demo.pub` for seed; see
+`.dockerignore`.
+
 | File | Purpose |
 |------|---------|
 | `sip-happens-demo` (+ `.pub`) | Customer keypair (empty passphrase, **local-only**) |

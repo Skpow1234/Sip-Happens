@@ -1,0 +1,9 @@
+# Keep build contexts lean and keep local-only secrets out of every image.
+.git
+.github
+**/*_test.go
+**/testdata
+
+# Demo SSH private keys are for local Compose mounts only (infra/demo/README.md).
+infra/demo/sip-happens-demo
+infra/demo/ssh_host_ed25519_key

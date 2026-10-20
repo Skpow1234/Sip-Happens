@@ -24,7 +24,9 @@ COPY --from=build /out/core-api /app/core-api
 COPY --from=build /out/core-jobs /app/core-jobs
 COPY --from=build /out/core-migrate /app/core-migrate
 COPY infra/migrations /app/infra/migrations
-COPY infra/demo /app/infra/demo
+# Seed needs the demo *public* key only. Never ship private keys
+# (sip-happens-demo, ssh_host_ed25519_key) — Trivy and attackers both flag them.
+COPY infra/demo/sip-happens-demo.pub /app/infra/demo/sip-happens-demo.pub
 COPY docs/openapi.yaml /app/docs/openapi.yaml
 EXPOSE 8080
 ENTRYPOINT ["/app/core-api"]
