@@ -79,9 +79,6 @@ on conflict (ssh_fingerprint) do nothing
 	if created.PersonalAccessToken.ID == "" || !strings.HasPrefix(created.PersonalAccessToken.ID, "pat_") {
 		t.Fatalf("public id: %q", created.PersonalAccessToken.ID)
 	}
-	if !strings.HasPrefix(created.Token, "pat_") || strings.Count(created.Token, "_") != 2 {
-		t.Fatalf("raw token shape: %q", created.Token)
-	}
 	if created.PersonalAccessToken.TokenPrefix == "" || len(created.PersonalAccessToken.TokenPrefix) != 32 {
 		t.Fatalf("token prefix: %q", created.PersonalAccessToken.TokenPrefix)
 	}
@@ -89,10 +86,10 @@ on conflict (ssh_fingerprint) do nothing
 		t.Fatalf("scopes: %v", created.PersonalAccessToken.Scopes)
 	}
 
-	// The raw token reported back must actually match what the DB stored.
+	// base64url secrets may contain '_'; validate shape via the real parser.
 	parsedPrefix, err := tokens.ParseRawToken(created.Token)
 	if err != nil {
-		t.Fatalf("parse raw token: %v", err)
+		t.Fatalf("raw token shape: %q (%v)", created.Token, err)
 	}
 	if parsedPrefix != created.PersonalAccessToken.TokenPrefix {
 		t.Fatalf("parsed prefix %q != stored %q", parsedPrefix, created.PersonalAccessToken.TokenPrefix)
