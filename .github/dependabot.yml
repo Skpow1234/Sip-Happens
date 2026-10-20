@@ -16,6 +16,8 @@ updates:
     groups:
       ci-actions:
         patterns: ["*"]
+    # Covers workflow actions and local composite action pins under
+    # .github/actions/*/action.yml (setup-go → actions/setup-go).
     open-pull-requests-limit: 5
     commit-message:
       prefix: "ci(actions)"

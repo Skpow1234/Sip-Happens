@@ -9,12 +9,11 @@ import (
 // `Authorization: Bearer <pat>` header instead of HMAC. Used by
 // programmatic clients that hold a personal access token (PAT) rather
 // than an SSH-derived HMAC secret. The PAT is the same string the user
-// got from PersonalAccessTokenCreateResult.Token; the core-api validates
-// it through the same tokens.SQLRepository the /tokens CRUD writes to.
+// got from PersonalAccessTokenCreateResult.Token; core-api validates it
+// in requireSigned (GetByPrefix + SHA-256 verify) and enforces scopes.
 //
 // X-SSH-Fingerprint is still set when provided so audit rows keep the
-// "who" attribution; core-api treats the PAT as the source of truth for
-// authentication and the fingerprint as a tag.
+// "who" attribution; it must match the token owner when present.
 //
 // The X-Request-Id header is auto-generated when missing for correlation.
 type BearerRoundTripper struct {

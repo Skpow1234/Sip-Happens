@@ -1,12 +1,13 @@
 # Base digests: infra/docker/base-images.env — see docs/ops/docker-image-security.md
 #
-# The base image is a *bootstrap* — its Go version (1.25 here) just needs
-# to be recent enough to honour `GOTOOLCHAIN=auto`. The actual Go used to
-# compile binaries is whatever `go.mod`'s `toolchain` line declares; the
-# Go runtime downloads it transparently from proxy.golang.org and verifies
-# it against the embedded release keys. Bumping `go.mod` therefore does
-# NOT require a Dockerfile edit; just `scripts/docker-refresh-digests.sh`
-# when you want to advance the security pin on the bootstrap.
+# The base image is a *bootstrap* — its Go version just needs to be recent
+# enough to honour `GOTOOLCHAIN=auto`. The actual Go used to compile
+# binaries is whatever `go.mod`'s `toolchain` line declares (currently
+# go1.26.10); the Go runtime downloads it transparently from
+# proxy.golang.org and verifies it against the embedded release keys.
+# Bumping `go.mod` therefore does NOT require a Dockerfile edit; just
+# `scripts/docker-refresh-digests.sh` when you want to advance the
+# security pin on the bootstrap.
 FROM golang:1.25@sha256:699337d620559a59b4a2bb298ad59611e535d2ee755a34cf2d2a98f37578dc80 AS build
 ENV GOTOOLCHAIN=auto
 WORKDIR /src

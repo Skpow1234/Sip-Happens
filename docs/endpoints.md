@@ -74,14 +74,18 @@ Stripe Billing; Checkout in subscription mode.
 
 ## Signed — personal access tokens
 
-For scripts / non-SSH API access. Tokens are minted and stored; **Bearer-PAT middleware on signed routes is still unfinished** — see [milestones](milestones.md).
+For scripts / non-SSH API access. Mint via HMAC (SSH gateway), then call signed routes with:
 
-- `GET /tokens` — list (`limit`, `offset`, `has_more`); raw secrets are **never** included
-- `POST /tokens` — create (body: `name`, `scopes[]`, optional `expires_at`); raw `pat_<prefix>_<secret>` returned **once**. Server stores SHA-256(raw) + indexed prefix only.
-- `GET /tokens/{id}` — metadata (`pat_…` or UUID)
-- `DELETE /tokens/{id}` — revoke (idempotent)
+`Authorization: Bearer pat_<prefix>_<secret>`
 
-Scopes: `catalog:read`, `cart:write`, `orders:read`, `orders:write`, `subscriptions:read`, `subscriptions:write`, `profile:read`, `profile:write`.
+Optional `X-SSH-Fingerprint` must match the token owner when set. Scopes are enforced for Bearer callers; HMAC (SSH) callers are unrestricted.
+
+- `GET /tokens` — list (`limit`, `offset`, `has_more`); raw secrets are **never** included (`profile:read`)
+- `POST /tokens` — create (body: `name`, `scopes[]`, optional `expires_at`); raw `pat_<prefix>_<secret>` returned **once**. Server stores SHA-256(raw) + indexed prefix only (`profile:write`)
+- `GET /tokens/{id}` — metadata (`pat_…` or UUID) (`profile:read`)
+- `DELETE /tokens/{id}` — revoke (idempotent) (`profile:write`)
+
+Scopes: `catalog:read`, `cart:write`, `orders:read`, `orders:write`, `subscriptions:read`, `subscriptions:write`, `profile:read`, `profile:write`. Write scopes imply the matching read scope.
 
 ## Signed — bootstrap
 

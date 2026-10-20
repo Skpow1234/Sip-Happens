@@ -6,7 +6,7 @@ Base images are pinned by digest; CVE notes: [docker-image-security](ops/docker-
 
 ## Optional: local Go / IDE
 
-`go.mod` requires **Go 1.25+** (`toolchain go1.25.10`). If the shell or editor still uses Go 1.24.x you will see `packages.Load` / `GOTOOLCHAIN=local` errors.
+`go.mod` requires **Go 1.26+** (`toolchain go1.26.10`). If the shell or editor still uses an older Go you will see `packages.Load` / `GOTOOLCHAIN=local` errors.
 
 - **Cursor / VS Code:** set `GOTOOLCHAIN=auto` for gopls:
 
@@ -17,7 +17,7 @@ Base images are pinned by digest; CVE notes: [docker-image-security](ops/docker-
 }
 ```
 
-- **Terminal:** `export GOTOOLCHAIN=auto` before `go test` / `go build`, or install Go 1.25+ system-wide.
+- **Terminal:** `export GOTOOLCHAIN=auto` before `go test` / `go build`, or install Go 1.26+ system-wide.
 
 Docker builds already set `GOTOOLCHAIN=auto`.
 

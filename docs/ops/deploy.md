@@ -54,6 +54,8 @@ cp infra/authorized_keys.example /secure/authorized_keys
 
 ### 4. Bring up production
 
+Prefer images from GHCR when a release tag exists (`ghcr.io/<owner>/<repo>/core-api:<tag>` and `…/ssh-gateway:<tag>` from the **release** workflow). Otherwise Compose builds from the Dockerfiles on the host:
+
 ```bash
 docker compose -f infra/compose.yaml -f infra/compose.prod.yaml --env-file .env.prod up -d
 docker compose -f infra/compose.yaml -f infra/compose.prod.yaml --env-file .env.prod run --rm core-migrate up

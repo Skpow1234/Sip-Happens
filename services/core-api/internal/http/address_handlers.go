@@ -215,6 +215,9 @@ func (s *Server) handleAddressDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) customerIDFromRequest(w http.ResponseWriter, r *http.Request) (domain.CustomerID, bool) {
+	if id, ok := patCustomerIDFromContext(r.Context()); ok {
+		return id, true
+	}
 	if s.Customers == nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
 		return "", false

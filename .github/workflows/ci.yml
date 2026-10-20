@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: ["main", "master"]
+  workflow_dispatch:
 
 # Principle of least privilege: workflow-level read-only token. Individual
 # jobs that need write access (e.g. release publishing) must escalate
@@ -13,8 +14,8 @@ permissions:
   contents: read
 
 # Cancel superseded PR runs so stacked pushes don't burn minutes. Branch
-# pushes use a unique key per SHA so two successive main pushes do not
-# clobber each other.
+# pushes / workflow_dispatch use a unique key per run so successive main
+# pushes do not clobber each other mid-flight.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -23,24 +24,20 @@ env:
   # Pinning -count=1 disables the test result cache so flakes can't masquerade
   # as passes when re-run. Cheap insurance on a project this size.
   GOFLAGS: "-count=1"
+  # Reproducible vuln scanner: bump deliberately when x/vuln releases matter.
+  GOVULNCHECK_VERSION: "v1.9.0"
 
 jobs:
   # -------------------------------------------------------------------------
   # lint — fast checks with no external services (no Postgres, no Docker).
-  # Runs in parallel with unit + integration so a missing gofmt fails the PR
-  # in ~30s instead of waiting behind a 4-minute integration suite.
   # -------------------------------------------------------------------------
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go
 
       - name: gofmt
         run: |
@@ -57,7 +54,7 @@ jobs:
       - name: staticcheck
         # Pinned action handles install + caching; bumping the staticcheck
         # release here keeps lint in sync with the Go version in go.mod
-        # (2026.1 covers Go 1.25). Dependabot tracks the action version.
+        # (2026.1 covers Go 1.26). Dependabot tracks the action version.
         uses: dominikh/staticcheck-action@v1.4.1
         with:
           version: "2026.1"
@@ -77,26 +74,31 @@ jobs:
       - name: Migration linearity (no gaps, no duplicates)
         run: bash scripts/check-migration-linearity.sh
 
+      - name: OpenAPI document parses
+        # Cheap structural gate: YAML must load and declare openapi + paths.
+        # Uses Ruby (preinstalled on ubuntu-24.04 runners) — no pip/network.
+        run: |
+          ruby -ryaml -e '
+            doc = YAML.load_file("docs/openapi.yaml")
+            abort "docs/openapi.yaml missing required openapi/paths keys" unless doc.is_a?(Hash) && doc["openapi"] && doc["paths"]
+            puts "openapi #{doc["openapi"]}: #{doc["paths"].size} paths"
+          '
+
       - name: shellcheck
         # shellcheck ships pre-installed on ubuntu-latest. Scoped to
         # scripts/*.sh so we don't lint vendored / generated shell.
         run: shellcheck scripts/*.sh
 
   # -------------------------------------------------------------------------
-  # unit — race-enabled tests for packages that DO NOT need Postgres. Fast
-  # signal on logic-level regressions (TUI, pkg/*, ssh-gateway client).
+  # unit — race-enabled tests for packages that DO NOT need Postgres.
   # -------------------------------------------------------------------------
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go
 
       - name: Unit tests (race detector, no DB)
         # Race detector is roughly 2x slower but it's the only realistic way
@@ -110,40 +112,17 @@ jobs:
             ./services/ssh-gateway/...
 
   # -------------------------------------------------------------------------
-  # integration — Postgres-backed tests, migration smoke, outbox multi-node
-  # claim, e2e HTTP smoke. Race detector is on for everything: the order /
-  # reservation / outbox-claim code is exactly where data races would hurt.
+  # security — govulncheck on shipped entrypoints (must pass). Independent
+  # of Postgres so a CVE blocks the PR in ~1–2 minutes, not behind
+  # integration.
   # -------------------------------------------------------------------------
-  integration:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: beer_shop
-          POSTGRES_USER: beer
-          POSTGRES_PASSWORD: beer
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U beer -d beer_shop"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      POSTGRES_DSN: postgres://beer:beer@localhost:5432/beer_shop?sslmode=disable
-
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go
 
       - name: Vulnerability scan — production binaries (must pass)
         # Scope this scan to the four entry points that actually ship:
@@ -157,11 +136,10 @@ jobs:
         # space-separated patterns become one invalid pattern and exit
         # with "no packages matched the provided patterns".
         #
-        # GOTOOLCHAIN=auto: govulncheck@latest (x/vuln v1.9+) requires Go
-        # >= 1.26 while this module pins toolchain go1.25.10 and setup-go
-        # sets GOTOOLCHAIN=local — without auto, `go install` fails.
+        # GOTOOLCHAIN=auto: govulncheck may require a newer Go than the
+        # runner bootstrap; go.mod's toolchain line still drives builds.
         run: |
-          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+          GOTOOLCHAIN=auto go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           govulncheck \
             ./services/core-api/cmd/api/... \
             ./services/core-api/cmd/jobs/... \
@@ -170,13 +148,74 @@ jobs:
 
       - name: Vulnerability scan — full tree (advisory)
         # Surfaces test-rig CVEs (e.g. transitively via testcontainers)
-        # so we can prioritise upstream dep bumps, but never blocks merge:
-        # nothing here is in the shipped binary's call graph.
-        # Same GOTOOLCHAIN=auto note as the production scan above.
+        # so we can prioritise upstream dep bumps, but never blocks merge.
         continue-on-error: true
         run: |
-          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+          GOTOOLCHAIN=auto go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           govulncheck ./...
+
+  # -------------------------------------------------------------------------
+  # build — compile production binaries early (parallel with tests). Catches
+  # broken imports / type errors without waiting for Docker or Postgres.
+  # -------------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-go
+
+      - name: Build production binaries
+        run: |
+          set -euo pipefail
+          mkdir -p bin
+          CGO_ENABLED=0 go build -trimpath -o bin/core-api ./services/core-api/cmd/api
+          CGO_ENABLED=0 go build -trimpath -o bin/core-jobs ./services/core-api/cmd/jobs
+          CGO_ENABLED=0 go build -trimpath -o bin/core-migrate ./services/core-api/cmd/migrate
+          CGO_ENABLED=0 go build -trimpath -o bin/ssh-gateway ./services/ssh-gateway/cmd/server
+          ls -la bin/
+
+      - name: Upload binaries (debug artifact)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-binaries-${{ github.run_id }}
+          path: bin/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # integration — Postgres-backed tests, migration smoke, outbox multi-node
+  # claim, e2e HTTP smoke.
+  # -------------------------------------------------------------------------
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: beer_shop
+          POSTGRES_USER: beer
+          POSTGRES_PASSWORD: beer
+        ports:
+          - 5432:5432
+        options: >-
+          --shm-size=256mb
+          --health-cmd "pg_isready -U beer -d beer_shop"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      POSTGRES_DSN: postgres://beer:beer@localhost:5432/beer_shop?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-go
 
       - name: Core-API integration tests (race, Postgres)
         run: |
@@ -187,104 +226,151 @@ jobs:
         # the canonical migrator must also apply cleanly against the live
         # public schema. Catches per-migration scoping bugs that the test
         # helper papers over with search_path tricks.
-        #
-        # Migrations are tracked in-repo (M1). hashFiles is a safety net
-        # if the tree is somehow empty.
-        if: hashFiles('infra/migrations/*.sql') != ''
         run: |
           go run ./services/core-api/cmd/migrate up
 
-      - name: Checkout concurrency (integration)
-        run: |
-          go test -race ./services/core-api/internal/orders/... \
-            -run TestConcurrentCreatePendingOrder -v
-
       - name: Outbox multi-node claim (two dispatch workers)
-        # Requires outbox_events (migration 005) from tracked migrations.
-        if: hashFiles('infra/migrations/*.sql') != ''
         run: |
           bash scripts/outbox-multi-node-ci.sh
           go test -race ./services/core-api/internal/outbox/... \
             -run TestMultiNodeOutboxDispatch -v
 
       - name: E2E smoke (seed demo + core-api + HTTP checks)
-        # Depends on migrate + seed against the schema from infra/migrations.
-        if: hashFiles('infra/migrations/*.sql') != ''
         env:
           HTTP_ADDR: ":18080"
           CORE_API_HMAC_KEYS: dev:dev-hmac-secret
           CORE_API_HMAC_KEY_ID: dev
           EMAIL_PROVIDER: log
         run: |
+          set -euo pipefail
           go run ./services/core-api/cmd/api seed demo
           go run ./services/core-api/cmd/api &
           API_PID=$!
-          trap 'kill $API_PID 2>/dev/null || true' EXIT
-          # Wait for the API to bind before firing the smoke harness;
-          # otherwise the first request can race the listener and turn
-          # into a flaky ECONNREFUSED on slow runners.
-          for i in $(seq 1 30); do
+          cleanup() { kill "$API_PID" 2>/dev/null || true; wait "$API_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          ready=0
+          for _ in $(seq 1 45); do
             if curl -fsS http://localhost:18080/healthz >/dev/null 2>&1; then
+              ready=1
               break
+            fi
+            # Bail early if the process died before binding.
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              echo "::error::core-api exited before becoming healthy"
+              exit 1
             fi
             sleep 1
           done
+          if [[ "$ready" -ne 1 ]]; then
+            echo "::error::core-api failed to become healthy within 45s"
+            exit 1
+          fi
+
           export BASE_URL=http://localhost:18080
           export SSH_FINGERPRINT=demo:ssh-fingerprint
           export CORE_API_HMAC_KEYS=dev:dev-hmac-secret
           go run ./services/core-api/cmd/e2e-smoke
 
   # -------------------------------------------------------------------------
-  # docker — compose build verifies Dockerfiles still build with the current
-  # go.mod and Alpine base. Depends on the three test jobs so a broken
-  # Dockerfile doesn't mask a real test failure (and vice versa we don't
-  # waste a 2-minute build when tests are red).
+  # docker — build production images with Buildx + GHA layer cache, then
+  # Trivy CRITICAL/HIGH gate. Depends on the test/build jobs so a broken
+  # Dockerfile doesn't mask a real test failure (and we don't waste a
+  # multi-minute build when earlier jobs are red).
   # -------------------------------------------------------------------------
   docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [lint, unit, integration]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [lint, unit, security, build, integration]
+    # Buildx type=gha cache requires actions: write under the workflow's
+    # default contents:read permission set.
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
-      - name: Stub gitignored Dockerfile COPY sources
-        # Safety stubs only if COPY sources are somehow missing (M1 tracks
-        # migrations, demo pubkeys/host key, and docs/openapi.yaml).
-        # NOTE: avoid heredocs in `run: |` YAML blocks — use printf.
+      - name: Build core-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/core-api/Dockerfile
+          push: false
+          load: true
+          tags: sip-happens/core-api:ci
+          cache-from: type=gha,scope=core-api
+          cache-to: type=gha,mode=max,scope=core-api
+
+      - name: Build ssh-gateway image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/ssh-gateway/Dockerfile
+          push: false
+          load: true
+          tags: sip-happens/ssh-gateway:ci
+          cache-from: type=gha,scope=ssh-gateway
+          cache-to: type=gha,mode=max,scope=ssh-gateway
+
+      - name: Trivy — core-api (CRITICAL/HIGH must be clean)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: sip-happens/core-api:ci
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+
+      - name: Trivy — ssh-gateway (CRITICAL/HIGH must be clean)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: sip-happens/ssh-gateway:ci
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+
+      - name: Compose config validates
+        # Ensures compose overlays still parse after Dockerfile / service
+        # edits. Does not start containers (images above already built).
+        run: |
+          docker compose -f infra/compose.yaml -f infra/compose.dev.yaml config >/dev/null
+          docker compose -f infra/compose.yaml -f infra/compose.prod.yaml config >/dev/null
+
+  # -------------------------------------------------------------------------
+  # ci — single required status check for branch protection. Always runs
+  # so a skipped/cancelled upstream cannot leave the PR looking "pending".
+  # -------------------------------------------------------------------------
+  ci:
+    name: CI
+    runs-on: ubuntu-24.04
+    if: always()
+    needs: [lint, unit, security, build, integration, docker]
+    steps:
+      - name: Require all jobs green
         run: |
           set -euo pipefail
-          if [ -z "$(ls -A infra/migrations/*.sql 2>/dev/null || true)" ]; then
-            mkdir -p infra/migrations
-            printf '%s\n' \
-              '-- CI build-verification placeholder only; real migrations should be tracked.' \
-              'select 1;' \
-              > infra/migrations/000_ci_placeholder.sql
-            echo "stubbed infra/migrations/000_ci_placeholder.sql"
+          declare -A results=(
+            [lint]="${{ needs.lint.result }}"
+            [unit]="${{ needs.unit.result }}"
+            [security]="${{ needs.security.result }}"
+            [build]="${{ needs.build.result }}"
+            [integration]="${{ needs.integration.result }}"
+            [docker]="${{ needs.docker.result }}"
+          )
+          bad=0
+          for job in lint unit security build integration docker; do
+            r="${results[$job]}"
+            echo "$job=$r"
+            if [[ "$r" != "success" ]]; then
+              bad=1
+            fi
+          done
+          if [[ "$bad" -ne 0 ]]; then
+            echo "::error::One or more required CI jobs did not succeed."
+            exit 1
           fi
-          if [ ! -f infra/demo/sip-happens-demo.pub ]; then
-            mkdir -p infra/demo
-            printf '%s\n' \
-              '# CI placeholder — tracked demo pubkey missing unexpectedly.' \
-              > infra/demo/README.ci-placeholder.md
-            echo "stubbed infra/demo (pubkey missing)"
-          fi
-          if [ ! -f docs/openapi.yaml ]; then
-            mkdir -p docs
-            printf '%s\n' \
-              'openapi: 3.0.0' \
-              'info:' \
-              '  title: sip-happens (CI placeholder)' \
-              '  version: 0.0.0-ci' \
-              'paths: {}' \
-              > docs/openapi.yaml
-            echo "stubbed docs/openapi.yaml"
-          fi
-
-      - name: Docker build (compose)
-        # We don't push — this is purely a build verification so a Dockerfile
-        # edit (FROM bump, COPY path change) is caught before merge.
-        run: |
-          docker compose -f infra/compose.yaml -f infra/compose.dev.yaml build
+          echo "All required CI jobs succeeded."

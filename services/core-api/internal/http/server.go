@@ -187,42 +187,42 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/catalog", s.handleCatalog)
 		mux.HandleFunc("/catalog/", s.handleCatalogDetail)
 	}
-	mux.Handle("GET /orders", s.requireSigned(http.HandlerFunc(s.handleOrders)))
-	mux.Handle("POST /orders", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleOrderCreate)))))
+	mux.Handle("GET /orders", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersRead, http.HandlerFunc(s.handleOrders))))
+	mux.Handle("POST /orders", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersWrite, checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleOrderCreate))))))
 	// More specific than /orders/ — Go 1.22 mux picks the longest method+pattern
 	// match. Customer-self-cancel of own PENDING_PAYMENT order. Rate-limited
 	// (checkoutRL) and idem-wrapped to deduplicate noisy retries.
-	mux.Handle("POST /orders/{ref}/cancel", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCustomerCancelOrder)))))
-	mux.Handle("/orders/", s.requireSigned(http.HandlerFunc(s.handleGetOrder)))
-	mux.Handle("GET /subscriptions", s.requireSigned(http.HandlerFunc(s.handleSubscriptions)))
-	mux.Handle("POST /subscriptions", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleSubscriptionCreate)))))
-	mux.Handle("/subscriptions/", s.requireSigned(http.HandlerFunc(s.handleSubscriptionByID)))
-	mux.Handle("/tokens", s.requireSigned(http.HandlerFunc(s.handleTokens)))
-	mux.Handle("/tokens/", s.requireSigned(http.HandlerFunc(s.handleTokenByID)))
-	mux.Handle("POST /oauth/authorize", s.requireSigned(checkoutRL.Wrap(http.HandlerFunc(s.handleOAuthAuthorize))))
+	mux.Handle("POST /orders/{ref}/cancel", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersWrite, checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCustomerCancelOrder))))))
+	mux.Handle("/orders/", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersRead, http.HandlerFunc(s.handleGetOrder))))
+	mux.Handle("GET /subscriptions", s.requireSigned(s.requirePATScope(domain.PATScopeSubscriptionsRead, http.HandlerFunc(s.handleSubscriptions))))
+	mux.Handle("POST /subscriptions", s.requireSigned(s.requirePATScope(domain.PATScopeSubscriptionsWrite, checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleSubscriptionCreate))))))
+	mux.Handle("/subscriptions/", s.requireSigned(s.requirePATScopeRW(domain.PATScopeSubscriptionsRead, domain.PATScopeSubscriptionsWrite, http.HandlerFunc(s.handleSubscriptionByID))))
+	mux.Handle("/tokens", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleTokens))))
+	mux.Handle("/tokens/", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleTokenByID))))
+	mux.Handle("POST /oauth/authorize", s.requireSigned(s.requirePATScope(domain.PATScopeProfileWrite, checkoutRL.Wrap(http.HandlerFunc(s.handleOAuthAuthorize)))))
 	mux.HandleFunc("POST /oauth/token", s.handleOAuthToken)
-	mux.Handle("/oauth/clients", s.requireSigned(http.HandlerFunc(s.handleOAuthClients)))
-	mux.Handle("/oauth/clients/", s.requireSigned(http.HandlerFunc(s.handleOAuthClientByID)))
-	mux.Handle("GET /view/init", s.requireSigned(http.HandlerFunc(s.handleViewInit)))
-	mux.Handle("/customers/me", s.requireSigned(http.HandlerFunc(s.handleCustomerMe)))
-	mux.Handle("/profile", s.requireSigned(http.HandlerFunc(s.handleProfile)))
-	mux.Handle("/addresses", s.requireSigned(http.HandlerFunc(s.handleAddresses)))
-	mux.Handle("/addresses/", s.requireSigned(http.HandlerFunc(s.handleAddressByID)))
-	mux.Handle("POST /payment-methods/collect", s.requireSigned(http.HandlerFunc(s.handlePaymentMethodsCollect)))
-	mux.Handle("/payment-methods", s.requireSigned(http.HandlerFunc(s.handlePaymentMethods)))
-	mux.Handle("/payment-methods/", s.requireSigned(http.HandlerFunc(s.handlePaymentMethodByID)))
-	mux.Handle("/cart/items/", s.requireSigned(http.HandlerFunc(s.handleCartItemByID)))
-	mux.Handle("/cart/address", s.requireSigned(http.HandlerFunc(s.handleCartAddress)))
-	mux.Handle("/cart/payment-method", s.requireSigned(http.HandlerFunc(s.handleCartPaymentMethod)))
-	mux.Handle("/cart/convert", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCartConvert)))))
-	mux.Handle("/cart", s.requireSigned(http.HandlerFunc(s.handleCart)))
-	mux.Handle("/shipping/estimate", s.requireSigned(http.HandlerFunc(s.handleShippingEstimate)))
+	mux.Handle("/oauth/clients", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleOAuthClients))))
+	mux.Handle("/oauth/clients/", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleOAuthClientByID))))
+	mux.Handle("GET /view/init", s.requireSigned(s.requirePATScope(domain.PATScopeProfileRead, http.HandlerFunc(s.handleViewInit))))
+	mux.Handle("/customers/me", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleCustomerMe))))
+	mux.Handle("/profile", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleProfile))))
+	mux.Handle("/addresses", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleAddresses))))
+	mux.Handle("/addresses/", s.requireSigned(s.requirePATScopeRW(domain.PATScopeProfileRead, domain.PATScopeProfileWrite, http.HandlerFunc(s.handleAddressByID))))
+	mux.Handle("POST /payment-methods/collect", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersWrite, http.HandlerFunc(s.handlePaymentMethodsCollect))))
+	mux.Handle("/payment-methods", s.requireSigned(s.requirePATScopeRW(domain.PATScopeOrdersRead, domain.PATScopeOrdersWrite, http.HandlerFunc(s.handlePaymentMethods))))
+	mux.Handle("/payment-methods/", s.requireSigned(s.requirePATScopeRW(domain.PATScopeOrdersRead, domain.PATScopeOrdersWrite, http.HandlerFunc(s.handlePaymentMethodByID))))
+	mux.Handle("/cart/items/", s.requireSigned(s.requirePATScope(domain.PATScopeCartWrite, http.HandlerFunc(s.handleCartItemByID))))
+	mux.Handle("/cart/address", s.requireSigned(s.requirePATScope(domain.PATScopeCartWrite, http.HandlerFunc(s.handleCartAddress))))
+	mux.Handle("/cart/payment-method", s.requireSigned(s.requirePATScope(domain.PATScopeCartWrite, http.HandlerFunc(s.handleCartPaymentMethod))))
+	mux.Handle("/cart/convert", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersWrite, checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCartConvert))))))
+	mux.Handle("/cart", s.requireSigned(s.requirePATScope(domain.PATScopeCartWrite, http.HandlerFunc(s.handleCart))))
+	mux.Handle("/shipping/estimate", s.requireSigned(s.requirePATScope(domain.PATScopeCartWrite, http.HandlerFunc(s.handleShippingEstimate))))
 	// Public newsletter subscribe with double-opt-in (Ley 1581).
 	// Rate-limited via checkoutRL to prevent enumeration / spam.
 	mux.Handle("POST /email", checkoutRL.Wrap(http.HandlerFunc(s.handleEmailSubscribe)))
 	mux.HandleFunc("GET /email/confirm", s.handleEmailConfirm)
 	mux.Handle("POST /email/unsubscribe", checkoutRL.Wrap(http.HandlerFunc(s.handleEmailUnsubscribe)))
-	mux.Handle("/checkout", s.requireSigned(checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout)))))
+	mux.Handle("/checkout", s.requireSigned(s.requirePATScope(domain.PATScopeOrdersWrite, checkoutRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleCheckout))))))
 	mux.Handle("/admin/products", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProducts))))
 	mux.Handle("/admin/products/", adminRL.Wrap(idem.Wrap(http.HandlerFunc(s.handleAdminProductDetail))))
 	mux.Handle("POST /admin/products/{id}/image", adminRL.Wrap(http.HandlerFunc(s.handleAdminProductImage)))
@@ -261,29 +261,46 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) requireSigned(next http.Handler) http.Handler {
-	// For local prototyping, if no secret is configured we accept unsigned requests.
-	if strings.TrimSpace(s.CoreAPIHMACSecret) == "" && len(s.CoreAPIHMACKeys) == 0 {
-		return next
-	}
-	if s.DB == nil {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
-		})
-	}
-	keys := map[string][]byte{}
-	for k, v := range s.CoreAPIHMACKeys {
-		if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
-			continue
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bearer := extractBearerToken(r)
+		if bearer != "" {
+			if _, err := tokens.ParseRawToken(bearer); err == nil {
+				s.serveWithPAT(w, r, bearer, next)
+				return
+			}
 		}
-		keys[strings.TrimSpace(k)] = []byte(strings.TrimSpace(v))
-	}
-	m := &HMACMiddleware{
-		LegacySecret: []byte(s.CoreAPIHMACSecret),
-		Secrets:      keys,
-		Tolerance:    5 * time.Minute,
-		Nonces:       &SQLNonceStore{DB: s.DB},
-	}
-	return m.Wrap(next)
+
+		hmacConfigured := strings.TrimSpace(s.CoreAPIHMACSecret) != "" || len(s.CoreAPIHMACKeys) > 0
+		// Local prototyping: no HMAC secrets → accept unsigned requests, unless
+		// a non-PAT Authorization Bearer was sent (do not treat admin tokens as
+		// customer auth on signed routes).
+		if !hmacConfigured {
+			if bearer != "" {
+				writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "unauthorized")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if s.DB == nil {
+			writeAPIError(w, r, http.StatusInternalServerError, "misconfigured", "server misconfigured")
+			return
+		}
+		keys := map[string][]byte{}
+		for k, v := range s.CoreAPIHMACKeys {
+			if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
+				continue
+			}
+			keys[strings.TrimSpace(k)] = []byte(strings.TrimSpace(v))
+		}
+		m := &HMACMiddleware{
+			LegacySecret: []byte(s.CoreAPIHMACSecret),
+			Secrets:      keys,
+			Tolerance:    5 * time.Minute,
+			Nonces:       &SQLNonceStore{DB: s.DB},
+		}
+		m.Wrap(next).ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,22 @@
 # Testing
 
+## CI map (GitHub Actions)
+
+Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). Require the single
+check named **CI** in branch protection (it aggregates the jobs below).
+
+| Job | What it gates |
+|-----|----------------|
+| `lint` | gofmt, vet, staticcheck, `go mod tidy`, migration linearity, OpenAPI YAML parse, shellcheck |
+| `unit` | race tests for `pkg/…` + `ssh-gateway` (no Postgres) |
+| `security` | `govulncheck` on shipped entrypoints (blocking); full-tree advisory |
+| `build` | `CGO_ENABLED=0` compile of api / jobs / migrate / ssh-gateway |
+| `integration` | race `core-api` tests + migrate up + outbox multi-node + HTTP e2e smoke |
+| `docker` | Buildx images with GHA layer cache + Trivy CRITICAL/HIGH + compose config |
+| `CI` | Passes only when every job above is `success` |
+
+Release images (tag `v*` or manual): [`.github/workflows/release.yml`](../.github/workflows/release.yml) → GHCR.
+
 ## Unit
 
 No external dependencies:
@@ -28,7 +45,7 @@ go run ./services/core-api/cmd/api seed demo
 bash scripts/e2e-smoke.sh
 ```
 
-CI: `go run ./services/core-api/cmd/e2e-smoke` (gated on `infra/migrations/*.sql` existing).
+CI starts core-api, waits for `/healthz` (fails if the process dies or the wait times out), then runs `go run ./services/core-api/cmd/e2e-smoke`.
 
 ## Load / concurrency
 

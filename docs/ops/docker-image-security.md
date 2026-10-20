@@ -9,4 +9,6 @@ Application Dockerfiles pin base images **by digest** (Go builder + distroless/s
 - Runtime images are distroless — no shell; debug with ephemeral sidecars or `docker compose run` debug variants if you add them.
 - Host only needs Docker; do not install Go on production VMs for runtime.
 
-CVE remediation for a pinned digest: bump the digest in the service Dockerfile, rebuild, redeploy. Track advisories via `govulncheck` in CI (production entrypoints must pass; full-tree scan is advisory).
+CVE remediation for a pinned digest: bump the digest in the service Dockerfile, rebuild, redeploy. Track advisories via `govulncheck` in CI (production entrypoints must pass; full-tree scan is advisory). The `docker` CI job also runs Trivy CRITICAL/HIGH against freshly built images (`ignore-unfixed: true`).
+
+Published images: tag `v*` (or run the **release** workflow) pushes `core-api` and `ssh-gateway` to GHCR. Prefer pulling those digests/tags onto the host instead of building on the production VM when you can.

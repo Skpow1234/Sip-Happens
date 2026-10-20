@@ -7,14 +7,14 @@ GitHub **project milestones** on the remote are currently empty. This file is th
 | ID | Status | Focus |
 |----|--------|--------|
 | **M1** | **Done** | Tracked migrations (001–032), demo SSH assets, `docs/openapi.yaml` |
-| **M2** | Next | Bearer PAT middleware + scope enforcement + contract tests |
+| **M2** | **Done** | Bearer PAT middleware + scope enforcement + contract tests |
 | **M3** | Next | Production SSH shop live (deploy + Stripe + authorized_keys) |
 | **M4** | Next | Hardening: HMAC fail-closed, money-path tests, DIAN provider |
 | **M5** | Next | Product depth: cities, draft orders, split mega-packages |
 
 ## Shipped (MVP)
 
-SSH TUI shop, Stripe Checkout + webhooks/reconcile, inventory reservations, outbox→NATS fulfillment, admin RBAC, newsletter double-opt-in, Compose overlays, CI/govulncheck, observability basics, **M1 clone completeness**.
+SSH TUI shop, Stripe Checkout + webhooks/reconcile, inventory reservations, outbox→NATS fulfillment, admin RBAC, newsletter double-opt-in, Compose overlays, CI/govulncheck, observability basics, **M1 clone completeness**, **M2 Bearer PAT auth**.
 
 ## Engineering backlog
 
@@ -145,9 +145,9 @@ Concrete improvements mined from the codebase (handlers, SQL, TUI, Stripe, Compo
 | B0220 | auth | `admin-token-hash-at-rest` | Hash ADMIN_* tokens at rest |
 | B0221 | auth | `admin-token-rotation-api` | Audited rotation without redeploy |
 | B0222 | auth | `age-gate-replay` | Persist age verification with anti-replay |
-| B0223 | auth | `bearer-pat-middleware` | Wire Bearer PAT middleware via tokens.GetByPrefix + hash verify |
-| B0224 | auth | `bearer-pat-scope-enforce` | Enforce PAT scopes on cart/orders/profile/subscriptions |
-| B0225 | auth | `bearer-vs-hmac-contract-tests` | Contract tests for Bearer success/fail vs HMAC paths |
+| B0223 | auth | `bearer-pat-middleware` | ~~Done (M2)~~ Wire Bearer PAT middleware via tokens.GetByPrefix + hash verify |
+| B0224 | auth | `bearer-pat-scope-enforce` | ~~Done (M2)~~ Enforce PAT scopes on cart/orders/profile/subscriptions |
+| B0225 | auth | `bearer-vs-hmac-contract-tests` | ~~Done (M2)~~ Contract tests for Bearer success/fail vs HMAC paths |
 | B0226 | auth | `break-glass-admin` | Break-glass admin procedure |
 | B0227 | auth | `device-attestation-future` | Future device attestation research |
 | B0228 | auth | `fingerprint-spoof-hardening` | Reject unsigned fingerprint injection in prod |

@@ -1,0 +1,12 @@
+# Shared Go bootstrap for CI jobs. Keeps go-version-file + module cache
+# consistent so a toolchain bump in go.mod applies everywhere at once.
+name: Setup Go
+description: Install the Go toolchain declared in go.mod with module caching
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+        cache: true

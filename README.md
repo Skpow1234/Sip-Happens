@@ -44,8 +44,8 @@ Then: DNS → VM, firewall for SSH + HTTPS, load `authorized_keys`, point Stripe
 |-------|------|
 | API endpoints | [docs/endpoints.md](docs/endpoints.md) |
 | Environment & feature flags | [docs/environment.md](docs/environment.md) |
-| Milestones / backlog | [docs/milestones.md](docs/milestones.md) (M1 done; 900+ next items) |
-| Testing | [docs/testing.md](docs/testing.md) |
+| Milestones / backlog | [docs/milestones.md](docs/milestones.md) (M1–M2 done; M3 next; 900+ backlog) |
+| Testing & CI | [docs/testing.md](docs/testing.md) (require GitHub check **CI**) |
 | Observability | [docs/observability.md](docs/observability.md) |
 | Compose environments | [docs/ops/compose-environments.md](docs/ops/compose-environments.md) |
 | Runbooks (incidents, rotations) | [docs/runbooks/](docs/runbooks/) |
@@ -60,4 +60,4 @@ bash scripts/dev-reset.sh   # wipe volumes
 
 ## Optional: local Go
 
-`go.mod` needs **Go 1.25+** (`toolchain go1.25.10`). Use `GOTOOLCHAIN=auto` in the shell or editor if the host Go is older. Docker builds already set this.
+`go.mod` needs **Go 1.26+** (`toolchain go1.26.10`). Use `GOTOOLCHAIN=auto` in the shell or editor if the host Go is older. Docker builds already set this.
