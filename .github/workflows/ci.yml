@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload binaries (debug artifact)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-binaries-${{ github.run_id }}
           path: bin/
@@ -291,10 +291,10 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build core-api image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: services/core-api/Dockerfile
@@ -305,7 +305,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=core-api
 
       - name: Build ssh-gateway image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: services/ssh-gateway/Dockerfile
