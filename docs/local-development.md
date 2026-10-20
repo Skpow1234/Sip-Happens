@@ -80,13 +80,7 @@ curl -fsS http://localhost:8080/healthz
 ssh -F infra/demo/ssh_config sip-happens
 ```
 
-If `infra/demo/sip-happens-demo` is missing (private key is gitignored):
-
-```bash
-ssh-keygen -t ed25519 -f infra/demo/sip-happens-demo -N "" -C sip-happens-demo@local
-```
-
-Matching public key: `infra/demo/authorized_keys`. Fixed dev host key avoids `REMOTE HOST IDENTIFICATION HAS CHANGED` on recreate. See `infra/demo/README.md` when that tree is present.
+Demo keypair + host key are tracked under `infra/demo/` (empty passphrase, local-only). Fixed host key avoids `REMOTE HOST IDENTIFICATION HAS CHANGED` on recreate. See [`infra/demo/README.md`](../infra/demo/README.md).
 
 Dev HMAC is pre-wired: `CORE_API_HMAC_KEY_ID=dev`, `CORE_API_HMAC_KEYS=dev:dev-hmac-secret`.
 

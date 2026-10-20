@@ -109,7 +109,7 @@ services:
       # Dev: any SSH public key is accepted; demo seed customer uses this fingerprint when no key is offered.
       SSH_REQUIRE_AUTHORIZED_KEYS: ${SSH_REQUIRE_AUTHORIZED_KEYS:-0}
       SSH_AUTHORIZED_KEYS_PATH: ${SSH_AUTHORIZED_KEYS_PATH:-/data/authorized_keys}
-      SSH_DEV_FINGERPRINT: ${SSH_DEV_FINGERPRINT:-SHA256:bO2LRb2AvETPxiykJemvR1cPIDiRfLlTadBTHeqMLzM}
+      SSH_DEV_FINGERPRINT: ${SSH_DEV_FINGERPRINT:-SHA256:kqjoLaSTFR7d2Vg62ebJEeM6hwJCbJcLzqvGnBxFQp8}
       PRIVACY_POLICY_URL: ${PRIVACY_POLICY_URL:-https://sip-happens.local/privacy}
       CONSUMER_RIGHTS_URL: ${CONSUMER_RIGHTS_URL:-https://www.sic.gov.co/proteccion-del-consumidor}
       DATA_PROCESSING_POLICY_URL: ${DATA_PROCESSING_POLICY_URL:-https://sip-happens.local/legal/data-processing}

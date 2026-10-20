@@ -1,0 +1,376 @@
+openapi: 3.0.3
+info:
+  title: Sip-Happens core-api
+  version: 0.1.0
+  description: |
+    Contract skeleton kept in sync with `ImplementedRoutes`
+    (`services/core-api/internal/http/openapi_ops.go`). Operation
+    bodies are intentionally minimal; expand schemas as needed.
+paths:
+  /healthz:
+    get:
+      responses:
+        '200':
+          description: OK
+  /readyz:
+    get:
+      responses:
+        '200':
+          description: OK
+  /metrics:
+    get:
+      responses:
+        '200':
+          description: OK
+  /catalog:
+    get:
+      responses:
+        '200':
+          description: OK
+  /catalog/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+  /customers/me:
+    get:
+      responses:
+        '200':
+          description: OK
+    patch:
+      responses:
+        '200':
+          description: OK
+  /profile:
+    get:
+      responses:
+        '200':
+          description: OK
+    put:
+      responses:
+        '200':
+          description: OK
+    patch:
+      responses:
+        '200':
+          description: OK
+  /addresses:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+  /addresses/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /payment-methods/collect:
+    post:
+      responses:
+        '200':
+          description: OK
+  /payment-methods:
+    get:
+      responses:
+        '200':
+          description: OK
+  /payment-methods/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /cart:
+    get:
+      responses:
+        '200':
+          description: OK
+    put:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /cart/items/{id}:
+    put:
+      responses:
+        '200':
+          description: OK
+  /cart/address:
+    put:
+      responses:
+        '200':
+          description: OK
+  /cart/payment-method:
+    put:
+      responses:
+        '200':
+          description: OK
+  /cart/convert:
+    post:
+      responses:
+        '200':
+          description: OK
+  /shipping/estimate:
+    get:
+      responses:
+        '200':
+          description: OK
+  /orders:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+  /orders/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+  /orders/{ref}/cancel:
+    post:
+      responses:
+        '200':
+          description: OK
+  /subscriptions:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+  /subscriptions/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+    put:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /tokens:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+  /tokens/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /oauth/authorize:
+    post:
+      responses:
+        '200':
+          description: OK
+  /oauth/token:
+    post:
+      responses:
+        '200':
+          description: OK
+  /oauth/clients:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+  /oauth/clients/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /view/init:
+    get:
+      responses:
+        '200':
+          description: OK
+  /checkout:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/products:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/products/{id}:
+    put:
+      responses:
+        '200':
+          description: OK
+    patch:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /admin/prices:
+    post:
+      responses:
+        '200':
+          description: OK
+    put:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+  /admin/inventory:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+    put:
+      responses:
+        '200':
+          description: OK
+  /admin/inventory/reservations:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/orders:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/export:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/cancel:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/reconcile-stripe:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/invoice:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/shipment:
+    patch:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/shipment/transition:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/status:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/refund:
+    post:
+      responses:
+        '200':
+          description: OK
+  /admin/orders/{id}/refunds:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/products/{id}/price-history:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/audit-events:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/stripe/dead-letters:
+    get:
+      responses:
+        '200':
+          description: OK
+  /admin/stripe/dead-letters/replay:
+    post:
+      responses:
+        '200':
+          description: OK
+  /webhooks/stripe:
+    post:
+      responses:
+        '200':
+          description: OK
+  /email:
+    post:
+      responses:
+        '200':
+          description: OK
+  /email/confirm:
+    get:
+      responses:
+        '200':
+          description: OK
+  /email/unsubscribe:
+    post:
+      responses:
+        '200':
+          description: OK

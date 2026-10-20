@@ -20,13 +20,15 @@ GitHub **project milestones** on [Skpow1234/Sip-Happens](https://github.com/Skpo
 | DB metrics for expired pending orders — *roadmap-143* | Done |
 | Compose dev / staging / prod overlays, CI, govulncheck | Done |
 | Observability (`/metrics`, request IDs, healthchecks) | Done |
+| Tracked migrations + demo SSH assets + OpenAPI (M1) | Done |
 
 ## Next (recommended order)
 
-### M1 — Clone & CI completeness
+### M1 — Clone & CI completeness — **done**
 
-- Check in (or artifact-bootstrap) `infra/migrations/*.sql` and demo SSH assets so `dev-up` / migrate / e2e are not no-ops on a fresh clone.
-- Keep OpenAPI in-repo or generate it in CI from `ImplementedRoutes`.
+- Tracked `infra/migrations/001`–`032` (linearity enforced in CI).
+- Tracked demo SSH pubkeys / host key / `ssh_config` / `known_hosts` (`infra/demo/`; client private key still gitignored).
+- Tracked `docs/openapi.yaml` aligned with `ImplementedRoutes`.
 
 ### M2 — Bearer PAT auth
 

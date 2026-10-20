@@ -1,6 +1,6 @@
 # API endpoints
 
-Full machine-readable contract: [`openapi.yaml`](openapi.yaml) (also `GET /openapi.yaml`; Redoc at `GET /docs` with admin Bearer token). Terminal.shop parity rationale: [ADR 0020](adr/README.md#0020-terminal-shop-api-parity).
+Full machine-readable contract: [`openapi.yaml`](openapi.yaml) (kept in sync with `ImplementedRoutes`; also `GET /openapi.yaml`; Redoc at `GET /docs` with admin Bearer token). Terminal.shop parity rationale: [ADR 0020](adr/README.md#0020-terminal-shop-api-parity).
 
 Public ids in JSON use stable prefixes: `prd_…` (product), `addr_…` (address), `pm_…` (Stripe payment method), `sub_…` (subscription), `pat_…` (personal access token), `oc_…` / `oci_…` (OAuth client). Orders also expose a human-readable `display_ref` (`SH-…`) accepted on `/orders/{id}`.
 

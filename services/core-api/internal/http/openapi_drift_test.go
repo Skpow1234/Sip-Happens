@@ -9,11 +9,7 @@ import (
 )
 
 // repoOpenAPIPath reads docs/openapi.yaml from the repo root for drift
-// comparison. The spec file is excluded by `.gitignore` so it is absent
-// on fresh CI checkouts; in that case we skip the test rather than fail,
-// matching the convention `scripts/check-migration-linearity.sh` uses
-// for the migrations dir. Local devs (who have the file) still get the
-// strict comparison.
+// comparison against ImplementedRoutes.
 func repoOpenAPIPath(t *testing.T) []byte {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
@@ -25,20 +21,13 @@ func repoOpenAPIPath(t *testing.T) []byte {
 	p := filepath.Join(root, "docs", "openapi.yaml")
 	b, err := os.ReadFile(p)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Skipf("docs/openapi.yaml not present (likely a CI checkout where docs/ is gitignored); skipping drift check")
-			return nil
-		}
-		t.Fatalf("read %s: %v", p, err)
+		t.Fatalf("read %s: %v (docs/openapi.yaml must be tracked — see M1)", p, err)
 	}
 	return b
 }
 
 func TestOpenAPIDrift_ImplementedRoutesMatchSpec(t *testing.T) {
 	spec := repoOpenAPIPath(t)
-	if spec == nil {
-		return // skipped inside helper
-	}
 	fromSpec, err := ParseOpenAPIOperations(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -54,9 +43,6 @@ func TestOpenAPIDrift_ImplementedRoutesMatchSpec(t *testing.T) {
 
 func TestOpenAPIDrift_LoadedSpecMatchesFile(t *testing.T) {
 	spec := repoOpenAPIPath(t)
-	if spec == nil {
-		return // skipped inside helper
-	}
 	fromFile, err := ParseOpenAPIOperations(spec)
 	if err != nil {
 		t.Fatal(err)

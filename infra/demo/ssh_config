@@ -1,0 +1,9 @@
+﻿# Demo SSH client for local Sip-Happens (dev only).
+Host sip-happens
+  HostName localhost
+  Port 2222
+  User sip
+  IdentityFile infra/demo/sip-happens-demo
+  IdentitiesOnly yes
+  UserKnownHostsFile infra/demo/known_hosts
+  StrictHostKeyChecking yes

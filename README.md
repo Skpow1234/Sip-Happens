@@ -23,10 +23,7 @@ ssh -F infra/demo/ssh_config sip-happens
 curl -fsS http://localhost:8080/healthz
 ```
 
-If the demo private key is missing:  
-`ssh-keygen -t ed25519 -f infra/demo/sip-happens-demo -N "" -C sip-happens-demo@local`
-
-Details: [Local development](docs/local-development.md) · [TUI shortcuts](docs/tui.md)
+Demo SSH keypair is tracked under `infra/demo/` (local-only). Details: [Local development](docs/local-development.md) · [TUI shortcuts](docs/tui.md)
 
 ## Deploy so customers can SSH in
 

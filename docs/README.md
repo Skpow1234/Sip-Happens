@@ -18,4 +18,4 @@ Operator and developer docs for Sip-Happens. Start with the root [README](../REA
 | [ADRs](adr/README.md) | Architecture decision index |
 | [Runbooks](runbooks/) | Incidents, rotations, Stripe local |
 
-Referenced OpenAPI contract (when checked in): [`openapi.yaml`](openapi.yaml) — also served at `GET /openapi.yaml`.
+OpenAPI contract: [`openapi.yaml`](openapi.yaml) — also served at `GET /openapi.yaml`.

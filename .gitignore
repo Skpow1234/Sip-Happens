@@ -18,6 +18,9 @@ Desktop.ini
 *.key
 *.p12
 *.pfx
+# Dev SSH host key is intentionally committed (fixed fingerprint for known_hosts).
+!infra/demo/ssh_host_ed25519_key
+!infra/demo/ssh_host_ed25519_key.pub
 
 # Go build outputs
 bin/
@@ -48,8 +51,10 @@ docker-compose.override.yml
 .cursorrules
 # Private design notes (keep out of the public tree). Everything else under docs/ is tracked.
 docs/DESIGN.md
-infra/migrations/*.sql
 services/ssh-gateway/entrypoint.sh
 
-infra/demo/
+# Demo SSH private keys are committed on purpose (passphrase-empty, local-only).
+# They pair with authorized_keys + SSH_DEV_FINGERPRINT so a fresh clone can
+# `ssh -F infra/demo/ssh_config sip-happens` without regenerating the keypair.
+# Do not reuse these keys outside local Compose.
 infra/docker
