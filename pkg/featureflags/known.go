@@ -20,7 +20,7 @@ type Known struct {
 	Requires    string // optional dependency note
 }
 
-// All returns the canonical flag catalog (source of truth for README).
+// All returns the canonical flag catalog (source of truth for docs/environment.md).
 func All() []Known {
 	return []Known{
 		{

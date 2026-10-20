@@ -151,13 +151,18 @@ jobs:
         # test-only dependencies (testcontainers → containerd/docker)
         # are surfaced by the advisory full-scan step below but do not
         # block CI here — there's no production exposure.
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          repo-checkout: false
-          work-dir: .
-          go-package: ./services/core-api/cmd/api/... ./services/core-api/cmd/jobs/... ./services/core-api/cmd/migrate/... ./services/ssh-gateway/cmd/server/...
+        #
+        # Invoke govulncheck directly (not golang/govulncheck-action): the
+        # action always passes "$GO_PACKAGE" as a single quoted argv, so
+        # space-separated patterns become one invalid pattern and exit
+        # with "no packages matched the provided patterns".
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck \
+            ./services/core-api/cmd/api/... \
+            ./services/core-api/cmd/jobs/... \
+            ./services/core-api/cmd/migrate/... \
+            ./services/ssh-gateway/cmd/server/...
 
       - name: Vulnerability scan — full tree (advisory)
         # Surfaces test-rig CVEs (e.g. transitively via testcontainers)
@@ -258,9 +263,9 @@ jobs:
 
       - name: Stub gitignored Dockerfile COPY sources
         # The core-api Dockerfile COPYs `infra/migrations`, `infra/demo`,
-        # and `docs/openapi.yaml`. All three are excluded by `.gitignore`
-        # (prod artifacts are managed via a separate operator workflow),
-        # so on a fresh CI checkout the COPY layers fail with
+        # and `docs/openapi.yaml`. Migrations and demo assets are gitignored
+        # (operator workflow); OpenAPI may be absent until checked in. On a
+        # fresh CI checkout missing COPY sources fail with
         # `failed to calculate checksum of ref … not found`.
         #
         # We don't push from this job (next step's comment notes it's

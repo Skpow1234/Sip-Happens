@@ -22,6 +22,11 @@ services:
       - ${SIP_HAPPENS_ENV_FILE:-.env.prod}
     environment:
       SSH_REQUIRE_AUTHORIZED_KEYS: ${SSH_REQUIRE_AUTHORIZED_KEYS:-1}
+    # Publish the shop SSH listener. Customers connect here (not via Caddy).
+    # Use 22 only if nothing else on the host binds it; otherwise keep 2222
+    # and point DNS / a firewall DNAT at this port. See docs/ops/deploy.md.
+    ports:
+      - "${SIP_HAPPENS_SSH_PORT:-2222}:2222"
     restart: unless-stopped
 
   order-reaper:

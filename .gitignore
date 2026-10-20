@@ -46,9 +46,9 @@ tmp/
 docker-compose.override.yml
 
 .cursorrules
+# Private design notes (keep out of the public tree). Everything else under docs/ is tracked.
 docs/DESIGN.md
 infra/migrations/*.sql
-docs
 services/ssh-gateway/entrypoint.sh
 
 infra/demo/
