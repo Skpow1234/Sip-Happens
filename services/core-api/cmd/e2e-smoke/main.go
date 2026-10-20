@@ -213,16 +213,18 @@ func run() error {
 		return fmt.Errorf("shipping/estimate: %w", err)
 	}
 
-	// /cart lifecycle: GET → PUT item → GET (subtotal > 0) → DELETE → GET (empty)
+	// /cart lifecycle: GET → PUT item → DELETE (responses wrap under {"cart":…}).
 	if err := checkJSON(ctx, client, base+"/cart?currency=COP", http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
-		var v struct {
-			Currency string `json:"currency"`
-			Items    []any  `json:"items"`
+		var wrap struct {
+			Cart struct {
+				Currency string `json:"currency"`
+				Items    []any  `json:"items"`
+			} `json:"cart"`
 		}
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := json.Unmarshal(b, &wrap); err != nil {
 			return err
 		}
-		if v.Currency == "" {
+		if wrap.Cart.Currency == "" {
 			return fmt.Errorf("missing currency")
 		}
 		return nil
@@ -232,15 +234,17 @@ func run() error {
 	putItemBody := `{"qty":1}`
 	if err := checkJSON(ctx, client, base+"/cart/items/"+productID+"?currency=COP",
 		http.MethodPut, []byte(putItemBody), true, secret, keyID, fp, func(b []byte) error {
-			var v struct {
-				SubtotalMinorUnits int64 `json:"subtotal_minor_units"`
-				ItemCount          int   `json:"item_count"`
+			var wrap struct {
+				Cart struct {
+					SubtotalMinorUnits int64 `json:"subtotal_minor_units"`
+					ItemCount          int   `json:"item_count"`
+				} `json:"cart"`
 			}
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := json.Unmarshal(b, &wrap); err != nil {
 				return err
 			}
-			if v.ItemCount < 1 {
-				return fmt.Errorf("expected item_count >= 1 after PUT, got %d", v.ItemCount)
+			if wrap.Cart.ItemCount < 1 {
+				return fmt.Errorf("expected item_count >= 1 after PUT, got %d", wrap.Cart.ItemCount)
 			}
 			return nil
 		}); err != nil {
