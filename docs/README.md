@@ -12,7 +12,7 @@ Operator and developer docs for Sip-Happens. Start with the root [README](../REA
 | [TUI](tui.md) | Screens, shortcuts, UX notes |
 | [Observability](observability.md) | Metrics, readiness, Grafana / alerts |
 | [Testing](testing.md) | Unit, integration, e2e, concurrency |
-| [Milestones](milestones.md) | What’s shipped vs next |
+| [Milestones](milestones.md) | M1–M5 + 900+ engineering backlog items |
 | [Compose environments](ops/compose-environments.md) | Dev / staging / prod overlays |
 | [Legal](legal/data-processing.md) | Ley 1581 draft + retention |
 | [ADRs](adr/README.md) | Architecture decision index |

@@ -156,8 +156,12 @@ jobs:
         # action always passes "$GO_PACKAGE" as a single quoted argv, so
         # space-separated patterns become one invalid pattern and exit
         # with "no packages matched the provided patterns".
+        #
+        # GOTOOLCHAIN=auto: govulncheck@latest (x/vuln v1.9+) requires Go
+        # >= 1.26 while this module pins toolchain go1.25.10 and setup-go
+        # sets GOTOOLCHAIN=local — without auto, `go install` fails.
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck \
             ./services/core-api/cmd/api/... \
             ./services/core-api/cmd/jobs/... \
@@ -168,14 +172,11 @@ jobs:
         # Surfaces test-rig CVEs (e.g. transitively via testcontainers)
         # so we can prioritise upstream dep bumps, but never blocks merge:
         # nothing here is in the shipped binary's call graph.
+        # Same GOTOOLCHAIN=auto note as the production scan above.
         continue-on-error: true
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          repo-checkout: false
-          work-dir: .
-          go-package: ./...
+        run: |
+          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
       - name: Core-API integration tests (race, Postgres)
         run: |

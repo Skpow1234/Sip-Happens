@@ -44,7 +44,7 @@ Then: DNS → VM, firewall for SSH + HTTPS, load `authorized_keys`, point Stripe
 |-------|------|
 | API endpoints | [docs/endpoints.md](docs/endpoints.md) |
 | Environment & feature flags | [docs/environment.md](docs/environment.md) |
-| Milestones / roadmap | [docs/milestones.md](docs/milestones.md) |
+| Milestones / backlog | [docs/milestones.md](docs/milestones.md) (M1 done; 900+ next items) |
 | Testing | [docs/testing.md](docs/testing.md) |
 | Observability | [docs/observability.md](docs/observability.md) |
 | Compose environments | [docs/ops/compose-environments.md](docs/ops/compose-environments.md) |
