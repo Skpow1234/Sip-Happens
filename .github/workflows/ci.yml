@@ -336,8 +336,11 @@ jobs:
       - name: Compose config validates
         # Ensures compose overlays still parse after Dockerfile / service
         # edits. Does not start containers (images above already built).
+        # Prod overlay requires a repo-root .env.prod (env_file); use the
+        # tracked example as a non-secret stub for config-only validation.
         run: |
           docker compose -f infra/compose.yaml -f infra/compose.dev.yaml config >/dev/null
+          cp infra/env.prod.example .env.prod
           docker compose -f infra/compose.yaml -f infra/compose.prod.yaml config >/dev/null
 
   # -------------------------------------------------------------------------
