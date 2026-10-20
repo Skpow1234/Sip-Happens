@@ -18,14 +18,15 @@ func TestPublicID_UUIDRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPublicID_OpaqueInternal(t *testing.T) {
+func TestPublicID_OpaqueInternalRoundTrip(t *testing.T) {
 	internal := domain.ProductID("p_test_1")
 	pub := PublicID(internal)
 	if pub != "prd_p_test_1" {
 		t.Fatalf("public id: %q", pub)
 	}
-	if _, ok := ProductIDFromPublicID(pub); ok {
-		t.Fatal("expected opaque public id to be non-decodable as UUID")
+	id, ok := ProductIDFromPublicID(pub)
+	if !ok || id != internal {
+		t.Fatalf("opaque decode: ok=%v id=%q want %q", ok, id, internal)
 	}
 }
 
@@ -33,7 +34,10 @@ func TestProductIDFromPublicID_Invalid(t *testing.T) {
 	if _, ok := ProductIDFromPublicID("SKU-1"); ok {
 		t.Fatal("expected false for sku")
 	}
-	if _, ok := ProductIDFromPublicID("prd_short"); ok {
-		t.Fatal("expected false for short tail")
+	if _, ok := ProductIDFromPublicID("prd_"); ok {
+		t.Fatal("expected false for empty tail")
+	}
+	if _, ok := ProductIDFromPublicID(""); ok {
+		t.Fatal("expected false for empty")
 	}
 }

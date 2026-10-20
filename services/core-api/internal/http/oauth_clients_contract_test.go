@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"sip-happens/pkg/auth"
+	"sip-happens/services/core-api/internal/oauthapps"
 	"sip-happens/services/core-api/internal/testutil"
 )
 
@@ -83,8 +84,9 @@ on conflict (ssh_fingerprint) do nothing
 	if !strings.HasPrefix(createOut.OAuthClient.ClientID, "oci_") {
 		t.Fatalf("client_id: %q", createOut.OAuthClient.ClientID)
 	}
-	if !strings.HasPrefix(createOut.ClientSecret, "ocs_") || strings.Count(createOut.ClientSecret, "_") != 2 {
-		t.Fatalf("client_secret shape: %q", createOut.ClientSecret)
+	// base64url secrets may contain '_'; validate via the real parser, not underscore count.
+	if _, err := oauthapps.ParseClientSecret(createOut.ClientSecret); err != nil {
+		t.Fatalf("client_secret shape: %q (%v)", createOut.ClientSecret, err)
 	}
 	if !createOut.OAuthClient.Confidential {
 		t.Fatal("confidential should default to true")

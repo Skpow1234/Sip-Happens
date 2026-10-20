@@ -113,8 +113,8 @@ insert into oauth_clients (
 	if err := json.NewDecoder(authzResp.Body).Decode(&authzOut); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(authzOut.Code, "oac_") || strings.Count(authzOut.Code, "_") != 2 {
-		t.Fatalf("malformed code: %q", authzOut.Code)
+	if _, err := oauthapps.ParseAuthorizationCode(authzOut.Code); err != nil {
+		t.Fatalf("malformed code: %q (%v)", authzOut.Code, err)
 	}
 	if authzOut.State != "xyz123" {
 		t.Fatalf("state echo mismatch: %q", authzOut.State)

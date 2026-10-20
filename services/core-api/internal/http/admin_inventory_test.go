@@ -43,7 +43,7 @@ on conflict (product_id) do update set on_hand=20, reserved=3, safety_stock=2, u
 
 	orderID := "ord-inv-res"
 	_, err = tdb.DB.ExecContext(ctx, `
-insert into customers (id, fingerprint, created_at, updated_at)
+insert into customers (id, ssh_fingerprint, created_at, updated_at)
 values ('cust-inv','fp-inv',$1,$1) on conflict do nothing
 `, now)
 	if err != nil {

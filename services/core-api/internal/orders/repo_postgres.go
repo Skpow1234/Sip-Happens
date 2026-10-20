@@ -19,13 +19,19 @@ type SQLRepository struct{}
 
 func NewSQLRepository() *SQLRepository { return &SQLRepository{} }
 
+// orderSelectCols coalesces nullable text columns so scanning into Go strings
+// does not fail for unpaid/minimal rows (city, stripe ids, etc. are often NULL).
+const orderSelectCols = `
+id, display_ref, status, customer_id,
+subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
+coalesce(city,''), coalesce(neighborhood,''), coalesce(address_line1,''),
+coalesce(phone,''), coalesce(legal_id,''), coalesce(full_name,''),
+coalesce(stripe_checkout_session_id,''), coalesce(stripe_payment_intent_id,''),
+expires_at, created_at, updated_at`
+
 func (r *SQLRepository) Get(ctx context.Context, q Querier, id domain.OrderID) (*domain.Order, error) {
 	row := q.QueryRowContext(ctx, `
-select id, display_ref, status, customer_id,
-       subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
-       city, neighborhood, address_line1, phone, legal_id, full_name,
-       stripe_checkout_session_id, stripe_payment_intent_id,
-       expires_at, created_at, updated_at
+select `+orderSelectCols+`
 from orders
 where id = $1
 `, string(id))
@@ -57,11 +63,7 @@ func (r *SQLRepository) GetForCustomer(ctx context.Context, q Querier, customerI
 		return nil, domain.ErrNotFound
 	}
 	row := q.QueryRowContext(ctx, `
-select id, display_ref, status, customer_id,
-       subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
-       city, neighborhood, address_line1, phone, legal_id, full_name,
-       stripe_checkout_session_id, stripe_payment_intent_id,
-       expires_at, created_at, updated_at
+select `+orderSelectCols+`
 from orders
 where customer_id = $1 and (id = $2 or display_ref = $2)
 `, string(customerID), ref)
@@ -247,11 +249,7 @@ func (r *SQLRepository) ListByCustomer(ctx context.Context, q Querier, customerI
 		offset = 0
 	}
 	rows, err := q.QueryContext(ctx, `
-select id, display_ref, status, customer_id,
-       subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
-       city, neighborhood, address_line1, phone, legal_id, full_name,
-       stripe_checkout_session_id, stripe_payment_intent_id,
-       expires_at, created_at, updated_at
+select `+orderSelectCols+`
 from orders
 where customer_id = $1
 order by created_at desc

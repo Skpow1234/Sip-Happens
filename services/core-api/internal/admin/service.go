@@ -762,8 +762,9 @@ func (s *SQLService) ListOrdersAdmin(ctx context.Context, in ListOrdersAdminInpu
 	rows, err := s.DB.QueryContext(ctx, `
 select id, display_ref, status, customer_id,
        subtotal_minor_units, shipping_minor_units, total_minor_units, currency,
-       city, neighborhood, address_line1, phone, legal_id, full_name,
-       stripe_checkout_session_id, stripe_payment_intent_id,
+       coalesce(city,''), coalesce(neighborhood,''), coalesce(address_line1,''),
+       coalesce(phone,''), coalesce(legal_id,''), coalesce(full_name,''),
+       coalesce(stripe_checkout_session_id,''), coalesce(stripe_payment_intent_id,''),
        expires_at, created_at, updated_at
 from orders
 where ($1::text is null or status = $1)

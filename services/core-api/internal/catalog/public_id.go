@@ -34,14 +34,19 @@ func ProductIDFromPublicID(pub string) (domain.ProductID, bool) {
 		return "", false
 	}
 	tail := strings.TrimPrefix(pub, publicIDPrefix)
-	if len(tail) != 32 {
+	if tail == "" {
 		return "", false
 	}
-	raw := tail[0:8] + "-" + tail[8:12] + "-" + tail[12:16] + "-" + tail[16:20] + "-" + tail[20:32]
-	if _, err := uuid.Parse(raw); err != nil {
-		return "", false
+	// UUID-shaped public ids: prd_<32 hex without dashes>.
+	if len(tail) == 32 {
+		raw := tail[0:8] + "-" + tail[8:12] + "-" + tail[12:16] + "-" + tail[16:20] + "-" + tail[20:32]
+		if _, err := uuid.Parse(raw); err == nil {
+			return domain.ProductID(raw), true
+		}
 	}
-	return domain.ProductID(raw), true
+	// Opaque internal ids used in tests (e.g. p_cart_get_contract → prd_p_cart_get_contract).
+	// PublicID strips dashes; for dash-free ids the reverse is the tail itself.
+	return domain.ProductID(tail), true
 }
 
 // ResolveProduct looks up a product by public id, internal UUID, SKU, or raw internal id.
