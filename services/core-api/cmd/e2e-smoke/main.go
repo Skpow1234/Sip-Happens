@@ -172,19 +172,19 @@ func run() error {
 
 	// ---- Parity additions (Terminal.shop / API parity batch) ----
 
-	// /view/init bootstrap
+	// /view/init bootstrap (envelope uses profile, not customer — matches TUI).
 	if err := checkJSON(ctx, client, base+"/view/init?currency=COP&catalog_limit=5&orders_limit=5",
 		http.MethodGet, nil, true, secret, keyID, fp, func(b []byte) error {
 			var out struct {
-				Customer json.RawMessage `json:"customer"`
-				Catalog  json.RawMessage `json:"catalog"`
-				Orders   json.RawMessage `json:"orders"`
+				Profile json.RawMessage `json:"profile"`
+				Catalog json.RawMessage `json:"catalog"`
+				Orders  json.RawMessage `json:"orders"`
 			}
 			if err := json.Unmarshal(b, &out); err != nil {
 				return err
 			}
-			if len(out.Customer) == 0 || len(out.Catalog) == 0 || len(out.Orders) == 0 {
-				return fmt.Errorf("view/init missing one of customer/catalog/orders")
+			if len(out.Profile) == 0 || len(out.Catalog) == 0 || len(out.Orders) == 0 {
+				return fmt.Errorf("view/init missing one of profile/catalog/orders")
 			}
 			return nil
 		}); err != nil {
