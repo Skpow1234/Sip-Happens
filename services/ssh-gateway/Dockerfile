@@ -2,7 +2,7 @@
 #
 # See services/core-api/Dockerfile for the GOTOOLCHAIN=auto rationale —
 # bumping go.mod does NOT require editing this file.
-FROM golang:1.25@sha256:f7c6f0bf2d22b0b840d2b4956466b155532de36351056eaba6ea5e1aa458dc3b AS build
+FROM golang:1.25@sha256:699337d620559a59b4a2bb298ad59611e535d2ee755a34cf2d2a98f37578dc80 AS build
 ENV GOTOOLCHAIN=auto
 WORKDIR /src
 COPY go.mod go.sum ./
