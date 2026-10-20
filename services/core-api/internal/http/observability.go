@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,26 +49,35 @@ type Metrics struct {
 	RequestDuration *prometheus.HistogramVec
 }
 
+// Process-wide metrics: Handler() is built once in production but many times
+// in contract tests; MustRegister panics on duplicate collector names.
+var (
+	metricsOnce   sync.Once
+	sharedMetrics *Metrics
+)
+
 func NewMetrics() *Metrics {
-	m := &Metrics{
-		RequestsTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "sip_happens_http_requests_total",
-				Help: "Total HTTP requests.",
-			},
-			[]string{"method", "path", "status"},
-		),
-		RequestDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "sip_happens_http_request_duration_seconds",
-				Help:    "HTTP request duration in seconds.",
-				Buckets: prometheus.DefBuckets,
-			},
-			[]string{"method", "path", "status"},
-		),
-	}
-	prometheus.MustRegister(m.RequestsTotal, m.RequestDuration)
-	return m
+	metricsOnce.Do(func() {
+		sharedMetrics = &Metrics{
+			RequestsTotal: prometheus.NewCounterVec(
+				prometheus.CounterOpts{
+					Name: "sip_happens_http_requests_total",
+					Help: "Total HTTP requests.",
+				},
+				[]string{"method", "path", "status"},
+			),
+			RequestDuration: prometheus.NewHistogramVec(
+				prometheus.HistogramOpts{
+					Name:    "sip_happens_http_request_duration_seconds",
+					Help:    "HTTP request duration in seconds.",
+					Buckets: prometheus.DefBuckets,
+				},
+				[]string{"method", "path", "status"},
+			),
+		}
+		prometheus.MustRegister(sharedMetrics.RequestsTotal, sharedMetrics.RequestDuration)
+	})
+	return sharedMetrics
 }
 
 type statusWriter struct {
